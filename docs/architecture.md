@@ -81,7 +81,7 @@ Creates the single `FastMCP("mcp-score")` instance that all tool modules import.
 
 ### `cli.py` -- CLI entry point
 
-Provides subcommands: `serve` (default, runs MCP server), `install-skill` (copies skill to `~/.claude/skills/`), `install-plugin` (copies QML plugin to MuseScore plugins directory), `install` (both).
+Provides subcommands: `serve` (default, runs MCP server), `run` (execute a Python script with music21 available), `install-skill` (copies skill to `~/.claude/skills/`), `install-plugin` (copies QML plugin to MuseScore plugins directory), `install` (both).
 
 ### `server.py` -- MCP server
 

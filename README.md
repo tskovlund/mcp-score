@@ -102,6 +102,7 @@ See [MuseScore plugin docs](docs/musescore-plugin.md) for details.
 
 ```
 mcp-score serve            Run the MCP server (default)
+mcp-score run <script>     Run a Python script with music21 available
 mcp-score install          Install skill and MuseScore plugin
 mcp-score install-skill    Install the score-generate skill to ~/.claude/skills/
 mcp-score install-plugin   Install the QML plugin to MuseScore's Plugins directory

@@ -16,14 +16,14 @@ The plugin is only needed for **manipulation** and **analysis** tools (reading p
 ## Installation
 
 1. Locate your MuseScore plugins directory:
-   - **macOS:** `~/Documents/MuseScore4/Plugins/`
+   - **macOS:** `~/Library/Application Support/MuseScore4/Plugins/`
    - **Linux:** `~/.local/share/MuseScore4/Plugins/`
    - **Windows:** `%APPDATA%/MuseScore4/Plugins/`
 
 2. Copy the plugin file:
    ```bash
    # macOS
-   cp src/mcp_score/musescore/plugin.qml ~/Documents/MuseScore4/Plugins/mcp-score-bridge.qml
+   cp src/mcp_score/musescore/plugin.qml ~/Library/Application\ Support/MuseScore4/Plugins/mcp-score-bridge.qml
 
    # Linux
    cp src/mcp_score/musescore/plugin.qml ~/.local/share/MuseScore4/Plugins/mcp-score-bridge.qml

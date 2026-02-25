@@ -1,17 +1,11 @@
 """Score analysis tools — read and understand musical content."""
 
-import json
 from typing import Any
 
 from mcp_score.app import mcp
-from mcp_score.bridge import get_bridge
+from mcp_score.tools import NOT_CONNECTED, check_measure, connected_bridge, to_json
 
 __all__: list[str] = []
-
-
-def _result(data: dict[str, Any]) -> str:
-    """Serialize a result dict to JSON."""
-    return json.dumps(data)
 
 
 @mcp.tool()
@@ -29,13 +23,14 @@ async def read_passage(
         end_measure: Last measure to read (inclusive, 1-indexed).
         staff: Staff index to read (0-indexed). If not provided, reads all staves.
     """
-    bridge = get_bridge()
-    if not bridge.is_connected:
-        return _result(
-            {"error": "Not connected to MuseScore. Use connect_to_musescore first."}
-        )
+    bridge = connected_bridge()
+    if bridge is None:
+        return to_json({"error": NOT_CONNECTED})
+    if err := check_measure(start_measure, "start_measure"):
+        return err
+    if end_measure < start_measure:
+        return to_json({"error": "end_measure must be >= start_measure."})
 
-    # Navigate to start and read elements for each measure.
     elements: list[dict[str, Any]] = []
     for measure_num in range(start_measure, end_measure + 1):
         await bridge.go_to_measure(measure_num)
@@ -49,7 +44,7 @@ async def read_passage(
             }
         )
 
-    return _result(
+    return to_json(
         {
             "success": True,
             "start_measure": start_measure,
@@ -68,15 +63,14 @@ async def get_measure_content(measure: int, staff: int = 0) -> str:
         measure: Measure number (1-indexed).
         staff: Staff index (0-indexed, default: 0).
     """
-    bridge = get_bridge()
-    if not bridge.is_connected:
-        return _result(
-            {"error": "Not connected to MuseScore. Use connect_to_musescore first."}
-        )
+    bridge = connected_bridge()
+    if bridge is None:
+        return to_json({"error": NOT_CONNECTED})
+    if err := check_measure(measure):
+        return err
 
     await bridge.go_to_measure(measure)
     await bridge.go_to_staff(staff)
 
-    # Select the full measure to get all elements.
     result = await bridge.send_command("selectCurrentMeasure")
-    return _result(result)
+    return to_json(result)

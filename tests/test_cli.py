@@ -13,6 +13,7 @@ from mcp_score.cli import (
     install_plugin,
     install_skill,
     main,
+    run_script,
 )
 
 
@@ -192,6 +193,48 @@ class TestMainCli:
             pytest.raises(SystemExit, match="1"),
         ):
             # Act / Assert
+            main()
+
+
+class TestRunScript:
+    def test_run_script_no_args_exits_one(self) -> None:
+        # Arrange / Act / Assert
+        with pytest.raises(SystemExit, match="1"):
+            run_script([])
+
+    def test_run_script_executes_script(self, tmp_path: Path) -> None:
+        # Arrange
+        script = tmp_path / "test_script.py"
+        script.write_text("print('hello')")
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        with (
+            patch("subprocess.run", return_value=mock_result) as mock_run,
+            pytest.raises(SystemExit, match="0"),
+        ):
+            # Act
+            run_script([str(script)])
+
+        # Assert
+        mock_run.assert_called_once()
+        assert str(script) in mock_run.call_args.args[0]
+
+    def test_run_command_via_main(self, tmp_path: Path) -> None:
+        # Arrange
+        script = tmp_path / "test_script.py"
+        script.write_text("print('hello')")
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        with (
+            patch("sys.argv", ["mcp-score", "run", str(script)]),
+            patch("subprocess.run", return_value=mock_result),
+            pytest.raises(SystemExit, match="0"),
+        ):
+            # Act
             main()
 
 

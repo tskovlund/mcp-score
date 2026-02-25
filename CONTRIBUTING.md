@@ -100,7 +100,7 @@ For small fixes (typos, docs), direct commits to `main` are fine. For anything s
 
 ```
 src/mcp_score/
-  cli.py              CLI entry point (serve, install-skill, install-plugin)
+  cli.py              CLI entry point (serve, run, install-skill, install-plugin)
   server.py           MCP server setup and tool imports
   app.py              Shared FastMCP instance
   tools/
