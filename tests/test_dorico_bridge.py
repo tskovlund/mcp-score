@@ -199,6 +199,36 @@ class TestDoricoBridgeHandshake:
         assert bridge._session_token == "new-token-456"
 
     @pytest.mark.anyio()
+    async def test_handshake_with_expired_token_unexpected_code_fails(self) -> None:
+        # Arrange — token expired, new token issued, but accept returns unexpected code
+        bridge = DoricoBridge()
+        bridge._session_token = "expired-token"
+        mock_connection = AsyncMock()
+
+        new_token_response = json.dumps(
+            {"message": "sessiontoken", "sessionToken": "new-token"}
+        )
+        unexpected_response = json.dumps(
+            {"message": "response", "code": "kPending"}
+        )
+        mock_connection.recv = AsyncMock(
+            side_effect=[new_token_response, unexpected_response]
+        )
+        mock_connection.send = AsyncMock()
+        mock_connection.close = AsyncMock()
+
+        with patch(
+            "mcp_score.bridge.dorico.websockets.connect",
+            new_callable=AsyncMock,
+            return_value=mock_connection,
+        ):
+            # Act
+            connected = await bridge.connect()
+
+        # Assert
+        assert connected is False
+
+    @pytest.mark.anyio()
     async def test_handshake_failure_returns_false(self) -> None:
         # Arrange — Dorico rejects the connection
         bridge = DoricoBridge()
@@ -414,6 +444,34 @@ class TestDoricoBridgeLimitations:
         # Assert
         assert "error" in result
         assert "does not support" in result["error"]
+
+
+    @pytest.mark.anyio()
+    async def test_add_rehearsal_mark_returns_warning(self) -> None:
+        # Arrange
+        bridge = DoricoBridge()
+        bridge.send_command = AsyncMock(
+            return_value={"message": "response", "code": "kOK"}
+        )
+
+        # Act
+        result = await bridge.add_rehearsal_mark("B")
+
+        # Assert
+        assert "warning" in result
+        assert "B" in result["warning"]
+
+    @pytest.mark.anyio()
+    async def test_add_chord_symbol_returns_limitation(self) -> None:
+        # Arrange
+        bridge = DoricoBridge()
+
+        # Act
+        result = await bridge.add_chord_symbol("Cmaj7")
+
+        # Assert
+        assert "error" in result
+        assert "cannot set chord symbol" in result["error"].lower()
 
 
 class TestDoricoBridgePing:
