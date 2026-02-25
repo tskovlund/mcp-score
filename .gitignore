@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+
+# uv
+.uv/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+coverage.xml
+
+# Environment variables
+.env
+
+# macOS
+.DS_Store
+
+# Nix
+result
+
+# direnv
+.direnv/
+
+# IDE
+.idea/
+.vscode/
+
+# Generated scores (user output, not tracked)
+output/

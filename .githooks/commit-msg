@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Enforce conventional commit format.
+# https://www.conventionalcommits.org/en/v1.0.0/
+
+commit_msg_file="$1"
+commit_msg=$(head -1 "$commit_msg_file")
+
+# Allow merge commits
+if echo "$commit_msg" | grep -qE '^Merge '; then
+  exit 0
+fi
+
+# Conventional commit pattern: type(scope): description  OR  type: description
+pattern='^(feat|fix|docs|chore|refactor|test|ci|style|perf|build|revert)(\(.+\))?: .+'
+
+if ! echo "$commit_msg" | grep -qE "$pattern"; then
+  echo "commit-msg: invalid commit message format"
+  echo ""
+  echo "  Expected: type(scope): description"
+  echo "  Examples: feat(generation): add big band score template"
+  echo "            fix: resolve WebSocket reconnection on timeout"
+  echo "            docs: update MusicXML element support table"
+  echo ""
+  echo "  Types: feat fix docs chore refactor test ci style perf build revert"
+  echo ""
+  echo "  Your message: $commit_msg"
+  exit 1
+fi

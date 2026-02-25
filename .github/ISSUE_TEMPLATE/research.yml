@@ -1,0 +1,39 @@
+name: Research
+description: Exploratory investigation or future consideration
+labels: ["research"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: What is this about? Describe the concept, tool, pattern, or approach.
+    validations:
+      required: true
+  - type: textarea
+    id: why-consider
+    attributes:
+      label: Why consider it
+      description: What benefits would this bring? What problems could it solve?
+    validations:
+      required: true
+  - type: textarea
+    id: why-not-now
+    attributes:
+      label: Why not now
+      description: What makes this premature or unnecessary today?
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to docs, implementations, prior art, or related discussions.
+    validations:
+      required: false
+  - type: textarea
+    id: trigger
+    attributes:
+      label: Trigger to revisit
+      description: What conditions or changes would make this worth implementing?
+    validations:
+      required: true

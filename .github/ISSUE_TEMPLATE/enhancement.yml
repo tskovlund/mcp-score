@@ -1,0 +1,50 @@
+name: Enhancement
+description: New feature or improvement to existing functionality
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is this enhancement and what does it add or change?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Why is this needed? What problem does it solve or what value does it add?
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: What needs to be done? Use task checkboxes (`- [ ]`) grouped under headings if there are multiple areas.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: caveats
+    attributes:
+      label: Caveats
+      description: Known constraints, edge cases, or risks to be aware of during implementation.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: How do we know this is done? Concrete, verifiable conditions.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to docs, related issues, prior art, or relevant discussions.
+    validations:
+      required: false

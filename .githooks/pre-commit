@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Run ruff check and format check on staged Python files.
+
+staged=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+echo "pre-commit: checking staged Python files..."
+
+ruff check $staged || exit 1
+ruff format --check $staged || exit 1
