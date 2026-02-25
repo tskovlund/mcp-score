@@ -3,7 +3,7 @@
 AI-driven music score generation and manipulation. Two complementary approaches:
 
 - **Score generation** via Claude Code skill (`.claude/skills/score-generate/`) — Claude writes music21 Python scripts that export MusicXML. No MCP needed; runs as a standalone skill.
-- **Live score manipulation** via MCP server — reads from and writes to a running score application (MuseScore or Dorico) via WebSocket bridge.
+- **Live score manipulation** via MCP server — reads from and writes to a running score application (MuseScore, Dorico, or Sibelius) via WebSocket bridge.
 
 ## Architecture
 
@@ -12,13 +12,14 @@ src/mcp_score/
   server.py           MCP server entry point (FastMCP)
   app.py              Shared FastMCP instance
   tools/
-    connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
+    connection.py     Connect/disconnect MuseScore, Dorico & Sibelius, ping, score info
     analysis.py       Read passages and measures from live score
     manipulation.py   Modify live score (barlines, chords, keys, tempo, transpose)
   bridge/
     base.py           ScoreBridge abstract base class
     musescore.py      WebSocket client for MuseScore plugin
     dorico.py         WebSocket client for Dorico Remote Control API
+    sibelius.py       WebSocket client for Sibelius Connect API
   musescore/
     plugin.qml        MuseScore QML plugin (WebSocket server, 19 commands)
 
@@ -35,7 +36,7 @@ docs/                 Diataxis-structured documentation
 
 **Generation** is best as a skill: Claude writes a complete music21 script in one shot, giving it full access to the entire music21 API. This is faster (one script vs dozens of MCP tool calls) and more flexible (no API surface to limit).
 
-**Manipulation** is best as MCP: reading from and writing to a live MuseScore instance requires a persistent WebSocket connection and state management that MCP handles well.
+**Manipulation** is best as MCP: reading from and writing to a live score application requires a persistent WebSocket connection and state management that MCP handles well.
 
 See [docs/architecture.md](docs/architecture.md) for detailed design documentation.
 
@@ -87,9 +88,9 @@ pyright src/         # type check (strict mode)
 
 ## Tool design principles
 
-MCP tools handle live score interaction (MuseScore or Dorico):
+MCP tools handle live score interaction (MuseScore, Dorico, or Sibelius):
 
-1. **Connection** — manage WebSocket bridges to MuseScore and Dorico
+1. **Connection** — manage WebSocket bridges to MuseScore, Dorico, and Sibelius
 2. **Analysis** — read and understand musical content from the live score
 3. **Manipulation** — modify the live score (barlines, chords, keys, tempo, transpose, undo)
 

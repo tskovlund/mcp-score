@@ -7,7 +7,7 @@
 mcp-score provides two complementary approaches for AI-driven music notation:
 
 1. **Score generation** via Claude Code skill -- Claude writes music21 Python scripts that export MusicXML, openable in any notation software
-2. **Live manipulation** via MCP server -- read from and write to a running score application (MuseScore or Dorico) through a WebSocket bridge
+2. **Live manipulation** via MCP server -- read from and write to a running score application (MuseScore, Dorico, or Sibelius) through a WebSocket bridge
 
 ## System diagram
 
@@ -20,28 +20,30 @@ mcp-score provides two complementary approaches for AI-driven music notation:
     Skill invocation     MCP protocol (stdio)
          |                    |
          v                    v
-+----------------+   +----------------------------+
-| score-generate |   | Python MCP Server          |
-| Claude Skill   |   | (src/mcp_score/)           |
-|                |   |                            |
-| Writes music21 |   | tools/connection.py (6)    |
-| Python script  |   | tools/analysis.py   (2)    |
-| -> MusicXML    |   | tools/manipulation.py (7)  |
-+----------------+   |                            |
-                     | bridge/                    |
-                     |   base.py (ScoreBridge)    |
-                     |   musescore.py             |
-                     |   dorico.py                |
-                     +--------+----------+--------+
-                              |          |
-                  WebSocket   |          | WebSocket
-             (ws://:8765)     |          | (ws://:4560)
-                              |          |
-              +---------------v--+  +----v-------------------+
-              | MuseScore QML    |  | Dorico Remote Control  |
-              | Plugin           |  | (built-in server)      |
-              | (plugin.qml)     |  | ~994 commands          |
-              +------------------+  +------------------------+
++----------------+   +-----------------------------+
+| score-generate |   | Python MCP Server           |
+| Claude Skill   |   | (src/mcp_score/)            |
+|                |   |                             |
+| Writes music21 |   | tools/connection.py (8)     |
+| Python script  |   | tools/analysis.py   (2)     |
+| -> MusicXML    |   | tools/manipulation.py (7)   |
++----------------+   |                             |
+                     | bridge/                     |
+                     |   base.py (ScoreBridge)     |
+                     |   musescore.py              |
+                     |   dorico.py                 |
+                     |   sibelius.py               |
+                     +------+--------+--------+----+
+                            |        |        |
+                WebSocket   |        |        | WebSocket
+           (ws://:8765)     |        |        | (ws://:1898)
+                            |        |        |
+            +---------------v-+  +---v------+ +--v-----------+
+            | MuseScore QML   |  | Dorico   | | Sibelius     |
+            | Plugin          |  | Remote   | | Connect      |
+            | (plugin.qml)   |  | Control  | | (built-in)   |
+            +-----------------+  | :4560    | | 900+ cmds    |
+                                 +----------+ +--------------+
 ```
 
 ## Multi-bridge design
@@ -54,6 +56,7 @@ mcp-score supports multiple score notation applications through a common bridge 
 
 - `MuseScoreBridge` -- connects to the MuseScore QML plugin's WebSocket server
 - `DoricoBridge` -- connects to Dorico's built-in Remote Control API
+- `SibeliusBridge` -- connects to Sibelius Connect's built-in WebSocket server
 
 ### Bridge registry
 
@@ -85,6 +88,29 @@ Session tokens can be cached and reused for reconnection (Dorico skips the user 
 - Good for score manipulation commands, limited for analysis
 - Some operations (key signatures, tempo) not available through the command API
 
+### Sibelius Connect protocol
+
+Sibelius 2024.3+ has "Sibelius Connect" -- a built-in WebSocket server (default port 1898, configurable). Requires Sibelius Ultimate tier. No plugin needed -- Sibelius IS the server.
+
+**Handshake protocol:**
+
+1. Client opens WebSocket to `ws://localhost:1898`
+2. Client sends connect message with `clientName` and `handshakeVersion`
+3. Sibelius shows a pairing dialog asking the user to approve
+4. Sibelius responds with a session token
+5. Client sends `acceptsessiontoken` with the received token
+6. Sibelius responds with `{"code": "kConnected"}`
+
+Session tokens can be cached and reused for reconnection (Sibelius skips the pairing dialog when a valid cached token is provided).
+
+**Known limitations:**
+
+- Cannot query arbitrary score content (individual notes, articulations) -- requires a ManuScript file-based bridge (future enhancement)
+- No MusicXML export via command API
+- Good for score manipulation commands (900+), limited for analysis
+- Some operations (key signatures, tempo, chord symbols) not available through the command API alone
+- Requires Sibelius Ultimate tier
+
 ## Why two approaches?
 
 **Generation is best as a skill.** Claude writes a complete music21 script in one shot, giving it full access to the entire music21 API. This is faster (one script vs dozens of MCP tool calls) and more flexible (no API surface to limit). A skill that teaches Claude music21 patterns produces better results than a curated set of MCP tools.
@@ -101,7 +127,7 @@ src/mcp_score/
   server.py             MCP server -- imports tool modules, runs FastMCP
   tools/
     __init__.py         Shared helpers: connected_bridge(), to_json(), etc.
-    connection.py       6 tools: connect/disconnect MuseScore & Dorico, ping, info
+    connection.py       8 tools: connect/disconnect MuseScore, Dorico & Sibelius, ping, info
     analysis.py         2 tools: read_passage, get_measure_content
     manipulation.py     7 tools: live rehearsal marks, chords, barlines, keys,
                                  tempo, transpose, undo
@@ -110,6 +136,7 @@ src/mcp_score/
     base.py             ScoreBridge abstract base class
     musescore.py        MuseScoreBridge -- WebSocket client for MuseScore plugin
     dorico.py           DoricoBridge -- WebSocket client for Dorico Remote Control
+    sibelius.py         SibeliusBridge -- WebSocket client for Sibelius Connect
   musescore/
     plugin.qml          MuseScore QML plugin (WebSocket server)
 
@@ -148,13 +175,17 @@ Imports the three tool modules (connection, analysis, manipulation) to register 
 
 `DoricoBridge(ScoreBridge)` connects to Dorico's built-in Remote Control API. Handles the two-step handshake protocol, session token caching for reconnection, and maps common bridge operations to Dorico commands. Returns clear limitation messages for unsupported operations.
 
+### `bridge/sibelius.py` -- Sibelius bridge
+
+`SibeliusBridge(ScoreBridge)` connects to Sibelius Connect's built-in WebSocket server (2024.3+). Handles the pairing handshake protocol, session token caching for reconnection, and maps common bridge operations to Sibelius commands. Returns clear limitation messages for operations that require a ManuScript file-based bridge (future enhancement). Requires Sibelius Ultimate tier.
+
 ### `bridge/__init__.py` -- bridge registry
 
 Manages which bridge is active. `get_active_bridge()` returns the current bridge; `set_active_bridge()` switches it. Connection tools call these to manage the active bridge lifecycle.
 
-## MCP tools (15 total)
+## MCP tools (17 total)
 
-### Connection (6 tools)
+### Connection (8 tools)
 
 | Tool | Purpose |
 |------|---------|
@@ -162,8 +193,10 @@ Manages which bridge is active. `get_active_bridge()` returns the current bridge
 | `disconnect_from_musescore` | Close the MuseScore connection |
 | `connect_to_dorico` | Connect to Dorico Remote Control API |
 | `disconnect_from_dorico` | Close the Dorico connection |
+| `connect_to_sibelius` | Connect to Sibelius Connect API |
+| `disconnect_from_sibelius` | Close the Sibelius connection |
 | `get_live_score_info` | Get info about the open score (any app) |
-| `ping_musescore` | Check if connected app is responsive (any app) |
+| `ping_score_app` | Check if connected app is responsive (any app) |
 
 ### Analysis (2 tools)
 
@@ -200,10 +233,11 @@ music21 (MIT, Python) handles transposing instruments, voice leading, and MusicX
 
 ### WebSocket bridges for live manipulation
 
-Both MuseScore and Dorico use WebSocket for communication, but the protocols differ:
+All three supported applications use WebSocket for communication, but the protocols differ:
 
 - **MuseScore**: QML plugin runs inside MuseScore, opens a WebSocket server on port 8765. JSON messages with `command` and `params` fields.
 - **Dorico**: Built-in WebSocket server on port 4560. JSON messages with `message` field for protocol-level operations and `commandName` for score commands. Requires a handshake protocol with session tokens.
+- **Sibelius**: Built-in WebSocket server (Sibelius Connect) on port 1898. Similar protocol to Dorico with `message`/`commandName` fields and session token handshake. Requires Sibelius Ultimate tier.
 
 ### Server does not call LLMs
 

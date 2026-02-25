@@ -5,6 +5,7 @@ from mcp_score.bridge import (
     get_active_bridge,
     get_dorico_bridge,
     get_musescore_bridge,
+    get_sibelius_bridge,
     set_active_bridge,
 )
 from mcp_score.tools import NOT_CONNECTED, connected_bridge, to_json
@@ -121,6 +122,63 @@ async def disconnect_from_dorico() -> str:
     )
 
 
+# ── Sibelius ─────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def connect_to_sibelius(host: str = "localhost", port: int = 1898) -> str:
+    """Connect to a running Sibelius instance via Sibelius Connect.
+
+    Sibelius 2024.3+ has a built-in WebSocket server (no plugin needed).
+    Requires Sibelius Ultimate tier. The port is configurable.
+
+    Args:
+        host: WebSocket host (default: localhost).
+        port: WebSocket port (default: 1898, Sibelius Connect's default).
+    """
+    # Disconnect any existing active bridge first.
+    current = get_active_bridge()
+    if current is not None and current.is_connected:
+        await current.disconnect()
+        set_active_bridge(None)
+
+    bridge = get_sibelius_bridge()
+    bridge.host = host
+    bridge.port = port
+    connected = await bridge.connect()
+    if connected:
+        set_active_bridge(bridge)
+        return to_json(
+            {
+                "success": True,
+                "message": (f"Connected to Sibelius at ws://{host}:{port}."),
+            }
+        )
+    return to_json(
+        {
+            "error": (
+                f"Could not connect to Sibelius at ws://{host}:{port}. "
+                "Is Sibelius running with Sibelius Connect enabled?"
+            )
+        }
+    )
+
+
+@mcp.tool()
+async def disconnect_from_sibelius() -> str:
+    """Disconnect from Sibelius."""
+    bridge = get_sibelius_bridge()
+    await bridge.disconnect()
+    if get_active_bridge() is bridge:
+        set_active_bridge(None)
+    return to_json(
+        {
+            "success": True,
+            "message": "Disconnected from Sibelius.",
+        }
+    )
+
+
 # ── Shared tools (work with any connected application) ──────────────
 
 
@@ -128,8 +186,8 @@ async def disconnect_from_dorico() -> str:
 async def get_live_score_info() -> str:
     """Get information about the currently open score.
 
-    Requires an active connection — use connect_to_musescore or
-    connect_to_dorico first.
+    Requires an active connection — use connect_to_musescore,
+    connect_to_dorico, or connect_to_sibelius first.
     """
     bridge = connected_bridge()
     if bridge is None:
@@ -142,7 +200,7 @@ async def get_live_score_info() -> str:
 async def ping_score_app() -> str:
     """Check if the connected score application is responsive.
 
-    Works with any connected application (MuseScore or Dorico).
+    Works with any connected application (MuseScore, Dorico, or Sibelius).
     Does NOT auto-connect — returns an error if not already connected.
     """
     bridge = connected_bridge()
