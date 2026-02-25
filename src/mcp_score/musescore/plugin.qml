@@ -10,7 +10,7 @@
 // and optionally a "params" field. The response is always a JSON object with
 // either a "result" field (on success) or an "error" field (on failure).
 //
-// Supported commands (19):
+// Supported commands:
 //   ping, getScore, getCursorInfo, goToMeasure, goToStaff, addNote,
 //   addRehearsalMark, setBarline, setKeySignature, setTimeSignature,
 //   setTempo, addChordSymbol, addDynamic, appendMeasures,
@@ -52,17 +52,6 @@ MuseScore {
     // ===================================================================
     // Lookup tables
     // ===================================================================
-
-    // Base duration denominator -> tick count.
-    readonly property var baseDurationTicks: ({
-        1:  1920,
-        2:  960,
-        4:  480,
-        8:  240,
-        16: 120,
-        32: 60,
-        64: 30
-    })
 
     // Barline type string -> MuseScore enum value.
     readonly property var barlineTypes: ({
@@ -706,7 +695,6 @@ MuseScore {
 
         // Find tick positions for the measure range.
         var cursor = curScore.newCursor();
-        cursor.rewind(Cursor.SCORE_START);
         advanceCursorToMeasure(cursor, startMeasure);
         var startTick = cursor.tick;
 
