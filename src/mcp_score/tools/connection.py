@@ -1,17 +1,10 @@
 """Connection tools — manage the WebSocket bridge to MuseScore."""
 
-import json
-from typing import Any
-
 from mcp_score.app import mcp
 from mcp_score.bridge import get_bridge
+from mcp_score.tools import NOT_CONNECTED, connected_bridge, to_json
 
 __all__: list[str] = []
-
-
-def _result(data: dict[str, Any]) -> str:
-    """Serialize a result dict to JSON."""
-    return json.dumps(data)
 
 
 @mcp.tool()
@@ -29,13 +22,13 @@ async def connect_to_musescore(host: str = "localhost", port: int = 8765) -> str
     bridge.port = port
     connected = await bridge.connect()
     if connected:
-        return _result(
+        return to_json(
             {
                 "success": True,
                 "message": f"Connected to MuseScore at ws://{host}:{port}.",
             }
         )
-    return _result(
+    return to_json(
         {
             "error": f"Could not connect to MuseScore at ws://{host}:{port}. "
             "Is the MCP Score Bridge plugin running?"
@@ -48,7 +41,7 @@ async def disconnect_from_musescore() -> str:
     """Disconnect from MuseScore."""
     bridge = get_bridge()
     await bridge.disconnect()
-    return _result(
+    return to_json(
         {
             "success": True,
             "message": "Disconnected from MuseScore.",
@@ -58,17 +51,27 @@ async def disconnect_from_musescore() -> str:
 
 @mcp.tool()
 async def get_live_score_info() -> str:
-    """Get information about the currently open score in MuseScore."""
-    bridge = get_bridge()
+    """Get information about the currently open score in MuseScore.
+
+    Requires an active connection — use connect_to_musescore first.
+    """
+    bridge = connected_bridge()
+    if bridge is None:
+        return to_json({"error": NOT_CONNECTED})
     result = await bridge.get_score()
-    return _result(result)
+    return to_json(result)
 
 
 @mcp.tool()
 async def ping_musescore() -> str:
-    """Check if MuseScore is connected and responsive."""
-    bridge = get_bridge()
+    """Check if MuseScore is connected and responsive.
+
+    Does NOT auto-connect — returns an error if not already connected.
+    """
+    bridge = connected_bridge()
+    if bridge is None:
+        return to_json({"error": NOT_CONNECTED})
     alive = await bridge.ping()
     if alive:
-        return _result({"success": True, "message": "MuseScore is responsive."})
-    return _result({"error": "MuseScore is not responding."})
+        return to_json({"success": True, "message": "MuseScore is responsive."})
+    return to_json({"error": "MuseScore is not responding."})

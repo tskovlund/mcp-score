@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -23,6 +24,9 @@ class MuseScoreBridge:
     This client sends commands and receives responses.
     """
 
+    #: Timeout in seconds for receiving a response from MuseScore.
+    RECV_TIMEOUT: float = 30.0
+
     def __init__(self, host: str = "localhost", port: int = 8765) -> None:
         self.host = host
         self.port = port
@@ -35,8 +39,15 @@ class MuseScoreBridge:
 
     @property
     def is_connected(self) -> bool:
-        """Whether there is an active WebSocket connection."""
-        return self._connection is not None
+        """Whether there is an active, open WebSocket connection."""
+        conn = self._connection
+        if conn is None:
+            return False
+        # Check the actual connection state, not just object presence.
+        try:
+            return conn.protocol.state.name == "OPEN"  # pyright: ignore[reportUnknownMemberType]
+        except AttributeError:
+            return True  # Fallback: trust that non-None means connected
 
     async def connect(self) -> bool:
         """Connect to the MuseScore WebSocket server.
@@ -67,7 +78,7 @@ class MuseScoreBridge:
             return {"error": "No active connection"}
 
         await conn.send(command_json)
-        response_raw = await conn.recv()
+        response_raw = await asyncio.wait_for(conn.recv(), timeout=self.RECV_TIMEOUT)
         if not isinstance(response_raw, str):
             return {"error": "Received non-text response from MuseScore"}
         logger.debug("Received: %s", response_raw)
@@ -107,6 +118,7 @@ class MuseScoreBridge:
         except (
             websockets.exceptions.ConnectionClosed,
             websockets.exceptions.WebSocketException,
+            TimeoutError,
         ):
             logger.warning("Connection lost, attempting reconnect...")
             self._connection = None

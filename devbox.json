@@ -5,7 +5,8 @@
     "init_hook": [
       "if [ ! -d .venv ]; then uv venv --python python3.13; fi",
       "source .venv/bin/activate",
-      "uv sync"
+      "uv sync",
+      "git config core.hooksPath .githooks 2>/dev/null || true"
     ],
     "scripts": {
       "test": "pytest",

@@ -25,7 +25,7 @@ Close the WebSocket connection. No parameters.
 
 ### `get_live_score_info`
 
-Get information about the currently open score in MuseScore. No parameters. Uses auto-connect.
+Get information about the currently open score in MuseScore. No parameters. Requires an active connection.
 
 ### `ping_musescore`
 

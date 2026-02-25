@@ -46,13 +46,18 @@ music21 instrument classes and their properties. Use these exact class names.
 | Electric Piano | `instrument.ElectricPiano()` | Concert pitch |
 | Harpsichord | `instrument.Harpsichord()` | Concert pitch |
 
-## Guitar
+## Guitar and Bass
 
-| Name | Class | Transposition |
+Guitar sounds an octave below written pitch in real life, but music21 does **not** encode this as a transposition. Write notes at the **written pitch** (not sounding pitch) for these instruments.
+
+| Name | Class | Transposition in music21 |
 |---|---|---|
-| Acoustic Guitar | `instrument.AcousticGuitar()` | Octave down |
-| Electric Guitar | `instrument.ElectricGuitar()` | Octave down |
-| Electric Bass | `instrument.ElectricBass()` | Octave down |
+| Acoustic Guitar | `instrument.AcousticGuitar()` | Concert pitch (no transposition) |
+| Electric Guitar | `instrument.ElectricGuitar()` | Concert pitch (no transposition) |
+| Acoustic Bass | `instrument.AcousticBass()` | Concert pitch (no transposition) |
+| Electric Bass | `instrument.ElectricBass()` | Concert pitch (no transposition) |
+
+For jazz rhythm sections, prefer `AcousticBass()` or `ElectricBass()` over `Contrabass()` — the latter applies an octave-down transposition suited for orchestral double bass.
 
 ## Percussion
 
@@ -62,12 +67,15 @@ music21 instrument classes and their properties. Use these exact class names.
 
 ## Voices
 
-| Name | Class | Range |
+Ranges are conventional (not enforced by music21).
+
+| Name | Class | Typical Range |
 |---|---|---|
-| Soprano | `instrument.Soprano()` | C4-C6 |
-| Alto | `instrument.Alto()` | F3-F5 |
-| Tenor | `instrument.Tenor()` | C3-C5 |
-| Baritone | `instrument.Baritone()` | A2-A4 |
+| Soprano | `instrument.Soprano()` | C4–C6 |
+| Alto | `instrument.Alto()` | F3–F5 |
+| Tenor | `instrument.Tenor()` | C3–C5 |
+| Baritone | `instrument.Baritone()` | A2–A4 |
+| Bass | `instrument.Bass()` | E2–E4 |
 
 ## Numbered Parts
 
@@ -100,7 +108,7 @@ instruments_list = [
     ("Bass Trombone", instrument.BassTrombone),
     ("Piano", instrument.Piano),
     ("Guitar", instrument.AcousticGuitar),
-    ("Bass", instrument.Contrabass),
+    ("Bass", instrument.AcousticBass),
     ("Drums", instrument.UnpitchedPercussion),
 ]
 

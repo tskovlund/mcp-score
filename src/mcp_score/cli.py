@@ -129,11 +129,25 @@ def install_all() -> bool:
 
 # ── CLI entry point ───────────────────────────────────────────────────
 
+
+def run_script(script_args: list[str]) -> NoReturn:
+    """Run a Python script with the package's interpreter (has music21)."""
+    import subprocess
+
+    if not script_args:
+        print("Usage: mcp-score run <script.py> [args...]")
+        sys.exit(1)
+
+    result = subprocess.run([sys.executable, *script_args])
+    sys.exit(result.returncode)
+
+
 _USAGE = """\
 Usage: mcp-score <command>
 
 Commands:
   serve            Run the MCP server (default)
+  run <script>     Run a Python script with music21 available
   install          Install skill and MuseScore plugin
   install-skill    Install the score-generate skill to ~/.claude/skills/
   install-plugin   Install the QML plugin to MuseScore's Plugins directory
@@ -152,6 +166,9 @@ def main() -> NoReturn:
 
         serve_main()
         sys.exit(0)
+
+    if command == "run":
+        run_script(args[1:])
 
     if command == "install":
         ok = install_all()
