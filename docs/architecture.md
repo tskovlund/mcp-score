@@ -30,9 +30,9 @@ mcp-score provides two complementary approaches for AI-driven music notation:
 +----------------+   |                             |
                      | bridge/                     |
                      |   base.py (ScoreBridge)     |
+                     |   remote_control.py         |
                      |   musescore.py              |
-                     |   dorico.py                 |
-                     |   sibelius.py               |
+                     |   dorico.py / sibelius.py   |
                      +------+--------+--------+----+
                             |        |        |
                 WebSocket   |        |        | WebSocket
@@ -52,11 +52,20 @@ mcp-score supports multiple score notation applications through a common bridge 
 
 ### Bridge abstraction
 
-`ScoreBridge` (in `bridge/base.py`) defines the common interface that all MCP tools depend on. Each concrete bridge implements this interface for its target application:
+`ScoreBridge` (in `bridge/base.py`) defines the common interface that all MCP tools depend on. The bridge hierarchy:
 
-- `MuseScoreBridge` -- connects to the MuseScore QML plugin's WebSocket server
-- `DoricoBridge` -- connects to Dorico's built-in Remote Control API
-- `SibeliusBridge` -- connects to Sibelius Connect's built-in WebSocket server
+```
+ScoreBridge (ABC)
+├── MuseScoreBridge          -- custom protocol for MuseScore QML plugin
+└── RemoteControlBridge      -- shared handshake/command protocol
+    ├── DoricoBridge         -- Dorico defaults (port 4560)
+    └── SibeliusBridge       -- Sibelius defaults (port 1898)
+```
+
+- `MuseScoreBridge` -- connects to the MuseScore QML plugin's WebSocket server (different protocol)
+- `RemoteControlBridge` (in `bridge/remote_control.py`) -- shared protocol logic for Dorico and Sibelius: handshake with session tokens, command formatting, reconnection, barline mapping, and limitation messages
+- `DoricoBridge` -- thin subclass providing Dorico-specific defaults
+- `SibeliusBridge` -- thin subclass providing Sibelius-specific defaults
 
 ### Bridge registry
 
@@ -66,50 +75,39 @@ mcp-score supports multiple score notation applications through a common bridge 
 - `set_active_bridge()` -- sets which bridge is active
 - Tools call `connected_bridge()` from `tools/__init__.py`, which returns the active bridge only if it's connected
 
-### Dorico Remote Control protocol
+### Remote Control protocol (shared by Dorico and Sibelius)
 
-Dorico 4+ has a built-in WebSocket server (default port 4560, configurable in preferences). No plugin needed -- Dorico IS the server.
-
-**Handshake protocol:**
-
-1. Client opens WebSocket to `ws://localhost:4560`
-2. Client sends connect message with `clientName` and `handshakeVersion`
-3. Dorico shows a dialog asking the user to allow the connection
-4. Dorico responds with a session token
-5. Client sends `acceptsessiontoken` with the received token
-6. Dorico responds with `{"code": "kConnected"}`
-
-Session tokens can be cached and reused for reconnection (Dorico skips the user dialog when a valid cached token is provided).
-
-**Known limitations:**
-
-- Cannot query arbitrary score content (notes/measures) -- only read properties of current selection
-- No MusicXML export via API
-- Good for score manipulation commands, limited for analysis
-- Some operations (key signatures, tempo) not available through the command API
-
-### Sibelius Connect protocol
-
-Sibelius 2024.3+ has "Sibelius Connect" -- a built-in WebSocket server (default port 1898, configurable). Requires Sibelius Ultimate tier. No plugin needed -- Sibelius IS the server.
+Dorico 4+ and Sibelius 2024.3+ both implement the same "Remote Control" WebSocket protocol. The shared logic lives in `bridge/remote_control.py`.
 
 **Handshake protocol:**
 
-1. Client opens WebSocket to `ws://localhost:1898`
+1. Client opens WebSocket to the application's port (Dorico: 4560, Sibelius: 1898)
 2. Client sends connect message with `clientName` and `handshakeVersion`
-3. Sibelius shows a pairing dialog asking the user to approve
-4. Sibelius responds with a session token
+3. Application shows a dialog asking the user to approve the connection
+4. Application responds with a session token
 5. Client sends `acceptsessiontoken` with the received token
-6. Sibelius responds with `{"code": "kConnected"}`
+6. Application responds with `{"code": "kConnected"}`
 
-Session tokens can be cached and reused for reconnection (Sibelius skips the pairing dialog when a valid cached token is provided).
+Session tokens can be cached and reused for reconnection (the application skips the approval dialog when a valid cached token is provided).
 
-**Known limitations:**
+**Dorico-specific notes:**
 
-- Cannot query arbitrary score content (individual notes, articulations) -- requires a ManuScript file-based bridge (future enhancement)
-- No MusicXML export via command API
-- Good for score manipulation commands (900+), limited for analysis
-- Some operations (key signatures, tempo, chord symbols) not available through the command API alone
+- Default port 4560, configurable in Dorico preferences
+- No plugin needed -- Dorico IS the server
+
+**Sibelius-specific notes:**
+
+- Default port 1898, configurable
 - Requires Sibelius Ultimate tier
+- No plugin needed -- Sibelius IS the server
+
+**Known limitations (both applications):**
+
+- Cannot query arbitrary score content -- limited to current selection and high-level status
+- No MusicXML export via the command API
+- Some operations (key signatures, tempo) not available through the command API
+- Chord symbols not supported via the command API (both applications)
+- Sibelius has 900+ commands; Dorico's command set is smaller but growing
 
 ## Why two approaches?
 
@@ -134,9 +132,10 @@ src/mcp_score/
   bridge/
     __init__.py         Bridge registry (get_active_bridge, set_active_bridge)
     base.py             ScoreBridge abstract base class
+    remote_control.py   RemoteControlBridge -- shared protocol for Dorico & Sibelius
     musescore.py        MuseScoreBridge -- WebSocket client for MuseScore plugin
-    dorico.py           DoricoBridge -- WebSocket client for Dorico Remote Control
-    sibelius.py         SibeliusBridge -- WebSocket client for Sibelius Connect
+    dorico.py           DoricoBridge -- thin subclass (Dorico defaults)
+    sibelius.py         SibeliusBridge -- thin subclass (Sibelius defaults)
   musescore/
     plugin.qml          MuseScore QML plugin (WebSocket server)
 
@@ -171,13 +170,17 @@ Imports the three tool modules (connection, analysis, manipulation) to register 
 
 `MuseScoreBridge(ScoreBridge)` connects to the MuseScore QML plugin. Features auto-connect on first command, automatic reconnect on connection loss, and typed convenience methods for all plugin commands.
 
+### `bridge/remote_control.py` -- shared Remote Control protocol
+
+`RemoteControlBridge(ScoreBridge)` implements the WebSocket protocol shared by Dorico and Sibelius: handshake with session tokens, command formatting, send-with-reconnect, barline mapping, and limitation messages for unsupported operations. Uses `self.application_name` in all user-facing messages for proper attribution.
+
 ### `bridge/dorico.py` -- Dorico bridge
 
-`DoricoBridge(ScoreBridge)` connects to Dorico's built-in Remote Control API. Handles the two-step handshake protocol, session token caching for reconnection, and maps common bridge operations to Dorico commands. Returns clear limitation messages for unsupported operations.
+`DoricoBridge(RemoteControlBridge)` -- thin subclass that provides Dorico-specific defaults (port 4560, application name "Dorico"). All protocol logic is inherited from `RemoteControlBridge`.
 
 ### `bridge/sibelius.py` -- Sibelius bridge
 
-`SibeliusBridge(ScoreBridge)` connects to Sibelius Connect's built-in WebSocket server (2024.3+). Handles the pairing handshake protocol, session token caching for reconnection, and maps common bridge operations to Sibelius commands. Returns clear limitation messages for operations that require a ManuScript file-based bridge (future enhancement). Requires Sibelius Ultimate tier.
+`SibeliusBridge(RemoteControlBridge)` -- thin subclass that provides Sibelius-specific defaults (port 1898, application name "Sibelius"). All protocol logic is inherited from `RemoteControlBridge`. Requires Sibelius Ultimate tier.
 
 ### `bridge/__init__.py` -- bridge registry
 
@@ -235,9 +238,8 @@ music21 (MIT, Python) handles transposing instruments, voice leading, and MusicX
 
 All three supported applications use WebSocket for communication, but the protocols differ:
 
-- **MuseScore**: QML plugin runs inside MuseScore, opens a WebSocket server on port 8765. JSON messages with `command` and `params` fields.
-- **Dorico**: Built-in WebSocket server on port 4560. JSON messages with `message` field for protocol-level operations and `commandName` for score commands. Requires a handshake protocol with session tokens.
-- **Sibelius**: Built-in WebSocket server (Sibelius Connect) on port 1898. Similar protocol to Dorico with `message`/`commandName` fields and session token handshake. Requires Sibelius Ultimate tier.
+- **MuseScore**: QML plugin runs inside MuseScore, opens a WebSocket server on port 8765. JSON messages with `command` and `params` fields. Custom protocol -- implemented directly in `MuseScoreBridge`.
+- **Dorico & Sibelius**: Both use the same "Remote Control" protocol with `message`/`commandName` fields and session token handshake. Shared logic lives in `RemoteControlBridge`; thin subclasses provide application-specific defaults (port, name).
 
 ### Server does not call LLMs
 

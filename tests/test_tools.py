@@ -11,32 +11,9 @@ from mcp_score.tools import (
     NOT_CONNECTED,
     check_measure,
     connected_bridge,
-    to_json,
 )
 
 # ── Helper tests ─────────────────────────────────────────────────────
-
-
-class TestToJson:
-    def test_serializes_dict(self) -> None:
-        # Arrange
-        data = {"success": True, "message": "ok"}
-
-        # Act
-        result = to_json(data)
-
-        # Assert
-        assert json.loads(result) == data
-
-    def test_serializes_nested_dict(self) -> None:
-        # Arrange
-        data = {"result": {"measures": [1, 2, 3]}}
-
-        # Act
-        result = to_json(data)
-
-        # Assert
-        assert json.loads(result) == data
 
 
 class TestCheckMeasure:

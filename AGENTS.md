@@ -17,9 +17,10 @@ src/mcp_score/
     manipulation.py   Modify live score (barlines, chords, keys, tempo, transpose)
   bridge/
     base.py           ScoreBridge abstract base class
+    remote_control.py Shared Remote Control protocol (Dorico & Sibelius)
     musescore.py      WebSocket client for MuseScore plugin
-    dorico.py         WebSocket client for Dorico Remote Control API
-    sibelius.py       WebSocket client for Sibelius Connect API
+    dorico.py         Dorico defaults (thin subclass of RemoteControlBridge)
+    sibelius.py       Sibelius defaults (thin subclass of RemoteControlBridge)
   musescore/
     plugin.qml        MuseScore QML plugin (WebSocket server, 19 commands)
 
@@ -77,14 +78,20 @@ pyright src/         # type check (strict mode)
 - **Ruff** for linting and formatting (line length 88)
 - **Conventional commits** — enforced by `.githooks/commit-msg`
 - **`__all__`** — every module explicitly declares its public API
-- **Full variable names** — `measure_index` not `m`, `staff_number` not `s`
+- **Full variable names** — `measure_index` not `m`, `staff_number` not `s`. Intent should be readable, not inferred from abbreviations
+- **No magic constants** — named constants for ports, protocol versions, error codes. Every literal value must be self-documenting
+- **No DRY violations** — extract shared logic into a single source of truth. Prefer a base class or utility over copy-paste
+- **Single responsibility** — each file and class has one clear purpose. Thin subclasses over monolithic duplicated implementations
+- **No shorthand** — `connection` not `conn`, `message` not `msg`, `response` not `resp`
 - Direct to main for small changes, branch + PR for structural work
 
 ## Test conventions
 
 - **Naming:** `test_action_expectation` (e.g. `test_create_score_sets_key_signature`)
 - **Structure:** Arrange / Act / Assert comments in every test
-- **Lean:** every test must earn its place by adding value
+- **Lean:** every test must earn its place by covering a meaningful path. No trivial tests (issubclass checks, json.dumps wrappers, constant assertions). No tests of library or built-in functionality
+- **No duplication:** shared protocol logic is tested once in the base class test file, not repeated per subclass. Per-subclass tests cover only subclass-specific behavior (defaults, overrides)
+- **Complete coverage of value paths:** every error path, edge case, and branching condition that could fail in production
 
 ## Tool design principles
 

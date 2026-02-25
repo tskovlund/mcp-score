@@ -8,11 +8,14 @@ Connection tools call ``set_active_bridge()`` to switch.
 from mcp_score.bridge.base import ScoreBridge
 from mcp_score.bridge.dorico import DoricoBridge
 from mcp_score.bridge.musescore import MuseScoreBridge
+from mcp_score.bridge.remote_control import HandshakeError, RemoteControlBridge
 from mcp_score.bridge.sibelius import SibeliusBridge
 
 __all__ = [
     "DoricoBridge",
+    "HandshakeError",
     "MuseScoreBridge",
+    "RemoteControlBridge",
     "ScoreBridge",
     "SibeliusBridge",
     "get_active_bridge",
