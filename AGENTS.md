@@ -1,28 +1,39 @@
 # mcp-score
 
-MCP server for AI-driven music score generation and manipulation. Natural language to notation via MusicXML, with live MuseScore integration for reading and modifying open scores.
+AI-driven music score generation and manipulation. Two complementary approaches:
+
+- **Score generation** via Claude Code skill (`.claude/skills/score-generate/`) — Claude writes music21 Python scripts that export MusicXML. No MCP needed; runs as a standalone skill.
+- **Live MuseScore manipulation** via MCP server — reads from and writes to a running MuseScore instance via WebSocket bridge.
 
 ## Architecture
 
 ```
 src/mcp_score/
   server.py           MCP server entry point (FastMCP)
+  app.py              Shared FastMCP instance
   tools/
-    generation.py     Score generation (create_score, add_section, set_chord_symbols)
-    analysis.py       Score analysis (read_passage, analyze_harmony, identify_pattern)
-    manipulation.py   Score manipulation (arrange_for, harmonize, transpose_passage)
+    connection.py     Connect/disconnect/ping MuseScore
+    analysis.py       Read passages and measures from live score
+    manipulation.py   Modify live score (barlines, chords, keys, tempo, transpose)
   bridge/
     client.py         WebSocket client to MuseScore plugin
   musescore/
-    plugin.qml        MuseScore QML plugin (WebSocket server)
+    plugin.qml        MuseScore QML plugin (WebSocket server, 19 commands)
+
+.claude/skills/
+  score-generate/     Claude Code skill for score generation via music21
+    SKILL.md
+    references/
 
 tests/                pytest tests, one file per module
 docs/                 Diataxis-structured documentation
 ```
 
-Two modes of operation:
-- **Generate:** music21 builds a score -> exports MusicXML -> opens in MuseScore
-- **Manipulate:** reads from a live MuseScore instance via WebSocket -> transforms -> writes back
+### Why two approaches?
+
+**Generation** is best as a skill: Claude writes a complete music21 script in one shot, giving it full access to the entire music21 API. This is faster (one script vs dozens of MCP tool calls) and more flexible (no API surface to limit).
+
+**Manipulation** is best as MCP: reading from and writing to a live MuseScore instance requires a persistent WebSocket connection and state management that MCP handles well.
 
 See [docs/architecture.md](docs/architecture.md) for detailed design documentation.
 
@@ -74,19 +85,20 @@ pyright src/         # type check (strict mode)
 
 ## Tool design principles
 
-Tools are organized in three tiers by abstraction level:
+MCP tools handle live MuseScore interaction only:
 
-1. **Generation** — create scores from structured descriptions (music21 -> MusicXML)
-2. **Analysis** — read and understand musical content from a live MuseScore instance
-3. **Manipulation** — transform and write back (combines reading + musical intelligence + writing)
+1. **Connection** — manage WebSocket bridge to MuseScore
+2. **Analysis** — read and understand musical content from the live score
+3. **Manipulation** — modify the live score (barlines, chords, keys, tempo, transpose, undo)
 
-The MCP server does NOT call LLMs. Claude is the musical intelligence; the server provides construction and analysis primitives.
+Score generation is handled by the `score-generate` skill — Claude writes music21 scripts directly, giving full API access without an MCP bottleneck.
 
 ## Key technical decisions
 
 - **MusicXML** as interchange format (not .mscz/.mscx — undocumented and version-fragile)
 - **music21** for programmatic score generation (handles transposing instruments, voice leading, MusicXML export)
-- **WebSocket bridge** to MuseScore via QML plugin (proven pattern, same as existing MuseScore MCP servers)
+- **Skill over MCP for generation** — fewer round-trips, full API access, better results
+- **WebSocket bridge** to MuseScore via QML plugin for live manipulation
 - **Python** because music21 is Python-only and the MCP SDK has first-class Python support
 
 ## Git workflow
