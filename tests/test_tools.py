@@ -226,11 +226,11 @@ class TestPingMusescore:
     @pytest.mark.anyio()
     async def test_requires_connection(self) -> None:
         # Arrange
-        from mcp_score.tools.connection import ping_musescore
+        from mcp_score.tools.connection import ping_score_app
 
         with patch("mcp_score.tools.get_active_bridge", return_value=None):
             # Act
-            result = json.loads(await ping_musescore())
+            result = json.loads(await ping_score_app())
 
         # Assert
         assert "error" in result
@@ -238,7 +238,7 @@ class TestPingMusescore:
     @pytest.mark.anyio()
     async def test_returns_success_when_responsive(self) -> None:
         # Arrange
-        from mcp_score.tools.connection import ping_musescore
+        from mcp_score.tools.connection import ping_score_app
 
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
@@ -247,7 +247,7 @@ class TestPingMusescore:
 
         with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
-            result = json.loads(await ping_musescore())
+            result = json.loads(await ping_score_app())
 
         # Assert
         assert result["success"] is True
@@ -255,7 +255,7 @@ class TestPingMusescore:
     @pytest.mark.anyio()
     async def test_returns_error_when_unresponsive(self) -> None:
         # Arrange
-        from mcp_score.tools.connection import ping_musescore
+        from mcp_score.tools.connection import ping_score_app
 
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
@@ -264,7 +264,7 @@ class TestPingMusescore:
 
         with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
-            result = json.loads(await ping_musescore())
+            result = json.loads(await ping_score_app())
 
         # Assert
         assert "error" in result

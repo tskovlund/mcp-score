@@ -6,20 +6,24 @@ Connection tools call ``set_active_bridge()`` to switch.
 """
 
 from mcp_score.bridge.base import ScoreBridge
+from mcp_score.bridge.dorico import DoricoBridge
 from mcp_score.bridge.musescore import MuseScoreBridge
 
 __all__ = [
+    "DoricoBridge",
     "MuseScoreBridge",
     "ScoreBridge",
     "get_active_bridge",
+    "get_dorico_bridge",
     "get_musescore_bridge",
     "set_active_bridge",
 ]
 
 _active_bridge: ScoreBridge | None = None
 
-# Legacy singleton for backward compatibility within MuseScore tools.
+# Singletons — one instance per DAW type, created on first use.
 _musescore_bridge: MuseScoreBridge | None = None
+_dorico_bridge: DoricoBridge | None = None
 
 
 def get_musescore_bridge() -> MuseScoreBridge:
@@ -28,6 +32,14 @@ def get_musescore_bridge() -> MuseScoreBridge:
     if _musescore_bridge is None:
         _musescore_bridge = MuseScoreBridge()
     return _musescore_bridge
+
+
+def get_dorico_bridge() -> DoricoBridge:
+    """Get the shared Dorico bridge instance, creating one if needed."""
+    global _dorico_bridge  # noqa: PLW0603
+    if _dorico_bridge is None:
+        _dorico_bridge = DoricoBridge()
+    return _dorico_bridge
 
 
 def get_active_bridge() -> ScoreBridge | None:

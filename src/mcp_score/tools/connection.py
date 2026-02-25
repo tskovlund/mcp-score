@@ -3,10 +3,10 @@
 from mcp_score.app import mcp
 from mcp_score.bridge import (
     get_active_bridge,
+    get_dorico_bridge,
     get_musescore_bridge,
     set_active_bridge,
 )
-from mcp_score.bridge.dorico import DoricoBridge
 from mcp_score.tools import NOT_CONNECTED, connected_bridge, to_json
 
 __all__: list[str] = []
@@ -68,17 +68,6 @@ async def disconnect_from_musescore() -> str:
 
 # ── Dorico ───────────────────────────────────────────────────────────
 
-# Module-level singleton for the Dorico bridge.
-_dorico_bridge: DoricoBridge | None = None
-
-
-def _get_dorico_bridge() -> DoricoBridge:
-    """Get the shared Dorico bridge instance, creating one if needed."""
-    global _dorico_bridge  # noqa: PLW0603
-    if _dorico_bridge is None:
-        _dorico_bridge = DoricoBridge()
-    return _dorico_bridge
-
 
 @mcp.tool()
 async def connect_to_dorico(host: str = "localhost", port: int = 4560) -> str:
@@ -97,7 +86,7 @@ async def connect_to_dorico(host: str = "localhost", port: int = 4560) -> str:
         await current.disconnect()
         set_active_bridge(None)
 
-    bridge = _get_dorico_bridge()
+    bridge = get_dorico_bridge()
     bridge.host = host
     bridge.port = port
     connected = await bridge.connect()
@@ -120,7 +109,7 @@ async def connect_to_dorico(host: str = "localhost", port: int = 4560) -> str:
 @mcp.tool()
 async def disconnect_from_dorico() -> str:
     """Disconnect from Dorico."""
-    bridge = _get_dorico_bridge()
+    bridge = get_dorico_bridge()
     await bridge.disconnect()
     if get_active_bridge() is bridge:
         set_active_bridge(None)
@@ -150,11 +139,11 @@ async def get_live_score_info() -> str:
 
 
 @mcp.tool()
-async def ping_musescore() -> str:
+async def ping_score_app() -> str:
     """Check if the connected score application is responsive.
 
-    Despite the name, works with any connected application (MuseScore or
-    Dorico). Does NOT auto-connect — returns an error if not already connected.
+    Works with any connected application (MuseScore or Dorico).
+    Does NOT auto-connect — returns an error if not already connected.
     """
     bridge = connected_bridge()
     if bridge is None:

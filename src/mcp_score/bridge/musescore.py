@@ -54,7 +54,7 @@ class MuseScoreBridge(ScoreBridge):
         try:
             return conn.protocol.state.name == "OPEN"  # pyright: ignore[reportUnknownMemberType]
         except AttributeError:
-            return True  # Fallback: trust that non-None means connected
+            return False  # Fallback: assume disconnected if state is unknown
 
     async def connect(self) -> bool:
         """Connect to the MuseScore WebSocket server.

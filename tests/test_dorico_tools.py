@@ -20,7 +20,7 @@ class TestConnectToDorico:
 
         with (
             patch(
-                "mcp_score.tools.connection._get_dorico_bridge",
+                "mcp_score.tools.connection.get_dorico_bridge",
                 return_value=mock_bridge,
             ),
             patch(
@@ -47,7 +47,7 @@ class TestConnectToDorico:
 
         with (
             patch(
-                "mcp_score.tools.connection._get_dorico_bridge",
+                "mcp_score.tools.connection.get_dorico_bridge",
                 return_value=mock_bridge,
             ),
             patch(
@@ -73,7 +73,7 @@ class TestConnectToDorico:
 
         with (
             patch(
-                "mcp_score.tools.connection._get_dorico_bridge",
+                "mcp_score.tools.connection.get_dorico_bridge",
                 return_value=mock_bridge,
             ),
             patch(
@@ -104,7 +104,7 @@ class TestConnectToDorico:
 
         with (
             patch(
-                "mcp_score.tools.connection._get_dorico_bridge",
+                "mcp_score.tools.connection.get_dorico_bridge",
                 return_value=new_bridge,
             ),
             patch(
@@ -132,7 +132,7 @@ class TestDisconnectFromDorico:
 
         with (
             patch(
-                "mcp_score.tools.connection._get_dorico_bridge",
+                "mcp_score.tools.connection.get_dorico_bridge",
                 return_value=mock_bridge,
             ),
             patch(
@@ -159,7 +159,7 @@ class TestDisconnectFromDorico:
 
         with (
             patch(
-                "mcp_score.tools.connection._get_dorico_bridge",
+                "mcp_score.tools.connection.get_dorico_bridge",
                 return_value=dorico_bridge,
             ),
             patch(
@@ -220,7 +220,7 @@ class TestBridgeSwitching:
 
         with (
             patch(
-                "mcp_score.tools.connection._get_dorico_bridge",
+                "mcp_score.tools.connection.get_dorico_bridge",
                 return_value=dorico_bridge,
             ),
             patch(

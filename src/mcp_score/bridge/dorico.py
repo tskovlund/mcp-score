@@ -82,7 +82,7 @@ class DoricoBridge(ScoreBridge):
         try:
             return conn.protocol.state.name == "OPEN"  # pyright: ignore[reportUnknownMemberType]
         except AttributeError:
-            return True  # Fallback: trust that non-None means connected
+            return False  # Fallback: assume disconnected if state is unknown
 
     async def connect(self) -> bool:
         """Connect to Dorico and perform the handshake.
@@ -139,9 +139,6 @@ class DoricoBridge(ScoreBridge):
         Returns:
             Parsed JSON response from Dorico.
         """
-        if self._connection is None and not await self.connect():
-            return {"error": f"Cannot connect to Dorico at {self.uri}"}
-
         message: dict[str, Any] = {
             "message": "command",
             "commandName": action,
@@ -149,21 +146,7 @@ class DoricoBridge(ScoreBridge):
         if params is not None:
             message["parameters"] = params
 
-        try:
-            return await self._send_and_receive(message)
-        except (
-            websockets.exceptions.ConnectionClosed,
-            websockets.exceptions.WebSocketException,
-            TimeoutError,
-        ):
-            logger.warning("Connection lost, attempting reconnect...")
-            await self._close_connection()
-            if not await self.connect():
-                return {"error": "Lost connection to Dorico and reconnect failed"}
-            try:
-                return await self._send_and_receive(message)
-            except Exception as exc:  # noqa: BLE001
-                return {"error": f"Command failed after reconnect: {exc}"}
+        return await self._send_with_reconnect(message)
 
     async def ping(self) -> bool:
         """Check if the connection is alive by requesting app info."""
@@ -208,16 +191,35 @@ class DoricoBridge(ScoreBridge):
         }
 
     async def add_rehearsal_mark(self, text: str) -> dict[str, Any]:
-        """Add a rehearsal mark at the current position."""
-        return await self.send_command("AddRehearsalMark")
+        """Add a rehearsal mark at the current position.
+
+        Dorico's Remote Control API does not support specifying the
+        rehearsal mark text — it uses Dorico's auto-numbering instead.
+        """
+        result = await self.send_command("AddRehearsalMark")
+        if "error" not in result:
+            result.setdefault(
+                "warning",
+                (
+                    f"Dorico ignores the requested text '{text}' and uses "
+                    "its own auto-numbering for rehearsal marks."
+                ),
+            )
+        return result
 
     async def add_chord_symbol(self, text: str) -> dict[str, Any]:
         """Add a chord symbol.
 
-        Dorico's command API can start chord input mode but setting
-        specific chord text requires additional interaction.
+        Dorico's Remote Control API can only enter chord input mode —
+        it cannot set specific chord text programmatically.
         """
-        return await self.send_command("StartChordInput")
+        return {
+            "error": (
+                "Dorico's Remote Control API cannot set chord symbol text "
+                f"('{text}') programmatically. Use Dorico's UI to enter "
+                "chord symbols."
+            )
+        }
 
     async def set_barline(self, barline_type: str) -> dict[str, Any]:
         """Set a barline at the current position."""
@@ -320,6 +322,10 @@ class DoricoBridge(ScoreBridge):
         if code == "kError":
             detail = accept_response.get("detail", "unknown error")
             raise HandshakeError(f"Handshake rejected: {detail}")
+        if code != "kConnected":
+            raise HandshakeError(
+                f"Expected 'kConnected' after accepting token, got: {accept_response}"
+            )
 
         self._session_token = session_token
 
@@ -370,12 +376,16 @@ class DoricoBridge(ScoreBridge):
         Used for protocol-level messages like ``getstatus``, ``getappinfo``,
         ``getcommands``, etc.
         """
-        if self._connection is None and not await self.connect():
-            return {"error": f"Cannot connect to Dorico at {self.uri}"}
-
         message: dict[str, Any] = {"message": message_type}
         if extra_fields is not None:
             message.update(extra_fields)
+
+        return await self._send_with_reconnect(message)
+
+    async def _send_with_reconnect(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Send a message, auto-connecting and retrying once on failure."""
+        if self._connection is None and not await self.connect():
+            return {"error": f"Cannot connect to Dorico at {self.uri}"}
 
         try:
             return await self._send_and_receive(message)
@@ -391,7 +401,7 @@ class DoricoBridge(ScoreBridge):
             try:
                 return await self._send_and_receive(message)
             except Exception as exc:  # noqa: BLE001
-                return {"error": f"Message failed after reconnect: {exc}"}
+                return {"error": f"Request failed after reconnect: {exc}"}
 
     async def _send_and_receive(self, message: dict[str, Any]) -> dict[str, Any]:
         """Send a JSON message and wait for the response."""
