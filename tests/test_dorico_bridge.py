@@ -208,9 +208,7 @@ class TestDoricoBridgeHandshake:
         new_token_response = json.dumps(
             {"message": "sessiontoken", "sessionToken": "new-token"}
         )
-        unexpected_response = json.dumps(
-            {"message": "response", "code": "kPending"}
-        )
+        unexpected_response = json.dumps({"message": "response", "code": "kPending"})
         mock_connection.recv = AsyncMock(
             side_effect=[new_token_response, unexpected_response]
         )
@@ -444,7 +442,6 @@ class TestDoricoBridgeLimitations:
         # Assert
         assert "error" in result
         assert "does not support" in result["error"]
-
 
     @pytest.mark.anyio()
     async def test_add_rehearsal_mark_returns_warning(self) -> None:

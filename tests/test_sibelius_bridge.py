@@ -209,9 +209,7 @@ class TestSibeliusBridgeHandshake:
         new_token_response = json.dumps(
             {"message": "sessiontoken", "sessionToken": "new-token"}
         )
-        unexpected_response = json.dumps(
-            {"message": "response", "code": "kPending"}
-        )
+        unexpected_response = json.dumps({"message": "response", "code": "kPending"})
         mock_connection.recv = AsyncMock(
             side_effect=[new_token_response, unexpected_response]
         )
