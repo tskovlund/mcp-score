@@ -1,119 +1,126 @@
 [![CI](https://github.com/tskovlund/mcp-score/actions/workflows/ci.yml/badge.svg)](https://github.com/tskovlund/mcp-score/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/mcp-score.svg)](https://pypi.org/project/mcp-score/)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![pyright strict](https://img.shields.io/badge/pyright-strict-yellow.svg)](https://github.com/microsoft/pyright)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
 
 # mcp-score
 
-MCP server for AI-driven music score generation and manipulation. Describe what you want in plain English — get a score in MuseScore.
+AI-powered music notation. Describe what you want in plain English -- get a publication-ready score in MuseScore.
 
-## What it does
+## Quick demo
 
-**Generate scores from natural language:**
+> "Create a big band chart -- 32-bar AABA form, key of Bb, slow blues at 66 BPM, with rhythm changes and rehearsal marks at each section."
 
-> "Create a standard big band score, AABA form, key of Bb, 32 bars, with rehearsal marks at each section and chord symbols following a rhythm changes progression."
+Claude writes a complete music21 script, executes it, and hands you a MusicXML file ready to open in MuseScore, Dorico, Sibelius, or any notation app.
 
-**Manipulate live scores:**
+With the MuseScore plugin running, you can go further:
 
-> "Read the pattern in bar 34, arrange it as a backing for the trombone section following the chord progression."
+> "Read the melody in bars 9-16 and arrange it as a trombone soli following the chord progression."
 
-mcp-score connects to any MCP-compatible AI assistant (Claude Desktop, Claude Code, Cursor) and provides tools for creating, analyzing, and transforming music notation.
+Claude reads the live score, applies musical intelligence, and writes the arrangement back -- all through natural language.
 
-## Features
-
-- **Score generation** — create scores from structured descriptions: instrumentation, form, key, time signature, rehearsal marks, barlines, chord symbols
-- **Score analysis** — read and understand musical content from a live MuseScore instance
-- **Score manipulation** — arrange, harmonize, transpose — high-level musical operations, not just note-by-note editing
-- **MusicXML output** — portable format that works with MuseScore, Dorico, Sibelius, and 270+ other notation apps
-- **Live MuseScore bridge** — WebSocket connection to a running MuseScore instance for real-time read/write
-
-## Quick start
-
-### Install
+## Installation
 
 ```bash
 pip install mcp-score
 ```
 
-Or from source ([Devbox](https://www.jetify.com/devbox) + direnv):
+Or with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-git clone https://github.com/tskovlund/mcp-score.git
-cd mcp-score
-direnv allow    # sets up Python 3.13, uv, dev tools, git hooks
+uv tool install mcp-score
 ```
 
-### Configure your MCP client
+Then set up the components you need:
 
-Add to your Claude Desktop config (`claude_desktop_config.json`):
+```bash
+# Install the score generation skill (for Claude Code)
+mcp-score install-skill
+
+# Install the MuseScore plugin (for live score manipulation)
+mcp-score install-plugin
+
+# Or install both at once
+mcp-score install
+```
+
+## Components
+
+mcp-score has three components that work together:
+
+### MCP server
+
+A Python MCP server with 13 tools for live MuseScore interaction: connect/disconnect, read passages, add chords, set barlines, transpose, and more. Runs via `mcp-score serve` (or just `mcp-score`).
+
+### Score generation skill
+
+A Claude Code [skill](https://docs.anthropic.com/en/docs/claude-code/skills) that teaches Claude to write music21 Python scripts for score generation. Installed to `~/.claude/skills/score-generate/`. This handles the "create a score from scratch" use case -- no MCP round-trips needed.
+
+### MuseScore plugin
+
+A QML plugin that runs a WebSocket server inside MuseScore 4, enabling the MCP server to read from and write to the active score in real time. Supports 19 commands including navigation, note input, chord symbols, rehearsal marks, barlines, key/time signatures, tempo, transposition, and undo.
+
+## Configuration
+
+### Claude Code
+
+Add the MCP server to your project or global settings:
+
+```bash
+claude mcp add mcp-score -- mcp-score serve
+```
+
+The score generation skill is installed separately with `mcp-score install-skill` and activates automatically when you ask Claude to create a score.
+
+### Claude Desktop
+
+Add to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "mcp-score": {
-      "command": "mcp-score"
+      "command": "mcp-score",
+      "args": ["serve"]
     }
   }
 }
 ```
 
-### Generate your first score
+### MuseScore plugin setup
 
-Ask Claude:
+After `mcp-score install-plugin`:
 
-> "Create a string quartet score in D major, 4/4 time, 16 bars with rehearsal marks at bars 1, 5, 9, and 13."
+1. Open MuseScore 4
+2. Go to **Plugins > Plugin Manager**
+3. Enable **MCP Score Bridge**
+4. The plugin starts a WebSocket server on port 8765
 
-The server generates MusicXML that you can open in MuseScore or any notation software.
+See [MuseScore plugin docs](docs/musescore-plugin.md) for details.
 
-### Live manipulation (optional)
-
-For reading from and writing to an open score in MuseScore, install the [MuseScore plugin](docs/musescore-plugin.md).
-
-## Architecture
+## CLI reference
 
 ```
-src/mcp_score/
-  server.py           MCP server entry point
-  tools/
-    generation.py     Create scores from descriptions (music21 -> MusicXML)
-    analysis.py       Read and understand musical content
-    manipulation.py   Arrange, harmonize, transpose
-  bridge/
-    client.py         WebSocket client to MuseScore
-  musescore/
-    plugin.qml        MuseScore QML plugin (WebSocket server)
-```
-
-Two modes of operation:
-
-| Mode | How it works | Requires MuseScore plugin? |
-|------|-------------|---------------------------|
-| **Generate** | music21 builds score -> MusicXML export -> open in any notation app | No |
-| **Manipulate** | Read from live MuseScore -> transform -> write back | Yes |
-
-See [docs/architecture.md](docs/architecture.md) for detailed design documentation.
-
-## Development
-
-```bash
-devbox run check     # run all checks (lint, format, typecheck, test)
-devbox run test      # run tests
-devbox run lint      # lint
-devbox run format    # format
-devbox run typecheck # type check (strict mode)
+mcp-score serve            Run the MCP server (default)
+mcp-score install          Install skill and MuseScore plugin
+mcp-score install-skill    Install the score-generate skill to ~/.claude/skills/
+mcp-score install-plugin   Install the QML plugin to MuseScore's Plugins directory
+mcp-score help             Show help
 ```
 
 ## Documentation
 
-| Document | Type | Description |
-|----------|------|-------------|
-| [Getting started](docs/getting-started.md) | Tutorial | Set up mcp-score and generate your first score |
-| [Architecture](docs/architecture.md) | Reference | System design, package structure, key decisions |
-| [Tool reference](docs/reference.md) | Reference | Complete list of MCP tools |
-| [MuseScore plugin](docs/musescore-plugin.md) | How-to | Install the MuseScore plugin for live manipulation |
+| Document | Description |
+|----------|-------------|
+| [Getting started](docs/getting-started.md) | Set up mcp-score and generate your first score |
+| [Architecture](docs/architecture.md) | System design and key decisions |
+| [Tool reference](docs/reference.md) | Complete list of MCP tools |
+| [MuseScore plugin](docs/musescore-plugin.md) | Plugin installation and WebSocket protocol |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and PR process.
 
 ## License
 
-MIT
+[MIT](LICENSE)
