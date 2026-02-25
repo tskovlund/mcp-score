@@ -71,7 +71,10 @@ class MuseScoreBridge:
         if not isinstance(response_raw, str):
             return {"error": "Received non-text response from MuseScore"}
         logger.debug("Received: %s", response_raw)
-        result: dict[str, Any] = json.loads(response_raw)
+        try:
+            result: dict[str, Any] = json.loads(response_raw)
+        except json.JSONDecodeError as exc:
+            return {"error": f"Invalid JSON from MuseScore: {exc}"}
         return result
 
     async def send_command(
@@ -92,7 +95,7 @@ class MuseScoreBridge:
         if self._connection is None and not await self.connect():
             return {"error": f"Cannot connect to MuseScore at {self.uri}"}
 
-        command: dict[str, Any] = {"action": action}
+        command: dict[str, Any] = {"command": action}
         if params is not None:
             command["params"] = params
 

@@ -30,7 +30,7 @@ Issues = "https://github.com/tskovlund/mcp-score/issues"
 Documentation = "https://github.com/tskovlund/mcp-score/tree/main/docs"
 
 [project.scripts]
-mcp-score = "mcp_score.server:main"
+mcp-score = "mcp_score.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -38,6 +38,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_score"]
+
+[tool.hatch.build.targets.wheel.force-include]
+".claude/skills/score-generate" = "mcp_score/.claude/skills/score-generate"
 
 [dependency-groups]
 dev = [

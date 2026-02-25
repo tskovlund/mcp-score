@@ -58,7 +58,7 @@ async def set_live_barline(measure: int, barline_type: str) -> str:
 
     Args:
         measure: Measure number (1-indexed).
-        barline_type: One of "double", "final", "repeat-start", "repeat-end".
+        barline_type: One of "double", "final", "startRepeat", "endRepeat".
     """
     bridge = get_bridge()
     if not bridge.is_connected:
@@ -143,7 +143,7 @@ async def transpose_passage(
             "startMeasure": start_measure,
             "endMeasure": end_measure,
             "startStaff": staff,
-            "endStaff": staff + 1,
+            "endStaff": staff,
         },
     )
 
