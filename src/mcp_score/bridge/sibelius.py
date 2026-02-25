@@ -1,17 +1,24 @@
-"""WebSocket client for the Dorico Remote Control API.
+"""WebSocket client for the Sibelius Connect API.
 
-Dorico 4+ has a built-in WebSocket server (default port 4560). The protocol
-uses a two-step handshake:
+Sibelius 2024.3+ has "Sibelius Connect" -- a WebSocket server (default
+port 1898, configurable). The protocol uses a pairing handshake:
 
-1. Client sends connect message with clientName and handshakeVersion
-2. Dorico responds with a sessionToken message
-3. Client sends acceptsessiontoken with the received token
-4. Dorico responds with ``{"message": "response", "code": "kConnected"}``
+1. Client opens WebSocket to ``ws://localhost:1898``
+2. Client sends a connect message with clientName and handshakeVersion
+3. Sibelius shows a pairing dialog asking the user to approve
+4. Sibelius responds with a session token
+5. Client sends acceptsessiontoken with the received token
+6. Sibelius responds with ``{"message": "response", "code": "kConnected"}``
 
-If a valid session token from a previous connection is provided in step 1,
-Dorico skips the user prompt and responds directly with ``kConnected``.
+If a valid session token from a previous connection is provided in step 2,
+Sibelius skips the pairing dialog and responds directly with ``kConnected``.
 
-Protocol details reverse-engineered from github.com/scott-janssens/Dorico.Net.
+Sibelius Connect exposes 900+ ManuScript commands. Requires Sibelius
+Ultimate tier.
+
+Note: Detailed score reading (individual notes, articulations) requires a
+ManuScript file-based bridge -- a future enhancement. The WebSocket command
+API is focused on score manipulation.
 """
 
 from __future__ import annotations
@@ -29,32 +36,35 @@ from mcp_score.bridge.base import ScoreBridge
 if TYPE_CHECKING:
     from websockets.asyncio.client import ClientConnection
 
-__all__ = ["DoricoBridge"]
+__all__ = ["SibeliusBridge"]
 
 logger = logging.getLogger(__name__)
 
-#: Client name presented to the user in Dorico's connection dialog.
+#: Client name presented to the user in Sibelius's pairing dialog.
 DEFAULT_CLIENT_NAME = "mcp-score"
 
 #: Handshake protocol version.
 HANDSHAKE_VERSION = "1.0"
 
+#: Default WebSocket port for Sibelius Connect.
+DEFAULT_PORT = 1898
 
-class DoricoBridge(ScoreBridge):
-    """WebSocket client for the Dorico Remote Control API.
 
-    Connects to Dorico's built-in WebSocket server and communicates
-    using the Remote Control protocol. Unlike MuseScore, no plugin is
-    needed — Dorico IS the server.
+class SibeliusBridge(ScoreBridge):
+    """WebSocket client for the Sibelius Connect API.
+
+    Connects to Sibelius's built-in WebSocket server and communicates
+    using the Sibelius Connect protocol. Unlike MuseScore, no plugin is
+    needed -- Sibelius IS the server (from 2024.3+).
     """
 
-    #: Timeout in seconds for receiving a response from Dorico.
+    #: Timeout in seconds for receiving a response from Sibelius.
     RECV_TIMEOUT: float = 30.0
 
     def __init__(
         self,
         host: str = "localhost",
-        port: int = 4560,
+        port: int = DEFAULT_PORT,
         client_name: str = DEFAULT_CLIENT_NAME,
     ) -> None:
         self.host = host
@@ -66,7 +76,7 @@ class DoricoBridge(ScoreBridge):
     @property
     def application_name(self) -> str:
         """Human-readable application name."""
-        return "Dorico"
+        return "Sibelius"
 
     @property
     def uri(self) -> str:
@@ -85,49 +95,50 @@ class DoricoBridge(ScoreBridge):
             return False  # Fallback: assume disconnected if state is unknown
 
     async def connect(self) -> bool:
-        """Connect to Dorico and perform the handshake.
+        """Connect to Sibelius and perform the pairing handshake.
 
         Returns:
             True if connected and handshake succeeded, False otherwise.
         """
         try:
             self._connection = await websockets.connect(self.uri)
-            logger.info("WebSocket opened to Dorico at %s", self.uri)
+            logger.info("WebSocket opened to Sibelius at %s", self.uri)
         except (OSError, websockets.exceptions.WebSocketException) as exc:
-            logger.error("Failed to connect to Dorico at %s: %s", self.uri, exc)
+            logger.error("Failed to connect to Sibelius at %s: %s", self.uri, exc)
             self._connection = None
             return False
 
         try:
             await self._handshake()
-            logger.info("Handshake complete with Dorico at %s", self.uri)
+            logger.info("Handshake complete with Sibelius at %s", self.uri)
             return True
         except (
             TimeoutError,
             websockets.exceptions.WebSocketException,
             HandshakeError,
         ) as exc:
-            logger.error("Dorico handshake failed: %s", exc)
+            logger.error("Sibelius handshake failed: %s", exc)
             await self._close_connection()
             return False
 
     async def disconnect(self) -> None:
-        """Disconnect from Dorico."""
+        """Disconnect from Sibelius."""
         if self._connection is not None:
             with contextlib.suppress(
                 websockets.exceptions.WebSocketException, TimeoutError
             ):
                 await self._send_json({"message": "disconnect"})
             await self._close_connection()
-            logger.info("Disconnected from Dorico")
+            logger.info("Disconnected from Sibelius")
 
     async def send_command(
         self, action: str, params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """Send a command to Dorico and return the response.
+        """Send a command to Sibelius and return the response.
 
-        Dorico commands are sent as JSON messages with a ``message`` field
-        set to ``"command"``, a ``commandName`` field, and optional parameters.
+        Sibelius Connect commands are sent as JSON messages with a
+        ``message`` field set to ``"command"``, a ``commandName`` field,
+        and optional parameters.
 
         Auto-connects if not already connected. Attempts one reconnect
         on connection failure.
@@ -137,7 +148,7 @@ class DoricoBridge(ScoreBridge):
             params: Optional command parameters.
 
         Returns:
-            Parsed JSON response from Dorico.
+            Parsed JSON response from Sibelius.
         """
         message: dict[str, Any] = {
             "message": "command",
@@ -156,36 +167,36 @@ class DoricoBridge(ScoreBridge):
     async def get_score(self) -> dict[str, Any]:
         """Get information about the currently open score.
 
-        Uses Dorico's ``getstatus`` message to retrieve score state.
+        Uses Sibelius Connect's ``getstatus`` message to retrieve score
+        state.
         """
         return await self._send_message("getstatus")
 
     async def get_cursor_info(self) -> dict[str, Any]:
         """Get current selection info.
 
-        Dorico does not have a cursor concept like MuseScore. This returns
-        the current status which includes selection state.
+        Sibelius Connect does not expose a cursor concept directly. This
+        returns the current status which includes selection state.
         """
         return await self._send_message("getstatus")
 
     async def go_to_measure(self, measure: int) -> dict[str, Any]:
         """Navigate to a specific measure.
 
-        Dorico's Remote Control API has limited navigation support.
-        This uses the ``Edit.GoToBar`` command.
+        Uses the ``Edit.GoToBar`` command.
         """
         return await self.send_command("Edit.GoToBar", {"barNumber": str(measure)})
 
     async def go_to_staff(self, staff: int) -> dict[str, Any]:
         """Navigate to a specific staff.
 
-        Dorico's API does not support direct staff navigation. Returns
-        a descriptive limitation message.
+        Sibelius Connect's command API does not support direct staff
+        navigation. Returns a descriptive limitation message.
         """
         return {
             "warning": (
-                "Dorico's Remote Control API does not support direct "
-                "staff navigation. Use Dorico's UI to select the "
+                "Sibelius Connect's command API does not support direct "
+                "staff navigation. Use Sibelius's UI to select the "
                 "desired staff."
             )
         }
@@ -193,16 +204,16 @@ class DoricoBridge(ScoreBridge):
     async def add_rehearsal_mark(self, text: str) -> dict[str, Any]:
         """Add a rehearsal mark at the current position.
 
-        Dorico's Remote Control API does not support specifying the
-        rehearsal mark text — it uses Dorico's auto-numbering instead.
+        Sibelius Connect can add rehearsal marks but uses Sibelius's
+        auto-numbering -- the requested text is ignored.
         """
         result = await self.send_command("AddRehearsalMark")
         if "error" not in result:
             result.setdefault(
                 "warning",
                 (
-                    f"Dorico ignores the requested text '{text}' and uses "
-                    "its own auto-numbering for rehearsal marks."
+                    f"Sibelius ignores the requested text '{text}' and "
+                    "uses its own auto-numbering for rehearsal marks."
                 ),
             )
         return result
@@ -210,31 +221,31 @@ class DoricoBridge(ScoreBridge):
     async def add_chord_symbol(self, text: str) -> dict[str, Any]:
         """Add a chord symbol.
 
-        Dorico's Remote Control API can only enter chord input mode —
-        it cannot set specific chord text programmatically.
+        Sibelius Connect's command API cannot set specific chord text
+        programmatically. A ManuScript plugin would be needed for this.
         """
         return {
             "error": (
-                "Dorico's Remote Control API cannot set chord symbol text "
-                f"('{text}') programmatically. Use Dorico's UI to enter "
-                "chord symbols."
+                "Sibelius Connect's command API cannot set chord symbol "
+                f"text ('{text}') programmatically. Use Sibelius's UI "
+                "to enter chord symbols, or use a ManuScript plugin."
             )
         }
 
     async def set_barline(self, barline_type: str) -> dict[str, Any]:
         """Set a barline at the current position."""
-        dorico_barline_map: dict[str, str] = {
+        sibelius_barline_map: dict[str, str] = {
             "double": "AddBarlineDouble",
             "final": "AddBarlineFinal",
             "startRepeat": "AddBarlineStartRepeat",
             "endRepeat": "AddBarlineEndRepeat",
         }
-        command = dorico_barline_map.get(barline_type)
+        command = sibelius_barline_map.get(barline_type)
         if command is None:
             return {
                 "error": (
                     f"Unknown barline type '{barline_type}'. "
-                    f"Supported: {', '.join(dorico_barline_map)}"
+                    f"Supported: {', '.join(sibelius_barline_map)}"
                 )
             }
         return await self.send_command(command)
@@ -242,26 +253,28 @@ class DoricoBridge(ScoreBridge):
     async def set_key_signature(self, fifths: int) -> dict[str, Any]:
         """Set the key signature.
 
-        Dorico's Remote Control API does not support setting key signatures
-        directly via commands. This is a known limitation.
+        Sibelius Connect's command API does not support setting key
+        signatures directly. A ManuScript plugin would be needed.
         """
         return {
             "error": (
-                "Dorico's Remote Control API does not support setting "
-                "key signatures directly. Use Dorico's UI instead."
+                "Sibelius Connect's command API does not support setting "
+                "key signatures directly. Use Sibelius's UI or a "
+                "ManuScript plugin instead."
             )
         }
 
     async def set_tempo(self, bpm: int, text: str | None = None) -> dict[str, Any]:
         """Set the tempo.
 
-        Dorico's Remote Control API has limited tempo manipulation
-        support. Fixed tempo mode can be toggled via status properties.
+        Sibelius Connect's command API does not support setting tempo
+        directly. A ManuScript plugin would be needed.
         """
         return {
             "error": (
-                "Dorico's Remote Control API does not support setting "
-                "tempo directly. Use Dorico's UI instead."
+                "Sibelius Connect's command API does not support setting "
+                "tempo directly. Use Sibelius's UI or a ManuScript "
+                "plugin instead."
             )
         }
 
@@ -269,24 +282,24 @@ class DoricoBridge(ScoreBridge):
         """Undo the last action."""
         return await self.send_command("Edit.Undo")
 
-    # ── Dorico-specific methods ──────────────────────────────────────
+    # -- Sibelius-specific methods ----------------------------------------
 
     async def get_app_info(self) -> dict[str, Any]:
-        """Request version information about the Dorico instance."""
+        """Request version information about the Sibelius instance."""
         return await self._send_message("getappinfo", {"info": "version"})
 
     async def get_commands(self) -> dict[str, Any]:
-        """Request the list of available commands from Dorico."""
+        """Request the list of available commands from Sibelius."""
         return await self._send_message("getcommands")
 
     async def get_status(self) -> dict[str, Any]:
-        """Request the current status from Dorico."""
+        """Request the current status from Sibelius."""
         return await self._send_message("getstatus")
 
-    # ── Internal protocol methods ────────────────────────────────────
+    # -- Internal protocol methods ----------------------------------------
 
     async def _handshake(self) -> None:
-        """Perform the Dorico Remote Control handshake.
+        """Perform the Sibelius Connect pairing handshake.
 
         If we have a cached session token, try to reconnect with it.
         Otherwise, do a fresh connect and wait for a new session token.
@@ -343,7 +356,7 @@ class DoricoBridge(ScoreBridge):
         if code == "kConnected":
             return
 
-        # Session token may have expired — try fresh handshake.
+        # Session token may have expired -- try fresh handshake.
         if response.get("message") == "sessiontoken":
             session_token = response.get("sessionToken")
             if not session_token or not isinstance(session_token, str):
@@ -367,7 +380,7 @@ class DoricoBridge(ScoreBridge):
             self._session_token = session_token
             return
 
-        # Unexpected response — invalidate cached token and fail.
+        # Unexpected response -- invalidate cached token and fail.
         self._session_token = None
         raise HandshakeError(f"Reconnect with session token failed: {response}")
 
@@ -376,10 +389,10 @@ class DoricoBridge(ScoreBridge):
         message_type: str,
         extra_fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Send a raw Dorico protocol message (not a command).
+        """Send a raw Sibelius Connect protocol message (not a command).
 
-        Used for protocol-level messages like ``getstatus``, ``getappinfo``,
-        ``getcommands``, etc.
+        Used for protocol-level messages like ``getstatus``,
+        ``getappinfo``, ``getcommands``, etc.
         """
         message: dict[str, Any] = {"message": message_type}
         if extra_fields is not None:
@@ -390,7 +403,7 @@ class DoricoBridge(ScoreBridge):
     async def _send_with_reconnect(self, message: dict[str, Any]) -> dict[str, Any]:
         """Send a message, auto-connecting and retrying once on failure."""
         if self._connection is None and not await self.connect():
-            return {"error": f"Cannot connect to Dorico at {self.uri}"}
+            return {"error": f"Cannot connect to Sibelius at {self.uri}"}
 
         try:
             return await self._send_and_receive(message)
@@ -402,7 +415,7 @@ class DoricoBridge(ScoreBridge):
             logger.warning("Connection lost, attempting reconnect...")
             await self._close_connection()
             if not await self.connect():
-                return {"error": "Lost connection to Dorico and reconnect failed"}
+                return {"error": ("Lost connection to Sibelius and reconnect failed")}
             try:
                 return await self._send_and_receive(message)
             except Exception as exc:  # noqa: BLE001
@@ -415,18 +428,18 @@ class DoricoBridge(ScoreBridge):
             return {"error": "No active connection"}
 
         message_json = json.dumps(message)
-        logger.debug("Sending to Dorico: %s", message_json)
+        logger.debug("Sending to Sibelius: %s", message_json)
         await conn.send(message_json)
 
         response_raw = await asyncio.wait_for(conn.recv(), timeout=self.RECV_TIMEOUT)
         if not isinstance(response_raw, str):
-            return {"error": "Received non-text response from Dorico"}
+            return {"error": "Received non-text response from Sibelius"}
 
-        logger.debug("Received from Dorico: %s", response_raw)
+        logger.debug("Received from Sibelius: %s", response_raw)
         try:
             result: dict[str, Any] = json.loads(response_raw)
         except json.JSONDecodeError as exc:
-            return {"error": f"Invalid JSON from Dorico: {exc}"}
+            return {"error": f"Invalid JSON from Sibelius: {exc}"}
         return result
 
     async def _send_json(self, message: dict[str, Any]) -> None:
@@ -444,4 +457,4 @@ class DoricoBridge(ScoreBridge):
 
 
 class HandshakeError(Exception):
-    """Raised when the Dorico handshake protocol fails."""
+    """Raised when the Sibelius Connect handshake fails."""

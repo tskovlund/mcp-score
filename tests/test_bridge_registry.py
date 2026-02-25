@@ -1,4 +1,4 @@
-"""Tests for the bridge registry — multi-bridge management."""
+"""Tests for the bridge registry -- multi-bridge management."""
 
 from __future__ import annotations
 
@@ -7,16 +7,18 @@ from unittest.mock import AsyncMock
 from mcp_score.bridge import (
     get_active_bridge,
     get_musescore_bridge,
+    get_sibelius_bridge,
     set_active_bridge,
 )
 from mcp_score.bridge.base import ScoreBridge
 from mcp_score.bridge.dorico import DoricoBridge
 from mcp_score.bridge.musescore import MuseScoreBridge
+from mcp_score.bridge.sibelius import SibeliusBridge
 
 
 class TestBridgeRegistry:
     def test_no_active_bridge_initially(self) -> None:
-        # Arrange — reset global state
+        # Arrange -- reset global state
         set_active_bridge(None)
 
         # Act / Assert
@@ -56,9 +58,18 @@ class TestBridgeRegistry:
         assert bridge1 is bridge2
         assert isinstance(bridge1, MuseScoreBridge)
 
+    def test_get_sibelius_bridge_returns_singleton(self) -> None:
+        # Act
+        bridge1 = get_sibelius_bridge()
+        bridge2 = get_sibelius_bridge()
+
+        # Assert
+        assert bridge1 is bridge2
+        assert isinstance(bridge1, SibeliusBridge)
+
 
 class TestScoreBridgeInterface:
-    """Verify both bridge implementations fulfill the ScoreBridge interface."""
+    """Verify all bridge implementations fulfill the ScoreBridge interface."""
 
     def test_musescore_bridge_is_score_bridge(self) -> None:
         # Assert
@@ -67,6 +78,10 @@ class TestScoreBridgeInterface:
     def test_dorico_bridge_is_score_bridge(self) -> None:
         # Assert
         assert issubclass(DoricoBridge, ScoreBridge)
+
+    def test_sibelius_bridge_is_score_bridge(self) -> None:
+        # Assert
+        assert issubclass(SibeliusBridge, ScoreBridge)
 
     def test_musescore_application_name(self) -> None:
         # Arrange / Act
@@ -81,3 +96,10 @@ class TestScoreBridgeInterface:
 
         # Assert
         assert bridge.application_name == "Dorico"
+
+    def test_sibelius_application_name(self) -> None:
+        # Arrange / Act
+        bridge = SibeliusBridge()
+
+        # Assert
+        assert bridge.application_name == "Sibelius"

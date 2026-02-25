@@ -1,4 +1,4 @@
-"""Tests for the Dorico WebSocket bridge client."""
+"""Tests for the Sibelius WebSocket bridge client."""
 
 from __future__ import annotations
 
@@ -7,28 +7,29 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mcp_score.bridge.dorico import (
+from mcp_score.bridge.sibelius import (
     DEFAULT_CLIENT_NAME,
+    DEFAULT_PORT,
     HANDSHAKE_VERSION,
-    DoricoBridge,
     HandshakeError,
+    SibeliusBridge,
 )
 
 # ── Init and properties ──────────────────────────────────────────────
 
 
-class TestDoricoBridgeInit:
+class TestSibeliusBridgeInit:
     def test_default_host_and_port(self) -> None:
         # Arrange / Act
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
         # Assert
         assert bridge.host == "localhost"
-        assert bridge.port == 4560
+        assert bridge.port == DEFAULT_PORT
 
     def test_custom_host_and_port(self) -> None:
         # Arrange / Act
-        bridge = DoricoBridge(host="192.168.1.10", port=9999)
+        bridge = SibeliusBridge(host="192.168.1.10", port=9999)
 
         # Assert
         assert bridge.host == "192.168.1.10"
@@ -36,48 +37,48 @@ class TestDoricoBridgeInit:
 
     def test_custom_client_name(self) -> None:
         # Arrange / Act
-        bridge = DoricoBridge(client_name="my-app")
+        bridge = SibeliusBridge(client_name="my-app")
 
         # Assert
         assert bridge.client_name == "my-app"
 
     def test_default_client_name(self) -> None:
         # Arrange / Act
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
         # Assert
         assert bridge.client_name == DEFAULT_CLIENT_NAME
 
 
-class TestDoricoBridgeUri:
+class TestSibeliusBridgeUri:
     def test_uri_default(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
         # Act / Assert
-        assert bridge.uri == "ws://localhost:4560"
+        assert bridge.uri == "ws://localhost:1898"
 
     def test_uri_custom(self) -> None:
         # Arrange
-        bridge = DoricoBridge(host="example.com", port=1234)
+        bridge = SibeliusBridge(host="example.com", port=1234)
 
         # Act / Assert
         assert bridge.uri == "ws://example.com:1234"
 
 
-class TestDoricoBridgeApplicationName:
+class TestSibeliusBridgeApplicationName:
     def test_application_name(self) -> None:
         # Arrange / Act
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
         # Assert
-        assert bridge.application_name == "Dorico"
+        assert bridge.application_name == "Sibelius"
 
 
-class TestDoricoBridgeConnection:
+class TestSibeliusBridgeConnection:
     def test_is_connected_initially_false(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
         # Act / Assert
         assert bridge.is_connected is False
@@ -85,7 +86,7 @@ class TestDoricoBridgeConnection:
     @pytest.mark.anyio()
     async def test_connect_fails_gracefully_when_no_server(self) -> None:
         # Arrange
-        bridge = DoricoBridge(host="localhost", port=19999)
+        bridge = SibeliusBridge(host="localhost", port=19999)
 
         # Act
         connected = await bridge.connect()
@@ -98,11 +99,11 @@ class TestDoricoBridgeConnection:
 # ── Handshake protocol ───────────────────────────────────────────────
 
 
-class TestDoricoBridgeHandshake:
+class TestSibeliusBridgeHandshake:
     @pytest.mark.anyio()
     async def test_handshake_without_session_token(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         mock_connection = AsyncMock()
 
         # Simulate: connect message -> sessiontoken response,
@@ -117,7 +118,7 @@ class TestDoricoBridgeHandshake:
         mock_connection.send = AsyncMock()
 
         with patch(
-            "mcp_score.bridge.dorico.websockets.connect",
+            "mcp_score.bridge.sibelius.websockets.connect",
             new_callable=AsyncMock,
             return_value=mock_connection,
         ):
@@ -145,17 +146,17 @@ class TestDoricoBridgeHandshake:
     @pytest.mark.anyio()
     async def test_handshake_with_cached_session_token(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge._session_token = "cached-token"
         mock_connection = AsyncMock()
 
-        # Dorico responds with kConnected when token is still valid
+        # Sibelius responds with kConnected when token is still valid
         connected_response = json.dumps({"message": "response", "code": "kConnected"})
         mock_connection.recv = AsyncMock(return_value=connected_response)
         mock_connection.send = AsyncMock()
 
         with patch(
-            "mcp_score.bridge.dorico.websockets.connect",
+            "mcp_score.bridge.sibelius.websockets.connect",
             new_callable=AsyncMock,
             return_value=mock_connection,
         ):
@@ -172,8 +173,8 @@ class TestDoricoBridgeHandshake:
 
     @pytest.mark.anyio()
     async def test_handshake_with_expired_session_token(self) -> None:
-        # Arrange — token expired, Dorico sends a new session token
-        bridge = DoricoBridge()
+        # Arrange -- token expired, Sibelius sends a new session token
+        bridge = SibeliusBridge()
         bridge._session_token = "expired-token"
         mock_connection = AsyncMock()
 
@@ -187,7 +188,7 @@ class TestDoricoBridgeHandshake:
         mock_connection.send = AsyncMock()
 
         with patch(
-            "mcp_score.bridge.dorico.websockets.connect",
+            "mcp_score.bridge.sibelius.websockets.connect",
             new_callable=AsyncMock,
             return_value=mock_connection,
         ):
@@ -200,8 +201,8 @@ class TestDoricoBridgeHandshake:
 
     @pytest.mark.anyio()
     async def test_handshake_with_expired_token_unexpected_code_fails(self) -> None:
-        # Arrange — token expired, new token issued, but accept returns unexpected code
-        bridge = DoricoBridge()
+        # Arrange -- token expired, new token issued, but accept returns unexpected code
+        bridge = SibeliusBridge()
         bridge._session_token = "expired-token"
         mock_connection = AsyncMock()
 
@@ -216,7 +217,7 @@ class TestDoricoBridgeHandshake:
         mock_connection.close = AsyncMock()
 
         with patch(
-            "mcp_score.bridge.dorico.websockets.connect",
+            "mcp_score.bridge.sibelius.websockets.connect",
             new_callable=AsyncMock,
             return_value=mock_connection,
         ):
@@ -228,8 +229,8 @@ class TestDoricoBridgeHandshake:
 
     @pytest.mark.anyio()
     async def test_handshake_failure_returns_false(self) -> None:
-        # Arrange — Dorico rejects the connection
-        bridge = DoricoBridge()
+        # Arrange -- Sibelius rejects the connection
+        bridge = SibeliusBridge()
         mock_connection = AsyncMock()
 
         error_response = json.dumps(
@@ -250,7 +251,7 @@ class TestDoricoBridgeHandshake:
         mock_connection.close = AsyncMock()
 
         with patch(
-            "mcp_score.bridge.dorico.websockets.connect",
+            "mcp_score.bridge.sibelius.websockets.connect",
             new_callable=AsyncMock,
             return_value=mock_connection,
         ):
@@ -262,8 +263,8 @@ class TestDoricoBridgeHandshake:
 
     @pytest.mark.anyio()
     async def test_handshake_no_session_token_in_response(self) -> None:
-        # Arrange — Dorico sends unexpected response
-        bridge = DoricoBridge()
+        # Arrange -- Sibelius sends unexpected response
+        bridge = SibeliusBridge()
         mock_connection = AsyncMock()
 
         bad_response = json.dumps({"message": "sessiontoken"})
@@ -272,7 +273,7 @@ class TestDoricoBridgeHandshake:
         mock_connection.close = AsyncMock()
 
         with patch(
-            "mcp_score.bridge.dorico.websockets.connect",
+            "mcp_score.bridge.sibelius.websockets.connect",
             new_callable=AsyncMock,
             return_value=mock_connection,
         ):
@@ -286,11 +287,11 @@ class TestDoricoBridgeHandshake:
 # ── Command execution ────────────────────────────────────────────────
 
 
-class TestDoricoBridgeCommands:
+class TestSibeliusBridgeCommands:
     @pytest.mark.anyio()
     async def test_send_command_formats_message_correctly(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge._connection = AsyncMock()
         bridge._connection.recv = AsyncMock(
             return_value=json.dumps({"message": "response", "code": "kOK"})
@@ -308,7 +309,7 @@ class TestDoricoBridgeCommands:
     @pytest.mark.anyio()
     async def test_send_command_with_params(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge._connection = AsyncMock()
         bridge._connection.recv = AsyncMock(
             return_value=json.dumps({"message": "response", "code": "kOK"})
@@ -326,7 +327,7 @@ class TestDoricoBridgeCommands:
         self,
     ) -> None:
         # Arrange
-        bridge = DoricoBridge(host="localhost", port=19999)
+        bridge = SibeliusBridge(host="localhost", port=19999)
 
         # Act
         result = await bridge.send_command("Edit.Undo")
@@ -338,7 +339,7 @@ class TestDoricoBridgeCommands:
     @pytest.mark.anyio()
     async def test_undo_sends_edit_undo_command(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge.send_command = AsyncMock(
             return_value={"message": "response", "code": "kOK"}
         )
@@ -352,7 +353,7 @@ class TestDoricoBridgeCommands:
     @pytest.mark.anyio()
     async def test_go_to_measure_sends_edit_gotobar(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge.send_command = AsyncMock(
             return_value={"message": "response", "code": "kOK"}
         )
@@ -366,7 +367,7 @@ class TestDoricoBridgeCommands:
     @pytest.mark.anyio()
     async def test_go_to_staff_returns_warning(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
         # Act
         result = await bridge.go_to_staff(2)
@@ -376,11 +377,11 @@ class TestDoricoBridgeCommands:
         assert "does not support" in result["warning"]
 
 
-class TestDoricoBridgeBarlineMapping:
+class TestSibeliusBridgeBarlineMapping:
     @pytest.mark.anyio()
     async def test_set_barline_double(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge.send_command = AsyncMock(
             return_value={"message": "response", "code": "kOK"}
         )
@@ -394,7 +395,7 @@ class TestDoricoBridgeBarlineMapping:
     @pytest.mark.anyio()
     async def test_set_barline_final(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge.send_command = AsyncMock(
             return_value={"message": "response", "code": "kOK"}
         )
@@ -408,7 +409,7 @@ class TestDoricoBridgeBarlineMapping:
     @pytest.mark.anyio()
     async def test_set_barline_unknown_returns_error(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
         # Act
         result = await bridge.set_barline("nonexistent")
@@ -418,11 +419,11 @@ class TestDoricoBridgeBarlineMapping:
         assert "Unknown barline type" in result["error"]
 
 
-class TestDoricoBridgeLimitations:
+class TestSibeliusBridgeLimitations:
     @pytest.mark.anyio()
     async def test_set_key_signature_returns_limitation(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
         # Act
         result = await bridge.set_key_signature(2)
@@ -434,7 +435,7 @@ class TestDoricoBridgeLimitations:
     @pytest.mark.anyio()
     async def test_set_tempo_returns_limitation(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
         # Act
         result = await bridge.set_tempo(120)
@@ -446,7 +447,7 @@ class TestDoricoBridgeLimitations:
     @pytest.mark.anyio()
     async def test_add_rehearsal_mark_returns_warning(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge.send_command = AsyncMock(
             return_value={"message": "response", "code": "kOK"}
         )
@@ -461,7 +462,7 @@ class TestDoricoBridgeLimitations:
     @pytest.mark.anyio()
     async def test_add_chord_symbol_returns_limitation(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
         # Act
         result = await bridge.add_chord_symbol("Cmaj7")
@@ -471,13 +472,13 @@ class TestDoricoBridgeLimitations:
         assert "cannot set chord symbol" in result["error"].lower()
 
 
-class TestDoricoBridgePing:
+class TestSibeliusBridgePing:
     @pytest.mark.anyio()
     async def test_ping_true_when_app_info_succeeds(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge.get_app_info = AsyncMock(
-            return_value={"variant": "Dorico Pro", "number": "5.1"}
+            return_value={"variant": "Sibelius Ultimate", "number": "2024.3"}
         )
 
         # Act
@@ -489,7 +490,7 @@ class TestDoricoBridgePing:
     @pytest.mark.anyio()
     async def test_ping_false_when_app_info_has_error(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge.get_app_info = AsyncMock(return_value={"error": "Connection failed"})
 
         # Act
@@ -499,11 +500,11 @@ class TestDoricoBridgePing:
         assert alive is False
 
 
-class TestDoricoBridgeDisconnect:
+class TestSibeliusBridgeDisconnect:
     @pytest.mark.anyio()
     async def test_disconnect_sends_message_and_closes(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         mock_connection = AsyncMock()
         bridge._connection = mock_connection
 
@@ -520,22 +521,25 @@ class TestDoricoBridgeDisconnect:
     @pytest.mark.anyio()
     async def test_disconnect_when_not_connected(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
 
-        # Act — should not raise
+        # Act -- should not raise
         await bridge.disconnect()
 
         # Assert
         assert bridge._connection is None
 
 
-class TestDoricoBridgeProtocolMessages:
+class TestSibeliusBridgeProtocolMessages:
     @pytest.mark.anyio()
     async def test_get_app_info(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge._send_message = AsyncMock(  # type: ignore[method-assign]
-            return_value={"variant": "Dorico Pro", "number": "5.1"}
+            return_value={
+                "variant": "Sibelius Ultimate",
+                "number": "2024.3",
+            }
         )
 
         # Act
@@ -543,12 +547,12 @@ class TestDoricoBridgeProtocolMessages:
 
         # Assert
         bridge._send_message.assert_called_once_with("getappinfo", {"info": "version"})
-        assert result["variant"] == "Dorico Pro"
+        assert result["variant"] == "Sibelius Ultimate"
 
     @pytest.mark.anyio()
     async def test_get_commands(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge._send_message = AsyncMock(  # type: ignore[method-assign]
             return_value={"commands": []}
         )
@@ -563,7 +567,7 @@ class TestDoricoBridgeProtocolMessages:
     @pytest.mark.anyio()
     async def test_get_status(self) -> None:
         # Arrange
-        bridge = DoricoBridge()
+        bridge = SibeliusBridge()
         bridge._send_message = AsyncMock(  # type: ignore[method-assign]
             return_value={"hasScore": True}
         )
