@@ -151,7 +151,7 @@ async def connect_to_sibelius(host: str = "localhost", port: int = 1898) -> str:
         return to_json(
             {
                 "success": True,
-                "message": (f"Connected to Sibelius at ws://{host}:{port}."),
+                "message": f"Connected to Sibelius at ws://{host}:{port}.",
             }
         )
     return to_json(

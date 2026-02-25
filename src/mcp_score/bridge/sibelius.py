@@ -372,6 +372,11 @@ class SibeliusBridge(ScoreBridge):
             if code == "kError":
                 detail = accept_response.get("detail", "unknown error")
                 raise HandshakeError(f"Handshake rejected: {detail}")
+            if code != "kConnected":
+                raise HandshakeError(
+                    f"Expected 'kConnected' after accepting token, "
+                    f"got: {accept_response}"
+                )
             self._session_token = session_token
             return
 
