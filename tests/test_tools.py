@@ -303,6 +303,41 @@ class TestReadPassage:
         assert mock_bridge.go_to_measure.call_count == 3
 
 
+class TestReadPassageWithStaff:
+    @pytest.mark.anyio()
+    async def test_navigates_to_staff(self) -> None:
+        # Arrange
+        from mcp_score.tools.analysis import read_passage
+
+        mock_bridge = AsyncMock()
+        mock_bridge.is_connected = True
+        mock_bridge.get_cursor_info = AsyncMock(return_value={"beat": 1})
+
+        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+            # Act
+            await read_passage(1, 2, staff=3)
+
+        # Assert
+        assert mock_bridge.go_to_staff.call_count == 2
+        mock_bridge.go_to_staff.assert_called_with(3)
+
+    @pytest.mark.anyio()
+    async def test_omits_staff_navigation_when_none(self) -> None:
+        # Arrange
+        from mcp_score.tools.analysis import read_passage
+
+        mock_bridge = AsyncMock()
+        mock_bridge.is_connected = True
+        mock_bridge.get_cursor_info = AsyncMock(return_value={"beat": 1})
+
+        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+            # Act
+            await read_passage(1, 2, staff=None)
+
+        # Assert
+        mock_bridge.go_to_staff.assert_not_called()
+
+
 class TestGetMeasureContent:
     @pytest.mark.anyio()
     async def test_requires_connection(self) -> None:
@@ -333,6 +368,44 @@ class TestGetMeasureContent:
 
         # Assert
         assert "must be >= 1" in result["error"]
+
+    @pytest.mark.anyio()
+    async def test_navigates_and_selects(self) -> None:
+        # Arrange
+        from mcp_score.tools.analysis import get_measure_content
+
+        mock_bridge = AsyncMock()
+        mock_bridge.is_connected = True
+        mock_bridge.send_command = AsyncMock(return_value={"notes": ["C4"]})
+
+        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+            # Act
+            result = json.loads(await get_measure_content(3, staff=1))
+
+        # Assert
+        mock_bridge.go_to_measure.assert_called_once_with(3)
+        mock_bridge.go_to_staff.assert_called_once_with(1)
+        mock_bridge.send_command.assert_called_once_with("selectCurrentMeasure")
+        assert result["notes"] == ["C4"]
+
+
+class TestTransposePassageErrorBranch:
+    @pytest.mark.anyio()
+    async def test_returns_error_when_select_range_fails(self) -> None:
+        # Arrange
+        from mcp_score.tools.manipulation import transpose_passage
+
+        mock_bridge = AsyncMock()
+        mock_bridge.is_connected = True
+        mock_bridge.send_command = AsyncMock(return_value={"error": "Invalid range"})
+
+        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+            # Act
+            result = json.loads(await transpose_passage(1, 4, 0, 5))
+
+        # Assert — should return the error from selectCustomRange, not call transpose
+        assert result["error"] == "Invalid range"
+        assert mock_bridge.send_command.call_count == 1
 
 
 # ── Manipulation tool tests ──────────────────────────────────────────
