@@ -3,7 +3,7 @@
 AI-driven music score generation and manipulation. Two complementary approaches:
 
 - **Score generation** via Claude Code skill (`.claude/skills/score-generate/`) — Claude writes music21 Python scripts that export MusicXML. No MCP needed; runs as a standalone skill.
-- **Live MuseScore manipulation** via MCP server — reads from and writes to a running MuseScore instance via WebSocket bridge.
+- **Live score manipulation** via MCP server — reads from and writes to a running score application (MuseScore or Dorico) via WebSocket bridge.
 
 ## Architecture
 
@@ -12,11 +12,13 @@ src/mcp_score/
   server.py           MCP server entry point (FastMCP)
   app.py              Shared FastMCP instance
   tools/
-    connection.py     Connect/disconnect/ping MuseScore
+    connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py       Read passages and measures from live score
     manipulation.py   Modify live score (barlines, chords, keys, tempo, transpose)
   bridge/
-    client.py         WebSocket client to MuseScore plugin
+    base.py           ScoreBridge abstract base class
+    musescore.py      WebSocket client for MuseScore plugin
+    dorico.py         WebSocket client for Dorico Remote Control API
   musescore/
     plugin.qml        MuseScore QML plugin (WebSocket server, 19 commands)
 
@@ -85,9 +87,9 @@ pyright src/         # type check (strict mode)
 
 ## Tool design principles
 
-MCP tools handle live MuseScore interaction only:
+MCP tools handle live score interaction (MuseScore or Dorico):
 
-1. **Connection** — manage WebSocket bridge to MuseScore
+1. **Connection** — manage WebSocket bridges to MuseScore and Dorico
 2. **Analysis** — read and understand musical content from the live score
 3. **Manipulation** — modify the live score (barlines, chords, keys, tempo, transpose, undo)
 

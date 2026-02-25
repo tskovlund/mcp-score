@@ -76,7 +76,7 @@ class TestConnectedBridge:
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = connected_bridge()
 
@@ -88,8 +88,16 @@ class TestConnectedBridge:
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = False
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
+            result = connected_bridge()
+
+        # Assert
+        assert result is None
+
+    def test_returns_none_when_no_active_bridge(self) -> None:
+        # Arrange / Act
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             result = connected_bridge()
 
         # Assert
@@ -107,8 +115,19 @@ class TestConnectToMusescore:
 
         mock_bridge = AsyncMock()
         mock_bridge.connect = AsyncMock(return_value=True)
+        mock_bridge.is_connected = False
 
-        with patch("mcp_score.tools.connection.get_bridge", return_value=mock_bridge):
+        with (
+            patch(
+                "mcp_score.tools.connection.get_musescore_bridge",
+                return_value=mock_bridge,
+            ),
+            patch(
+                "mcp_score.tools.connection.get_active_bridge",
+                return_value=None,
+            ),
+            patch("mcp_score.tools.connection.set_active_bridge"),
+        ):
             # Act
             result = json.loads(await connect_to_musescore())
 
@@ -123,8 +142,18 @@ class TestConnectToMusescore:
 
         mock_bridge = AsyncMock()
         mock_bridge.connect = AsyncMock(return_value=False)
+        mock_bridge.is_connected = False
 
-        with patch("mcp_score.tools.connection.get_bridge", return_value=mock_bridge):
+        with (
+            patch(
+                "mcp_score.tools.connection.get_musescore_bridge",
+                return_value=mock_bridge,
+            ),
+            patch(
+                "mcp_score.tools.connection.get_active_bridge",
+                return_value=None,
+            ),
+        ):
             # Act
             result = json.loads(await connect_to_musescore())
 
@@ -141,7 +170,17 @@ class TestDisconnectFromMusescore:
 
         mock_bridge = AsyncMock()
 
-        with patch("mcp_score.tools.connection.get_bridge", return_value=mock_bridge):
+        with (
+            patch(
+                "mcp_score.tools.connection.get_musescore_bridge",
+                return_value=mock_bridge,
+            ),
+            patch(
+                "mcp_score.tools.connection.get_active_bridge",
+                return_value=mock_bridge,
+            ),
+            patch("mcp_score.tools.connection.set_active_bridge"),
+        ):
             # Act
             result = json.loads(await disconnect_from_musescore())
 
@@ -156,10 +195,7 @@ class TestGetLiveScoreInfo:
         # Arrange
         from mcp_score.tools.connection import get_live_score_info
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
-
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             # Act
             result = json.loads(await get_live_score_info())
 
@@ -178,7 +214,7 @@ class TestGetLiveScoreInfo:
             return_value={"title": "Test Score", "measures": 32}
         )
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await get_live_score_info())
 
@@ -192,10 +228,7 @@ class TestPingMusescore:
         # Arrange
         from mcp_score.tools.connection import ping_musescore
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
-
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             # Act
             result = json.loads(await ping_musescore())
 
@@ -210,8 +243,9 @@ class TestPingMusescore:
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
         mock_bridge.ping = AsyncMock(return_value=True)
+        mock_bridge.application_name = "MuseScore"
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await ping_musescore())
 
@@ -226,8 +260,9 @@ class TestPingMusescore:
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
         mock_bridge.ping = AsyncMock(return_value=False)
+        mock_bridge.application_name = "MuseScore"
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await ping_musescore())
 
@@ -244,10 +279,7 @@ class TestReadPassage:
         # Arrange
         from mcp_score.tools.analysis import read_passage
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
-
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             # Act
             result = json.loads(await read_passage(1, 4))
 
@@ -262,7 +294,7 @@ class TestReadPassage:
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await read_passage(0, 4))
 
@@ -277,7 +309,7 @@ class TestReadPassage:
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await read_passage(5, 3))
 
@@ -293,7 +325,7 @@ class TestReadPassage:
         mock_bridge.is_connected = True
         mock_bridge.get_cursor_info = AsyncMock(return_value={"beat": 1})
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await read_passage(1, 3))
 
@@ -313,7 +345,7 @@ class TestReadPassageWithStaff:
         mock_bridge.is_connected = True
         mock_bridge.get_cursor_info = AsyncMock(return_value={"beat": 1})
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             await read_passage(1, 2, staff=3)
 
@@ -330,7 +362,7 @@ class TestReadPassageWithStaff:
         mock_bridge.is_connected = True
         mock_bridge.get_cursor_info = AsyncMock(return_value={"beat": 1})
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             await read_passage(1, 2, staff=None)
 
@@ -344,10 +376,7 @@ class TestGetMeasureContent:
         # Arrange
         from mcp_score.tools.analysis import get_measure_content
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
-
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             # Act
             result = json.loads(await get_measure_content(1))
 
@@ -362,7 +391,7 @@ class TestGetMeasureContent:
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await get_measure_content(0))
 
@@ -378,7 +407,7 @@ class TestGetMeasureContent:
         mock_bridge.is_connected = True
         mock_bridge.send_command = AsyncMock(return_value={"notes": ["C4"]})
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await get_measure_content(3, staff=1))
 
@@ -399,7 +428,7 @@ class TestTransposePassageErrorBranch:
         mock_bridge.is_connected = True
         mock_bridge.send_command = AsyncMock(return_value={"error": "Invalid range"})
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await transpose_passage(1, 4, 0, 5))
 
@@ -418,10 +447,7 @@ class TestManipulationToolsRequireConnection:
     async def test_add_live_rehearsal_mark(self) -> None:
         from mcp_score.tools.manipulation import add_live_rehearsal_mark
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
-
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             result = json.loads(await add_live_rehearsal_mark(1, "A"))
 
         assert "error" in result
@@ -430,10 +456,7 @@ class TestManipulationToolsRequireConnection:
     async def test_add_live_chord_symbol(self) -> None:
         from mcp_score.tools.manipulation import add_live_chord_symbol
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
-
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             result = json.loads(await add_live_chord_symbol(1, "Cmaj7"))
 
         assert "error" in result
@@ -442,10 +465,7 @@ class TestManipulationToolsRequireConnection:
     async def test_set_live_barline(self) -> None:
         from mcp_score.tools.manipulation import set_live_barline
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
-
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             result = json.loads(await set_live_barline(1, "double"))
 
         assert "error" in result
@@ -454,10 +474,7 @@ class TestManipulationToolsRequireConnection:
     async def test_set_live_tempo(self) -> None:
         from mcp_score.tools.manipulation import set_live_tempo
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
-
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             result = json.loads(await set_live_tempo(1, 120))
 
         assert "error" in result
@@ -466,10 +483,7 @@ class TestManipulationToolsRequireConnection:
     async def test_transpose_passage(self) -> None:
         from mcp_score.tools.manipulation import transpose_passage
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
-
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             result = json.loads(await transpose_passage(1, 4, 0, 2))
 
         assert "error" in result
@@ -478,10 +492,7 @@ class TestManipulationToolsRequireConnection:
     async def test_undo_last_action(self) -> None:
         from mcp_score.tools.manipulation import undo_last_action
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
-
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=None):
             result = json.loads(await undo_last_action())
 
         assert "error" in result
@@ -497,7 +508,7 @@ class TestManipulationMeasureValidation:
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             result = json.loads(await add_live_rehearsal_mark(0, "A"))
 
         assert "must be >= 1" in result["error"]
@@ -509,7 +520,7 @@ class TestManipulationMeasureValidation:
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             result = json.loads(await add_live_chord_symbol(-1, "Cmaj7"))
 
         assert "must be >= 1" in result["error"]
@@ -521,7 +532,7 @@ class TestManipulationMeasureValidation:
         mock_bridge = AsyncMock()
         mock_bridge.is_connected = True
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             result = json.loads(await transpose_passage(5, 3, 0, 2))
 
         assert "end_measure" in result["error"]
@@ -539,7 +550,7 @@ class TestManipulationHappyPaths:
         mock_bridge.is_connected = True
         mock_bridge.add_rehearsal_mark = AsyncMock(return_value={"result": "ok"})
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await add_live_rehearsal_mark(5, "B"))
 
@@ -557,7 +568,7 @@ class TestManipulationHappyPaths:
         mock_bridge.is_connected = True
         mock_bridge.set_tempo = AsyncMock(return_value={"result": "ok"})
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await set_live_tempo(1, 66, "Slow Blues"))
 
@@ -566,7 +577,9 @@ class TestManipulationHappyPaths:
         assert result["result"] == "ok"
 
     @pytest.mark.anyio()
-    async def test_transpose_passage_selects_range_and_transposes(self) -> None:
+    async def test_transpose_passage_selects_range_and_transposes(
+        self,
+    ) -> None:
         # Arrange
         from mcp_score.tools.manipulation import transpose_passage
 
@@ -574,7 +587,7 @@ class TestManipulationHappyPaths:
         mock_bridge.is_connected = True
         mock_bridge.send_command = AsyncMock(return_value={"result": "ok"})
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             await transpose_passage(1, 8, 0, 5)
 
@@ -597,7 +610,7 @@ class TestManipulationHappyPaths:
         mock_bridge.is_connected = True
         mock_bridge.undo = AsyncMock(return_value={"result": "ok"})
 
-        with patch("mcp_score.tools.get_bridge", return_value=mock_bridge):
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
             # Act
             result = json.loads(await undo_last_action())
 

@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 import websockets
 
+from mcp_score.bridge.base import ScoreBridge
+
 if TYPE_CHECKING:
     from websockets.asyncio.client import ClientConnection
 
@@ -17,7 +19,7 @@ __all__ = ["MuseScoreBridge"]
 logger = logging.getLogger(__name__)
 
 
-class MuseScoreBridge:
+class MuseScoreBridge(ScoreBridge):
     """WebSocket client for communicating with the MuseScore QML plugin.
 
     The QML plugin runs inside MuseScore and exposes a WebSocket server.
@@ -31,6 +33,11 @@ class MuseScoreBridge:
         self.host = host
         self.port = port
         self._connection: ClientConnection | None = None
+
+    @property
+    def application_name(self) -> str:
+        """Human-readable application name."""
+        return "MuseScore"
 
     @property
     def uri(self) -> str:

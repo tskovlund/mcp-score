@@ -1,14 +1,16 @@
-"""MCP tool definitions for live MuseScore interaction."""
+"""MCP tool definitions for live score interaction."""
 
 import json
 from typing import Any
 
-from mcp_score.bridge import get_bridge
-from mcp_score.bridge.client import MuseScoreBridge
+from mcp_score.bridge import ScoreBridge, get_active_bridge
 
 __all__ = ["NOT_CONNECTED", "check_measure", "connected_bridge", "to_json"]
 
-NOT_CONNECTED = "Not connected to MuseScore. Use connect_to_musescore first."
+NOT_CONNECTED = (
+    "Not connected to any score application. "
+    "Use connect_to_musescore or connect_to_dorico first."
+)
 
 
 def to_json(data: dict[str, Any]) -> str:
@@ -16,8 +18,8 @@ def to_json(data: dict[str, Any]) -> str:
     return json.dumps(data)
 
 
-def connected_bridge() -> MuseScoreBridge | None:
-    """Return the bridge if connected, or ``None``.
+def connected_bridge() -> ScoreBridge | None:
+    """Return the active bridge if connected, or ``None``.
 
     Tools that require an active connection should call this and return
     an error when ``None`` is returned::
@@ -26,7 +28,9 @@ def connected_bridge() -> MuseScoreBridge | None:
         if bridge is None:
             return to_json({"error": NOT_CONNECTED})
     """
-    bridge = get_bridge()
+    bridge = get_active_bridge()
+    if bridge is None:
+        return None
     return bridge if bridge.is_connected else None
 
 

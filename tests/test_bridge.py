@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from mcp_score.bridge.client import MuseScoreBridge
+from mcp_score.bridge.musescore import MuseScoreBridge
 
 
 class TestMuseScoreBridgeInit:
