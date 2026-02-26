@@ -199,9 +199,11 @@ class RemoteControlBridge(ScoreBridge):
         """
         return {
             "warning": (
-                f"{self.application_name}'s API does not support direct "
-                "staff navigation. Use the application's UI to select "
-                "the desired staff."
+                f"{self.application_name}'s Remote Control WebSocket API "
+                "does not support direct staff navigation. The API "
+                "operates on the current selection; there is no command "
+                "to move to a specific staff. Use the application's UI "
+                "to select the desired staff."
             )
         }
 
@@ -217,8 +219,9 @@ class RemoteControlBridge(ScoreBridge):
                 "warning",
                 (
                     f"{self.application_name} ignores the requested text "
-                    f"'{text}' and uses its own auto-numbering for "
-                    "rehearsal marks."
+                    f"'{text}' and uses auto-numbering for rehearsal marks. "
+                    "The WebSocket API can trigger AddRehearsalMark but "
+                    "cannot provide text input to the popover."
                 ),
             )
         return result
@@ -231,9 +234,10 @@ class RemoteControlBridge(ScoreBridge):
         """
         return {
             "error": (
-                f"{self.application_name}'s API cannot set chord symbol "
-                f"text ('{text}') programmatically. Use the application's "
-                "UI to enter chord symbols."
+                f"{self.application_name}'s Remote Control WebSocket API "
+                f"cannot set chord symbol text ('{text}') programmatically. "
+                "Chord symbols are entered through a popover in the UI, "
+                "and the WebSocket API cannot interact with popovers."
             )
         }
 
@@ -257,8 +261,10 @@ class RemoteControlBridge(ScoreBridge):
         """
         return {
             "error": (
-                f"{self.application_name}'s API does not support setting "
-                "key signatures directly. Use the application's UI instead."
+                f"{self.application_name}'s Remote Control WebSocket API "
+                "does not support setting key signatures. Key signatures "
+                "are entered through a popover in the UI, and the "
+                "WebSocket API cannot provide popover input."
             )
         }
 
@@ -269,8 +275,10 @@ class RemoteControlBridge(ScoreBridge):
         """
         return {
             "error": (
-                f"{self.application_name}'s API does not support setting "
-                "tempo directly. Use the application's UI instead."
+                f"{self.application_name}'s Remote Control WebSocket API "
+                "does not support setting tempo. Tempo marks are entered "
+                "through a popover in the UI, and the WebSocket API "
+                "cannot provide popover input."
             )
         }
 
@@ -291,6 +299,33 @@ class RemoteControlBridge(ScoreBridge):
     async def get_status(self) -> dict[str, Any]:
         """Request the current status."""
         return await self._send_message("getstatus")
+
+    async def get_properties(self) -> dict[str, Any]:
+        """Request properties of the current selection.
+
+        Returns the names, types, and current values of all properties
+        on the currently selected items. This is the closest the Remote
+        Control API gets to "reading" score data.
+        """
+        return await self._send_message("getproperties")
+
+    async def get_flows(self) -> dict[str, Any]:
+        """Request the list of flows in the current document.
+
+        Flows are a Dorico concept — each flow is an independent piece
+        of music within the same project. Sibelius may return limited
+        or empty data for this message type.
+        """
+        return await self._send_message("getflows")
+
+    async def get_layouts(self) -> dict[str, Any]:
+        """Request the list of layouts in the current document.
+
+        Layouts control how music is presented (full score, parts, etc.).
+        This is primarily a Dorico concept; Sibelius may return limited
+        or empty data.
+        """
+        return await self._send_message("getlayouts")
 
     # ── Internal protocol methods ─────────────────────────────────────
 

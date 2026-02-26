@@ -153,6 +153,13 @@ class MuseScoreBridge(ScoreBridge):
         """Get current cursor position info."""
         return await self.send_command("getCursorInfo")
 
+    async def get_properties(self) -> dict[str, Any]:
+        """Get properties of the current selection.
+
+        Returns cursor info as MuseScore's equivalent of selection properties.
+        """
+        return await self.send_command("getCursorInfo")
+
     async def go_to_measure(self, measure: int) -> dict[str, Any]:
         """Navigate to a specific measure (1-indexed)."""
         return await self.send_command("goToMeasure", {"measure": measure})

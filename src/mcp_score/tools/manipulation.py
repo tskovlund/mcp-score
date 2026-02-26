@@ -1,4 +1,4 @@
-"""Score manipulation tools — modify scores in a live MuseScore instance."""
+"""Score manipulation tools — modify the live score in a connected application."""
 
 from mcp_score.app import mcp
 from mcp_score.tools import NOT_CONNECTED, check_measure, connected_bridge, to_json
@@ -8,7 +8,7 @@ __all__: list[str] = []
 
 @mcp.tool()
 async def add_live_rehearsal_mark(measure: int, text: str) -> str:
-    """Add a rehearsal mark in the live MuseScore score.
+    """Add a rehearsal mark in the live score.
 
     Args:
         measure: Measure number (1-indexed).
@@ -27,7 +27,7 @@ async def add_live_rehearsal_mark(measure: int, text: str) -> str:
 
 @mcp.tool()
 async def add_live_chord_symbol(measure: int, symbol: str) -> str:
-    """Add a chord symbol in the live MuseScore score.
+    """Add a chord symbol in the live score.
 
     Args:
         measure: Measure number (1-indexed).
@@ -46,7 +46,7 @@ async def add_live_chord_symbol(measure: int, symbol: str) -> str:
 
 @mcp.tool()
 async def set_live_barline(measure: int, barline_type: str) -> str:
-    """Set a barline type in the live MuseScore score.
+    """Set a barline type in the live score.
 
     Args:
         measure: Measure number (1-indexed).
@@ -65,7 +65,7 @@ async def set_live_barline(measure: int, barline_type: str) -> str:
 
 @mcp.tool()
 async def set_live_key_signature(measure: int, fifths: int) -> str:
-    """Set the key signature in the live MuseScore score.
+    """Set the key signature in the live score.
 
     Args:
         measure: Measure number (1-indexed).
@@ -85,7 +85,7 @@ async def set_live_key_signature(measure: int, fifths: int) -> str:
 
 @mcp.tool()
 async def set_live_tempo(measure: int, bpm: int, text: str | None = None) -> str:
-    """Set the tempo in the live MuseScore score.
+    """Set the tempo in the live score.
 
     Args:
         measure: Measure number (1-indexed).
@@ -152,7 +152,7 @@ async def transpose_passage(
 
 @mcp.tool()
 async def undo_last_action() -> str:
-    """Undo the last action in MuseScore."""
+    """Undo the last action in the connected score application."""
     bridge = connected_bridge()
     if bridge is None:
         return to_json({"error": NOT_CONNECTED})

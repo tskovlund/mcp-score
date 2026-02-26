@@ -1,11 +1,21 @@
 """Score analysis tools — read and understand musical content."""
 
+from __future__ import annotations
+
 from typing import Any
 
 from mcp_score.app import mcp
+from mcp_score.bridge.remote_control import RemoteControlBridge
 from mcp_score.tools import NOT_CONNECTED, check_measure, connected_bridge, to_json
 
 __all__: list[str] = []
+
+_REMOTE_CONTROL_ANALYSIS_WARNING = (
+    "Dorico and Sibelius provide limited data through the Remote Control "
+    "WebSocket API — you will get application status rather than detailed "
+    "note content. Use get_selection_properties for the best results with "
+    "Dorico/Sibelius."
+)
 
 
 @mcp.tool()
@@ -14,9 +24,11 @@ async def read_passage(
     end_measure: int,
     staff: int | None = None,
 ) -> str:
-    """Read musical content from a range of measures in the live MuseScore score.
+    """Read musical content from a range of measures in the live score.
 
     Returns notes, rests, and musical elements in the specified range.
+    Works best with MuseScore; Dorico and Sibelius return limited data
+    through the Remote Control WebSocket API.
 
     Args:
         start_measure: First measure to read (1-indexed).
@@ -44,20 +56,23 @@ async def read_passage(
             }
         )
 
-    return to_json(
-        {
-            "success": True,
-            "start_measure": start_measure,
-            "end_measure": end_measure,
-            "staff": staff,
-            "elements": elements,
-        }
-    )
+    result: dict[str, Any] = {
+        "success": True,
+        "start_measure": start_measure,
+        "end_measure": end_measure,
+        "staff": staff,
+        "elements": elements,
+    }
+    if isinstance(bridge, RemoteControlBridge):
+        result["warning"] = _REMOTE_CONTROL_ANALYSIS_WARNING
+    return to_json(result)
 
 
 @mcp.tool()
 async def get_measure_content(measure: int, staff: int = 0) -> str:
-    """Read the content of a specific measure and staff from MuseScore.
+    """Read the content of a specific measure and staff from the connected score.
+
+    Works best with MuseScore; Dorico and Sibelius return limited data.
 
     Args:
         measure: Measure number (1-indexed).
@@ -73,4 +88,27 @@ async def get_measure_content(measure: int, staff: int = 0) -> str:
     await bridge.go_to_staff(staff)
 
     result = await bridge.send_command("selectCurrentMeasure")
+    if isinstance(bridge, RemoteControlBridge) and "error" not in result:
+        result["warning"] = _REMOTE_CONTROL_ANALYSIS_WARNING
+    return to_json(result)
+
+
+@mcp.tool()
+async def get_selection_properties() -> str:
+    """Get properties of the current selection in the connected score application.
+
+    Returns information about whatever is currently selected:
+
+    - **MuseScore**: Returns cursor position info (measure, beat, staff).
+    - **Dorico/Sibelius**: Returns properties from the Remote Control
+      API's ``getproperties`` message — names, types, and values of all
+      properties on the selected items. This is the closest the WebSocket
+      API gets to "reading" score data.
+
+    Requires an active connection.
+    """
+    bridge = connected_bridge()
+    if bridge is None:
+        return to_json({"error": NOT_CONNECTED})
+    result = await bridge.get_properties()
     return to_json(result)

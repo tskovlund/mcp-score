@@ -92,5 +92,9 @@ class ScoreBridge(ABC):
         """Set the tempo."""
 
     @abstractmethod
+    async def get_properties(self) -> dict[str, Any]:
+        """Get properties of the current selection."""
+
+    @abstractmethod
     async def undo(self) -> dict[str, Any]:
         """Undo the last action."""

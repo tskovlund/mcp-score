@@ -101,13 +101,44 @@ Session tokens can be cached and reused for reconnection (the application skips 
 - Requires Sibelius Ultimate tier
 - No plugin needed -- Sibelius IS the server
 
-**Known limitations (both applications):**
+## Capabilities and limitations
 
-- Cannot query arbitrary score content -- limited to current selection and high-level status
-- No MusicXML export via the command API
-- Some operations (key signatures, tempo) not available through the command API
-- Chord symbols not supported via the command API (both applications)
-- Sibelius has 900+ commands; Dorico's command set is smaller but growing
+The Remote Control WebSocket API (shared by Dorico and Sibelius) is fundamentally a **command execution and UI state observation** layer. It can trigger any action the application can perform (equivalent to pressing menu items or key commands) and read the UI state. But it cannot read musical content or perform operations that require text input through popovers.
+
+### What the WebSocket API can do
+
+| Capability | MuseScore | Dorico | Sibelius |
+|-----------|:---------:|:------:|:--------:|
+| Execute commands (undo, navigation, barlines, rehearsal marks) | Yes | Yes (~994 commands) | Yes (900+ commands) |
+| Get application status | Yes | Yes | Yes |
+| Get selection properties | Yes | Yes | Yes |
+| Get flows and layouts | N/A | Yes | Unknown |
+| Set barlines | Yes | Yes | Yes |
+| Add rehearsal marks | Yes (with custom text) | Yes (auto-numbered only) | Yes (auto-numbered only) |
+| Navigate to measure | Yes | Yes | Yes |
+| Read note content | Yes (via QML plugin) | No | No |
+| Read cursor position | Yes (measure, beat, staff) | Limited (UI state only) | Limited (UI state only) |
+
+### What the WebSocket API cannot do (and why)
+
+These are **upstream API constraints** in Dorico and Sibelius, not mcp-score limitations:
+
+**Chord symbols, key signatures, tempo marks** -- In Dorico and Sibelius, these are entered through popovers (text input dialogs). The WebSocket API can execute commands but has no mechanism to interact with popovers or provide text input. There is no `SetKeySignature`, `SetTempo`, or `AddChordSymbol` command in either application's API.
+
+**Read arbitrary score content** (Dorico/Sibelius) -- The WebSocket API reports on UI state and selection properties, but cannot enumerate notes, articulations, or other musical elements at arbitrary positions. MuseScore's custom QML plugin provides deeper access because it runs inside the application with full scripting API access.
+
+**Staff navigation** (Dorico/Sibelius) -- The API operates on the current selection. There is no command to programmatically move the selection to a specific staff.
+
+**MusicXML export** -- None of the WebSocket APIs support exporting score content as MusicXML programmatically.
+
+### The future path
+
+The WebSocket API limitations can be overcome with **application-native scripting plugins** that run inside the application (like the existing MuseScore QML plugin):
+
+- **Sibelius**: A ManuScript plugin can access the full object model -- notes, bars, staves, key signatures, text, chord symbols. ManuScript has file I/O (`ReadTextFile`/`WriteTextFile`) for communicating with an external bridge process. Requires Sibelius Ultimate tier.
+- **Dorico**: Lua scripts can execute commands and access some internal state, though Dorico's Lua API is undocumented. Steinberg has acknowledged that expanded scripting is planned but unscheduled.
+
+These bridge plugins would complement the WebSocket API (not replace it), handling the operations that popovers block today.
 
 ## Why two approaches?
 
@@ -186,7 +217,7 @@ Imports the three tool modules (connection, analysis, manipulation) to register 
 
 Manages which bridge is active. `get_active_bridge()` returns the current bridge; `set_active_bridge()` switches it. Connection tools call these to manage the active bridge lifecycle.
 
-## MCP tools (17 total)
+## MCP tools (18 total)
 
 ### Connection (8 tools)
 
@@ -201,12 +232,13 @@ Manages which bridge is active. `get_active_bridge()` returns the current bridge
 | `get_live_score_info` | Get info about the open score (any app) |
 | `ping_score_app` | Check if connected app is responsive (any app) |
 
-### Analysis (2 tools)
+### Analysis (3 tools)
 
 | Tool | Purpose |
 |------|---------|
 | `read_passage` | Read content from a range of measures |
 | `get_measure_content` | Read a specific measure and staff |
+| `get_selection_properties` | Get properties of the current selection |
 
 ### Manipulation (7 tools)
 

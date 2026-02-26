@@ -496,3 +496,48 @@ class TestRemoteControlProtocolMessages:
         # Assert
         bridge._send_message.assert_called_once_with("getstatus")
         assert result["hasScore"] is True
+
+    @pytest.mark.anyio()
+    async def test_get_properties(self) -> None:
+        # Arrange
+        bridge = DoricoBridge()
+        bridge._send_message = AsyncMock(  # type: ignore[method-assign]
+            return_value={"Properties": [{"Name": "kNoteHideStem"}]}
+        )
+
+        # Act
+        result = await bridge.get_properties()
+
+        # Assert
+        bridge._send_message.assert_called_once_with("getproperties")
+        assert result["Properties"][0]["Name"] == "kNoteHideStem"
+
+    @pytest.mark.anyio()
+    async def test_get_flows(self) -> None:
+        # Arrange
+        bridge = DoricoBridge()
+        bridge._send_message = AsyncMock(  # type: ignore[method-assign]
+            return_value={"flows": [{"FlowID": 1, "FlowName": "Flow 1"}]}
+        )
+
+        # Act
+        result = await bridge.get_flows()
+
+        # Assert
+        bridge._send_message.assert_called_once_with("getflows")
+        assert result["flows"][0]["FlowName"] == "Flow 1"
+
+    @pytest.mark.anyio()
+    async def test_get_layouts(self) -> None:
+        # Arrange
+        bridge = DoricoBridge()
+        bridge._send_message = AsyncMock(  # type: ignore[method-assign]
+            return_value={"layouts": [{"LayoutName": "Full Score"}]}
+        )
+
+        # Act
+        result = await bridge.get_layouts()
+
+        # Assert
+        bridge._send_message.assert_called_once_with("getlayouts")
+        assert result["layouts"][0]["LayoutName"] == "Full Score"
