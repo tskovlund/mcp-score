@@ -108,6 +108,8 @@ relevant subset in its own AGENTS.md / CLAUDE.md / CONTRIBUTING.md.
   where the README already covers everything, `docs/` is not required
 - **CONTRIBUTING.md** when external contributors are expected — references
   CONVENTIONS.md for standards, covers dev setup and PR process
+- **Author section at the bottom of every README** — always present. Licensed
+  repos also have a License section (linking to the LICENSE file) after it
 
 ## Project Structure
 
