@@ -73,27 +73,12 @@ pyright src/         # type check (strict mode)
 
 **Multi-line commits:** `devbox run -- git commit -m "$(cat ...)"` produces literal `\n`. Always use `git commit -F /tmp/msg.txt` for multi-line commit messages.
 
-## Code conventions
+## Repo-specific conventions
 
-- **src layout** — all package code under `src/mcp_score/`
-- **Pyright strict mode** — all function signatures fully typed
-- **Ruff** for linting and formatting (line length 88)
 - **Conventional commits** — enforced by `.githooks/commit-msg`
-- **`__all__`** — every module explicitly declares its public API
-- **Full variable names** — `measure_index` not `m`, `staff_number` not `s`. Intent should be readable, not inferred from abbreviations
-- **No magic constants** — named constants for ports, protocol versions, error codes. Every literal value must be self-documenting
-- **No DRY violations** — extract shared logic into a single source of truth. Prefer a base class or utility over copy-paste
-- **Single responsibility** — each file and class has one clear purpose. Thin subclasses over monolithic duplicated implementations
-- **No shorthand** — `connection` not `conn`, `message` not `msg`, `response` not `resp`
-- Direct to main for small changes, branch + PR for structural work
-
-## Test conventions
-
-- **Naming:** `test_<action>_<expected_outcome>` (e.g. `test_create_score_sets_key_signature`)
-- **Structure:** Arrange / Act / Assert comments in every test
-- **Lean:** every test must earn its place by covering a meaningful path. No trivial tests (issubclass checks, json.dumps wrappers, constant assertions). No tests of library or built-in functionality
-- **No duplication:** shared protocol logic is tested once in the base class test file, not repeated per subclass. Per-subclass tests cover only subclass-specific behavior (defaults, overrides)
-- **Complete coverage of value paths:** every error path, edge case, and branching condition that could fail in production
+- **Thin subclasses over monolithic duplicated implementations** — shared logic lives in `RemoteControlBridge`; app-specific bridges (Dorico, Sibelius) only override defaults
+- **Test non-triviality** — no issubclass checks, json.dumps wrappers, or constant assertions. Every test must cover a meaningful code path
+- **Test deduplication** — shared protocol logic is tested once in the base class test file, not repeated per subclass. Per-subclass tests cover only subclass-specific behavior (defaults, overrides)
 
 ## Tool design principles
 
@@ -114,9 +99,6 @@ Score generation is handled by the `score-generate` skill — Claude writes musi
 - **Python** because music21 is Python-only and the MCP SDK has first-class Python support
 
 ## Git workflow
-
-- **Direct to main:** small tweaks, bug fixes
-- **Branch + PR:** new tools, structural changes, anything touching multiple modules
 
 ### PR workflow
 
