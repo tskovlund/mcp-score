@@ -51,11 +51,10 @@ pytest
 
 ## Code style
 
-- **Pyright strict mode** — all function signatures must be fully typed
-- **Ruff** for linting and formatting (line length 88)
-- **`__all__`** — every module must explicitly declare its public API
-- **Full variable names** — `measure_index` not `m`, `staff_number` not `s`
-- **src layout** — all package code under `src/mcp_score/`
+Follow the code standards in [CONVENTIONS.md](CONVENTIONS.md). The Python-specific highlights:
+
+- Pyright strict mode, Ruff for linting/formatting (line length 88)
+- `__all__` in every module, full variable names, src layout
 
 ## Commit conventions
 
