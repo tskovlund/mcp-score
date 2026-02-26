@@ -5,6 +5,8 @@ AI-driven music score generation and manipulation. Two complementary approaches:
 - **Score generation** via Claude Code skill (`.claude/skills/score-generate/`) — Claude writes music21 Python scripts that export MusicXML. No MCP needed; runs as a standalone skill.
 - **Live score manipulation** via MCP server — reads from and writes to a running score application (MuseScore, Dorico, or Sibelius) via WebSocket bridge.
 
+Follow the code standards in [CONVENTIONS.md](CONVENTIONS.md).
+
 ## Architecture
 
 ```
