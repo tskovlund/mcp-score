@@ -99,9 +99,15 @@ relevant subset in its own AGENTS.md / CLAUDE.md / CONTRIBUTING.md.
 
 ## Documentation
 
-- **Diataxis framework** — tutorials, how-to guides, reference, explanation
-- **README in every repo** — what the project does, how to set it up, how to
-  run it. A repo without a README is incomplete
+- **Diataxis framework** — tutorials, how-to guides, reference, explanation.
+  Use it as a thinking tool when writing docs, not a rigid filing system
+- **README as landing page** — what the project is, why it matters, quick start
+  (3–5 commands). Keep it lean. The README sells, `docs/` teaches
+- **Detailed docs in `docs/`** — getting started, architecture, reference, and
+  how-to guides live in `docs/` and are linked from the README. For small repos
+  where the README already covers everything, `docs/` is not required
+- **CONTRIBUTING.md** when external contributors are expected — references
+  CONVENTIONS.md for standards, covers dev setup and PR process
 
 ## Project Structure
 
