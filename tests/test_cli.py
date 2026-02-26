@@ -18,7 +18,7 @@ from mcp_score.cli import (
 
 
 class TestInstallSkill:
-    def test_install_skill_copies_files(self, tmp_path: Path) -> None:
+    def test_install_skill_copies_files_to_destination(self, tmp_path: Path) -> None:
         # Arrange
         skill_dest = tmp_path / "skills" / "score-generate"
 
@@ -42,7 +42,7 @@ class TestInstallSkill:
         assert (skill_dest / "SKILL.md").exists()
         assert (skill_dest / "references" / "instruments.md").exists()
 
-    def test_install_skill_returns_false_when_not_found(self) -> None:
+    def test_install_skill_without_files_returns_false(self) -> None:
         # Arrange
         with patch(
             "mcp_score.cli._package_path",
@@ -56,7 +56,7 @@ class TestInstallSkill:
 
 
 class TestInstallPlugin:
-    def test_install_plugin_copies_file(self, tmp_path: Path) -> None:
+    def test_install_plugin_copies_qml_to_destination(self, tmp_path: Path) -> None:
         # Arrange
         plugin_dir = tmp_path / "Plugins"
         plugin_dir.mkdir()
@@ -78,7 +78,7 @@ class TestInstallPlugin:
         assert (plugin_dir / "mcp-score-bridge.qml").exists()
         assert (plugin_dir / "mcp-score-bridge.qml").read_text() == "// fake plugin"
 
-    def test_install_plugin_creates_parent_dirs(self, tmp_path: Path) -> None:
+    def test_install_plugin_creates_missing_parent_dirs(self, tmp_path: Path) -> None:
         # Arrange
         plugin_dir = tmp_path / "nested" / "path" / "Plugins"
 
@@ -98,7 +98,7 @@ class TestInstallPlugin:
         assert result is True
         assert (plugin_dir / "mcp-score-bridge.qml").exists()
 
-    def test_install_plugin_unsupported_platform(self) -> None:
+    def test_install_plugin_on_unsupported_platform_returns_false(self) -> None:
         # Arrange
         with patch("mcp_score.cli.platform.system", return_value="Windows"):
             # Act
@@ -107,7 +107,7 @@ class TestInstallPlugin:
         # Assert
         assert result is False
 
-    def test_install_plugin_returns_false_when_not_found(self) -> None:
+    def test_install_plugin_without_file_returns_false(self) -> None:
         # Arrange
         with (
             patch("mcp_score.cli.platform.system", return_value="Darwin"),
@@ -124,7 +124,7 @@ class TestInstallPlugin:
 
 
 class TestMainCli:
-    def test_serve_is_default(self) -> None:
+    def test_main_without_args_runs_serve(self) -> None:
         # Arrange
         mock_serve = MagicMock()
 
@@ -139,7 +139,7 @@ class TestMainCli:
         # Assert
         mock_serve.assert_called_once()
 
-    def test_help_exits_zero(self) -> None:
+    def test_help_command_exits_zero(self) -> None:
         # Arrange / Act / Assert
         with (
             patch("sys.argv", ["mcp-score", "help"]),
@@ -147,7 +147,7 @@ class TestMainCli:
         ):
             main()
 
-    def test_unknown_command_exits_one(self) -> None:
+    def test_unknown_command_exits_with_error(self) -> None:
         # Arrange / Act / Assert
         with (
             patch("sys.argv", ["mcp-score", "nonsense"]),
@@ -155,7 +155,7 @@ class TestMainCli:
         ):
             main()
 
-    def test_install_skill_command(self) -> None:
+    def test_install_skill_command_exits_zero(self) -> None:
         # Arrange
         with (
             patch("sys.argv", ["mcp-score", "install-skill"]),
@@ -165,7 +165,7 @@ class TestMainCli:
             # Act / Assert
             main()
 
-    def test_install_plugin_command(self) -> None:
+    def test_install_plugin_command_exits_zero(self) -> None:
         # Arrange
         with (
             patch("sys.argv", ["mcp-score", "install-plugin"]),
@@ -175,7 +175,7 @@ class TestMainCli:
             # Act / Assert
             main()
 
-    def test_install_command(self) -> None:
+    def test_install_command_exits_zero(self) -> None:
         # Arrange
         with (
             patch("sys.argv", ["mcp-score", "install"]),
@@ -185,7 +185,7 @@ class TestMainCli:
             # Act / Assert
             main()
 
-    def test_install_failure_exits_one(self) -> None:
+    def test_install_failure_exits_with_error(self) -> None:
         # Arrange
         with (
             patch("sys.argv", ["mcp-score", "install"]),
@@ -197,12 +197,12 @@ class TestMainCli:
 
 
 class TestRunScript:
-    def test_run_script_no_args_exits_one(self) -> None:
+    def test_run_script_without_args_exits_with_error(self) -> None:
         # Arrange / Act / Assert
         with pytest.raises(SystemExit, match="1"):
             run_script([])
 
-    def test_run_script_executes_script(self, tmp_path: Path) -> None:
+    def test_run_script_executes_python_script(self, tmp_path: Path) -> None:
         # Arrange
         script = tmp_path / "test_script.py"
         script.write_text("print('hello')")
@@ -221,7 +221,7 @@ class TestRunScript:
         mock_run.assert_called_once()
         assert str(script) in mock_run.call_args.args[0]
 
-    def test_run_command_via_main(self, tmp_path: Path) -> None:
+    def test_run_command_via_main_executes_script(self, tmp_path: Path) -> None:
         # Arrange
         script = tmp_path / "test_script.py"
         script.write_text("print('hello')")
@@ -239,14 +239,14 @@ class TestRunScript:
 
 
 class TestPackagePaths:
-    def test_skill_dest_is_under_home(self) -> None:
+    def test_skill_destination_is_under_home_directory(self) -> None:
         # Arrange
         expected = Path.home() / ".claude" / "skills" / "score-generate"
 
         # Act / Assert
         assert expected == _SKILL_DEST
 
-    def test_plugin_dirs_has_darwin_and_linux(self) -> None:
+    def test_plugin_dirs_includes_darwin_and_linux(self) -> None:
         # Arrange / Act / Assert
         assert "Darwin" in _PLUGIN_DIRS
         assert "Linux" in _PLUGIN_DIRS

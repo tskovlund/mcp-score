@@ -8,8 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 - Score generation via Claude Code skill (music21 -> MusicXML)
-- MCP server with 13 tools for live MuseScore manipulation
+- MCP server with 18 tools for live score manipulation (MuseScore, Dorico, Sibelius)
+- Multi-bridge architecture: MuseScore QML plugin, Dorico Remote Control, Sibelius Connect
 - MuseScore 4 QML plugin with WebSocket bridge (19 commands)
 - CLI install commands: `mcp-score install-skill`, `mcp-score install-plugin`
-- Comprehensive test suite (27 tests)
+- Comprehensive test suite (145 tests)
 - Full documentation (architecture, reference, getting-started)
+- GitHub security: CodeQL scanning, branch protection, SECURITY.md

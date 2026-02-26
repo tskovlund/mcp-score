@@ -18,14 +18,14 @@ from mcp_score.bridge.sibelius import SibeliusBridge
 
 
 class TestBridgeRegistry:
-    def test_no_active_bridge_initially(self) -> None:
+    def test_get_active_bridge_initially_returns_none(self) -> None:
         # Arrange — reset global state
         set_active_bridge(None)
 
         # Act / Assert
         assert get_active_bridge() is None
 
-    def test_set_and_get_active_bridge(self) -> None:
+    def test_set_active_bridge_stores_bridge(self) -> None:
         # Arrange
         mock_bridge = AsyncMock(spec=ScoreBridge)
         set_active_bridge(mock_bridge)
@@ -39,7 +39,7 @@ class TestBridgeRegistry:
         # Cleanup
         set_active_bridge(None)
 
-    def test_clear_active_bridge(self) -> None:
+    def test_set_active_bridge_to_none_clears_bridge(self) -> None:
         # Arrange
         mock_bridge = AsyncMock(spec=ScoreBridge)
         set_active_bridge(mock_bridge)
@@ -50,7 +50,7 @@ class TestBridgeRegistry:
         # Assert
         assert get_active_bridge() is None
 
-    def test_get_musescore_bridge_returns_singleton(self) -> None:
+    def test_get_musescore_bridge_returns_same_instance(self) -> None:
         # Act
         bridge1 = get_musescore_bridge()
         bridge2 = get_musescore_bridge()
@@ -59,7 +59,7 @@ class TestBridgeRegistry:
         assert bridge1 is bridge2
         assert isinstance(bridge1, MuseScoreBridge)
 
-    def test_get_dorico_bridge_returns_singleton(self) -> None:
+    def test_get_dorico_bridge_returns_same_instance(self) -> None:
         # Act
         bridge1 = get_dorico_bridge()
         bridge2 = get_dorico_bridge()
@@ -68,7 +68,7 @@ class TestBridgeRegistry:
         assert bridge1 is bridge2
         assert isinstance(bridge1, DoricoBridge)
 
-    def test_get_sibelius_bridge_returns_singleton(self) -> None:
+    def test_get_sibelius_bridge_returns_same_instance(self) -> None:
         # Act
         bridge1 = get_sibelius_bridge()
         bridge2 = get_sibelius_bridge()

@@ -21,7 +21,7 @@ from mcp_score.bridge.remote_control import DEFAULT_CLIENT_NAME, HANDSHAKE_VERSI
 
 class TestRemoteControlHandshake:
     @pytest.mark.anyio()
-    async def test_fresh_handshake_sends_connect_and_accept(self) -> None:
+    async def test_fresh_handshake_sends_connect_and_accept_messages(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         mock_connection = AsyncMock()
@@ -60,7 +60,7 @@ class TestRemoteControlHandshake:
         assert accept_msg["sessionToken"] == "abc-123"
 
     @pytest.mark.anyio()
-    async def test_cached_session_token_skips_accept(self) -> None:
+    async def test_connect_with_cached_token_skips_accept(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge._session_token = "cached-token"
@@ -85,7 +85,7 @@ class TestRemoteControlHandshake:
         assert connect_msg["sessionToken"] == "cached-token"
 
     @pytest.mark.anyio()
-    async def test_expired_token_accepts_new_token(self) -> None:
+    async def test_connect_with_expired_token_accepts_new_token(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge._session_token = "expired-token"
@@ -113,7 +113,7 @@ class TestRemoteControlHandshake:
         assert bridge._session_token == "new-token-456"
 
     @pytest.mark.anyio()
-    async def test_expired_token_unexpected_code_fails(self) -> None:
+    async def test_connect_with_expired_token_unexpected_code_fails(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge._session_token = "expired-token"
@@ -141,7 +141,7 @@ class TestRemoteControlHandshake:
         assert connected is False
 
     @pytest.mark.anyio()
-    async def test_handshake_rejection_returns_false(self) -> None:
+    async def test_connect_with_rejected_handshake_returns_false(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         mock_connection = AsyncMock()
@@ -170,7 +170,7 @@ class TestRemoteControlHandshake:
         assert connected is False
 
     @pytest.mark.anyio()
-    async def test_missing_session_token_in_response_fails(self) -> None:
+    async def test_connect_without_session_token_returns_false(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         mock_connection = AsyncMock()
@@ -197,7 +197,7 @@ class TestRemoteControlHandshake:
 
 class TestRemoteControlCommands:
     @pytest.mark.anyio()
-    async def test_send_command_formats_message(self) -> None:
+    async def test_send_command_formats_correct_message(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge._connection = AsyncMock()
@@ -215,7 +215,7 @@ class TestRemoteControlCommands:
         assert "parameters" not in sent_json
 
     @pytest.mark.anyio()
-    async def test_send_command_includes_params(self) -> None:
+    async def test_send_command_with_params_includes_parameters(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge._connection = AsyncMock()
@@ -231,7 +231,7 @@ class TestRemoteControlCommands:
         assert sent_json["parameters"] == {"barNumber": "5"}
 
     @pytest.mark.anyio()
-    async def test_send_command_returns_error_when_not_connected(self) -> None:
+    async def test_send_command_without_connection_returns_error(self) -> None:
         # Arrange
         bridge = DoricoBridge(host="localhost", port=19999)
 
@@ -243,7 +243,7 @@ class TestRemoteControlCommands:
         assert "Cannot connect" in result["error"]
 
     @pytest.mark.anyio()
-    async def test_undo_sends_edit_undo(self) -> None:
+    async def test_undo_sends_edit_undo_command(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge.send_command = AsyncMock(
@@ -257,7 +257,7 @@ class TestRemoteControlCommands:
         bridge.send_command.assert_called_once_with("Edit.Undo")
 
     @pytest.mark.anyio()
-    async def test_go_to_measure_sends_edit_gotobar(self) -> None:
+    async def test_go_to_measure_sends_edit_gotobar_command(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge.send_command = AsyncMock(
@@ -271,7 +271,7 @@ class TestRemoteControlCommands:
         bridge.send_command.assert_called_once_with("Edit.GoToBar", {"barNumber": "5"})
 
     @pytest.mark.anyio()
-    async def test_go_to_staff_returns_warning(self) -> None:
+    async def test_go_to_staff_returns_unsupported_warning(self) -> None:
         # Arrange
         bridge = DoricoBridge()
 
@@ -288,7 +288,7 @@ class TestRemoteControlCommands:
 
 class TestRemoteControlBarlines:
     @pytest.mark.anyio()
-    async def test_set_barline_double(self) -> None:
+    async def test_set_barline_double_sends_correct_command(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge.send_command = AsyncMock(
@@ -302,7 +302,7 @@ class TestRemoteControlBarlines:
         bridge.send_command.assert_called_once_with("AddBarlineDouble")
 
     @pytest.mark.anyio()
-    async def test_set_barline_final(self) -> None:
+    async def test_set_barline_final_sends_correct_command(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge.send_command = AsyncMock(
@@ -316,7 +316,7 @@ class TestRemoteControlBarlines:
         bridge.send_command.assert_called_once_with("AddBarlineFinal")
 
     @pytest.mark.anyio()
-    async def test_set_barline_unknown_returns_error(self) -> None:
+    async def test_set_barline_with_unknown_type_returns_error(self) -> None:
         # Arrange
         bridge = DoricoBridge()
 
@@ -333,7 +333,7 @@ class TestRemoteControlBarlines:
 
 class TestRemoteControlLimitations:
     @pytest.mark.anyio()
-    async def test_set_key_signature_returns_error(self) -> None:
+    async def test_set_key_signature_returns_unsupported_error(self) -> None:
         # Arrange
         bridge = DoricoBridge()
 
@@ -345,7 +345,7 @@ class TestRemoteControlLimitations:
         assert "does not support" in result["error"]
 
     @pytest.mark.anyio()
-    async def test_set_tempo_returns_error(self) -> None:
+    async def test_set_tempo_returns_unsupported_error(self) -> None:
         # Arrange
         bridge = DoricoBridge()
 
@@ -357,7 +357,7 @@ class TestRemoteControlLimitations:
         assert "does not support" in result["error"]
 
     @pytest.mark.anyio()
-    async def test_add_rehearsal_mark_includes_warning(self) -> None:
+    async def test_add_rehearsal_mark_returns_auto_numbering_warning(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge.send_command = AsyncMock(
@@ -372,7 +372,7 @@ class TestRemoteControlLimitations:
         assert "B" in result["warning"]
 
     @pytest.mark.anyio()
-    async def test_add_chord_symbol_returns_error(self) -> None:
+    async def test_add_chord_symbol_returns_unsupported_error(self) -> None:
         # Arrange
         bridge = DoricoBridge()
 
@@ -389,7 +389,7 @@ class TestRemoteControlLimitations:
 
 class TestRemoteControlPing:
     @pytest.mark.anyio()
-    async def test_ping_true_when_app_info_succeeds(self) -> None:
+    async def test_ping_with_successful_app_info_returns_true(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge.get_app_info = AsyncMock(
@@ -403,7 +403,7 @@ class TestRemoteControlPing:
         assert alive is True
 
     @pytest.mark.anyio()
-    async def test_ping_false_when_app_info_has_error(self) -> None:
+    async def test_ping_with_failed_app_info_returns_false(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         bridge.get_app_info = AsyncMock(return_value={"error": "Connection failed"})
@@ -420,7 +420,7 @@ class TestRemoteControlPing:
 
 class TestRemoteControlDisconnect:
     @pytest.mark.anyio()
-    async def test_disconnect_sends_message_and_closes(self) -> None:
+    async def test_disconnect_sends_message_and_closes_connection(self) -> None:
         # Arrange
         bridge = DoricoBridge()
         mock_connection = AsyncMock()
@@ -437,7 +437,7 @@ class TestRemoteControlDisconnect:
         assert bridge._connection is None
 
     @pytest.mark.anyio()
-    async def test_disconnect_when_not_connected(self) -> None:
+    async def test_disconnect_without_connection_succeeds(self) -> None:
         # Arrange
         bridge = DoricoBridge()
 

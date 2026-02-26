@@ -10,7 +10,7 @@ import pytest
 
 class TestConnectToDorico:
     @pytest.mark.anyio()
-    async def test_connect_success(self) -> None:
+    async def test_connect_returns_success(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_dorico
 
@@ -37,7 +37,7 @@ class TestConnectToDorico:
         assert "Connected to Dorico" in result["message"]
 
     @pytest.mark.anyio()
-    async def test_connect_failure(self) -> None:
+    async def test_connect_failure_returns_error(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_dorico
 
@@ -63,7 +63,7 @@ class TestConnectToDorico:
         assert "Could not connect to Dorico" in result["error"]
 
     @pytest.mark.anyio()
-    async def test_connect_with_custom_port(self) -> None:
+    async def test_connect_with_custom_port_sets_port(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_dorico
 
@@ -91,7 +91,7 @@ class TestConnectToDorico:
         assert mock_bridge.port == 5555
 
     @pytest.mark.anyio()
-    async def test_connect_disconnects_existing_bridge(self) -> None:
+    async def test_connect_disconnects_existing_bridge_first(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_dorico
 
@@ -124,7 +124,7 @@ class TestConnectToDorico:
 
 class TestDisconnectFromDorico:
     @pytest.mark.anyio()
-    async def test_disconnect(self) -> None:
+    async def test_disconnect_returns_success(self) -> None:
         # Arrange
         from mcp_score.tools.connection import disconnect_from_dorico
 
@@ -150,7 +150,7 @@ class TestDisconnectFromDorico:
         mock_bridge.disconnect.assert_called_once()
 
     @pytest.mark.anyio()
-    async def test_disconnect_does_not_clear_other_bridge(self) -> None:
+    async def test_disconnect_preserves_other_active_bridge(self) -> None:
         # Arrange — active bridge is MuseScore, not Dorico
         from mcp_score.tools.connection import disconnect_from_dorico
 
@@ -179,7 +179,7 @@ class TestBridgeSwitching:
     """Verify that connecting to one DAW disconnects the other."""
 
     @pytest.mark.anyio()
-    async def test_connecting_musescore_disconnects_dorico(self) -> None:
+    async def test_connect_musescore_disconnects_dorico(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_musescore
 
@@ -208,7 +208,7 @@ class TestBridgeSwitching:
         assert result["success"] is True
 
     @pytest.mark.anyio()
-    async def test_connecting_dorico_disconnects_musescore(self) -> None:
+    async def test_connect_dorico_disconnects_musescore(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_dorico
 

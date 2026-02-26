@@ -9,7 +9,7 @@ from mcp_score.bridge.musescore import MuseScoreBridge
 
 
 class TestMuseScoreBridgeInit:
-    def test_default_host_and_port(self) -> None:
+    def test_init_sets_default_host_and_port(self) -> None:
         # Arrange / Act
         bridge = MuseScoreBridge()
 
@@ -17,7 +17,7 @@ class TestMuseScoreBridgeInit:
         assert bridge.host == "localhost"
         assert bridge.port == 8765
 
-    def test_custom_host_and_port(self) -> None:
+    def test_init_sets_custom_host_and_port(self) -> None:
         # Arrange / Act
         bridge = MuseScoreBridge(host="192.168.1.10", port=9999)
 
@@ -27,7 +27,7 @@ class TestMuseScoreBridgeInit:
 
 
 class TestMuseScoreBridgeUri:
-    def test_uri_default(self) -> None:
+    def test_uri_returns_default_address(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
 
@@ -37,7 +37,7 @@ class TestMuseScoreBridgeUri:
         # Assert
         assert uri == "ws://localhost:8765"
 
-    def test_uri_custom(self) -> None:
+    def test_uri_returns_custom_address(self) -> None:
         # Arrange
         bridge = MuseScoreBridge(host="example.com", port=1234)
 
@@ -49,7 +49,7 @@ class TestMuseScoreBridgeUri:
 
 
 class TestMuseScoreBridgeConnection:
-    def test_is_connected_initially_false(self) -> None:
+    def test_new_bridge_is_not_connected(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
 
@@ -57,7 +57,7 @@ class TestMuseScoreBridgeConnection:
         assert bridge.is_connected is False
 
     @pytest.mark.anyio()
-    async def test_connect_fails_gracefully_when_no_server(self) -> None:
+    async def test_connect_without_server_returns_false(self) -> None:
         # Arrange
         bridge = MuseScoreBridge(host="localhost", port=19999)
 
@@ -69,7 +69,7 @@ class TestMuseScoreBridgeConnection:
         assert bridge.is_connected is False
 
     @pytest.mark.anyio()
-    async def test_send_command_returns_error_when_cannot_connect(self) -> None:
+    async def test_send_command_without_server_returns_error(self) -> None:
         # Arrange
         bridge = MuseScoreBridge(host="localhost", port=19999)
 
@@ -81,7 +81,7 @@ class TestMuseScoreBridgeConnection:
         assert "Cannot connect" in result["error"]
 
     @pytest.mark.anyio()
-    async def test_ping_returns_false_when_not_connected(self) -> None:
+    async def test_ping_without_connection_returns_false(self) -> None:
         # Arrange
         bridge = MuseScoreBridge(host="localhost", port=19999)
 
@@ -96,7 +96,7 @@ class TestMuseScoreBridgeConvenienceMethods:
     """Test that convenience methods call send_command with correct arguments."""
 
     @pytest.mark.anyio()
-    async def test_get_score_calls_send_command(self) -> None:
+    async def test_get_score_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -108,7 +108,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("getScore")
 
     @pytest.mark.anyio()
-    async def test_get_cursor_info_calls_send_command(self) -> None:
+    async def test_get_cursor_info_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -135,7 +135,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         assert result["measure"] == 1
 
     @pytest.mark.anyio()
-    async def test_go_to_measure_calls_send_command(self) -> None:
+    async def test_go_to_measure_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -147,7 +147,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("goToMeasure", {"measure": 5})
 
     @pytest.mark.anyio()
-    async def test_go_to_staff_calls_send_command(self) -> None:
+    async def test_go_to_staff_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -159,7 +159,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("goToStaff", {"staff": 2})
 
     @pytest.mark.anyio()
-    async def test_add_note_calls_send_command(self) -> None:
+    async def test_add_note_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -178,7 +178,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         )
 
     @pytest.mark.anyio()
-    async def test_add_rehearsal_mark_calls_send_command(self) -> None:
+    async def test_add_rehearsal_mark_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -190,7 +190,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("addRehearsalMark", {"text": "A"})
 
     @pytest.mark.anyio()
-    async def test_set_barline_calls_send_command(self) -> None:
+    async def test_set_barline_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -202,7 +202,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("setBarline", {"type": "double"})
 
     @pytest.mark.anyio()
-    async def test_set_key_signature_calls_send_command(self) -> None:
+    async def test_set_key_signature_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -214,7 +214,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("setKeySignature", {"fifths": -3})
 
     @pytest.mark.anyio()
-    async def test_set_time_signature_calls_send_command(self) -> None:
+    async def test_set_time_signature_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -229,7 +229,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         )
 
     @pytest.mark.anyio()
-    async def test_set_tempo_calls_send_command(self) -> None:
+    async def test_set_tempo_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -241,7 +241,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("setTempo", {"bpm": 120})
 
     @pytest.mark.anyio()
-    async def test_set_tempo_with_text_calls_send_command(self) -> None:
+    async def test_set_tempo_with_text_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -255,7 +255,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         )
 
     @pytest.mark.anyio()
-    async def test_add_chord_symbol_calls_send_command(self) -> None:
+    async def test_add_chord_symbol_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -267,7 +267,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("addChordSymbol", {"text": "Cmaj7"})
 
     @pytest.mark.anyio()
-    async def test_add_dynamic_calls_send_command(self) -> None:
+    async def test_add_dynamic_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -279,7 +279,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("addDynamic", {"type": "ff"})
 
     @pytest.mark.anyio()
-    async def test_append_measures_calls_send_command(self) -> None:
+    async def test_append_measures_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -291,7 +291,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("appendMeasures", {"count": 4})
 
     @pytest.mark.anyio()
-    async def test_undo_calls_send_command(self) -> None:
+    async def test_undo_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -303,7 +303,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("undo")
 
     @pytest.mark.anyio()
-    async def test_process_sequence_calls_send_command(self) -> None:
+    async def test_process_sequence_sends_correct_command(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "ok"})
@@ -321,7 +321,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         )
 
     @pytest.mark.anyio()
-    async def test_ping_returns_true_on_pong(self) -> None:
+    async def test_ping_with_pong_response_returns_true(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "pong"})
@@ -334,7 +334,7 @@ class TestMuseScoreBridgeConvenienceMethods:
         bridge.send_command.assert_called_once_with("ping")
 
     @pytest.mark.anyio()
-    async def test_ping_returns_false_on_non_pong(self) -> None:
+    async def test_ping_with_error_response_returns_false(self) -> None:
         # Arrange
         bridge = MuseScoreBridge()
         bridge.send_command = AsyncMock(return_value={"result": "error"})

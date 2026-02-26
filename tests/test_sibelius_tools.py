@@ -10,7 +10,7 @@ import pytest
 
 class TestConnectToSibelius:
     @pytest.mark.anyio()
-    async def test_connect_success(self) -> None:
+    async def test_connect_returns_success(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_sibelius
 
@@ -37,7 +37,7 @@ class TestConnectToSibelius:
         assert "Connected to Sibelius" in result["message"]
 
     @pytest.mark.anyio()
-    async def test_connect_failure(self) -> None:
+    async def test_connect_failure_returns_error(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_sibelius
 
@@ -63,7 +63,7 @@ class TestConnectToSibelius:
         assert "Could not connect to Sibelius" in result["error"]
 
     @pytest.mark.anyio()
-    async def test_connect_with_custom_port(self) -> None:
+    async def test_connect_with_custom_port_sets_port(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_sibelius
 
@@ -91,7 +91,7 @@ class TestConnectToSibelius:
         assert mock_bridge.port == 5555
 
     @pytest.mark.anyio()
-    async def test_connect_disconnects_existing_bridge(self) -> None:
+    async def test_connect_disconnects_existing_bridge_first(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_sibelius
 
@@ -124,7 +124,7 @@ class TestConnectToSibelius:
 
 class TestDisconnectFromSibelius:
     @pytest.mark.anyio()
-    async def test_disconnect(self) -> None:
+    async def test_disconnect_returns_success(self) -> None:
         # Arrange
         from mcp_score.tools.connection import disconnect_from_sibelius
 
@@ -150,7 +150,7 @@ class TestDisconnectFromSibelius:
         mock_bridge.disconnect.assert_called_once()
 
     @pytest.mark.anyio()
-    async def test_disconnect_does_not_clear_other_bridge(self) -> None:
+    async def test_disconnect_preserves_other_active_bridge(self) -> None:
         # Arrange -- active bridge is MuseScore, not Sibelius
         from mcp_score.tools.connection import disconnect_from_sibelius
 
@@ -179,7 +179,7 @@ class TestBridgeSwitchingWithSibelius:
     """Verify that connecting to Sibelius disconnects other bridges."""
 
     @pytest.mark.anyio()
-    async def test_connecting_sibelius_disconnects_musescore(self) -> None:
+    async def test_connect_sibelius_disconnects_musescore(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_sibelius
 
@@ -208,7 +208,7 @@ class TestBridgeSwitchingWithSibelius:
         assert result["success"] is True
 
     @pytest.mark.anyio()
-    async def test_connecting_musescore_disconnects_sibelius(self) -> None:
+    async def test_connect_musescore_disconnects_sibelius(self) -> None:
         # Arrange
         from mcp_score.tools.connection import connect_to_musescore
 

@@ -50,7 +50,7 @@ mcp-score has three components that work together:
 
 ### MCP server
 
-A Python MCP server with 13 tools for live MuseScore interaction: connect/disconnect, read passages, add chords, set barlines, transpose, and more. Runs via `mcp-score serve` (or just `mcp-score`).
+A Python MCP server with 18 tools for live score manipulation across MuseScore, Dorico, and Sibelius: connect/disconnect, read passages, add chords, set barlines, transpose, and more. Runs via `mcp-score serve` (or just `mcp-score`).
 
 ### Score generation skill
 

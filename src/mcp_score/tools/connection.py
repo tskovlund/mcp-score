@@ -8,16 +8,27 @@ from mcp_score.bridge import (
     get_sibelius_bridge,
     set_active_bridge,
 )
+from mcp_score.bridge.musescore import DEFAULT_PORT as MUSESCORE_DEFAULT_PORT
 from mcp_score.tools import NOT_CONNECTED, connected_bridge, to_json
 
 __all__: list[str] = []
+
+
+async def _disconnect_active_bridge() -> None:
+    """Disconnect the currently active bridge, if any."""
+    current = get_active_bridge()
+    if current is not None and current.is_connected:
+        await current.disconnect()
+        set_active_bridge(None)
 
 
 # ── MuseScore ────────────────────────────────────────────────────────
 
 
 @mcp.tool()
-async def connect_to_musescore(host: str = "localhost", port: int = 8765) -> str:
+async def connect_to_musescore(
+    host: str = "localhost", port: int = MUSESCORE_DEFAULT_PORT
+) -> str:
     """Connect to a running MuseScore instance.
 
     The MuseScore MCP Score Bridge plugin must be running.
@@ -26,11 +37,7 @@ async def connect_to_musescore(host: str = "localhost", port: int = 8765) -> str
         host: WebSocket host (default: localhost).
         port: WebSocket port (default: 8765).
     """
-    # Disconnect any existing active bridge first.
-    current = get_active_bridge()
-    if current is not None and current.is_connected:
-        await current.disconnect()
-        set_active_bridge(None)
+    await _disconnect_active_bridge()
 
     bridge = get_musescore_bridge()
     bridge.host = host
@@ -81,11 +88,7 @@ async def connect_to_dorico(host: str = "localhost", port: int = 4560) -> str:
         host: WebSocket host (default: localhost).
         port: WebSocket port (default: 4560, Dorico's default).
     """
-    # Disconnect any existing active bridge first.
-    current = get_active_bridge()
-    if current is not None and current.is_connected:
-        await current.disconnect()
-        set_active_bridge(None)
+    await _disconnect_active_bridge()
 
     bridge = get_dorico_bridge()
     bridge.host = host
@@ -136,11 +139,7 @@ async def connect_to_sibelius(host: str = "localhost", port: int = 1898) -> str:
         host: WebSocket host (default: localhost).
         port: WebSocket port (default: 1898, Sibelius Connect's default).
     """
-    # Disconnect any existing active bridge first.
-    current = get_active_bridge()
-    if current is not None and current.is_connected:
-        await current.disconnect()
-        set_active_bridge(None)
+    await _disconnect_active_bridge()
 
     bridge = get_sibelius_bridge()
     bridge.host = host

@@ -57,8 +57,8 @@ def _package_path(resource_path: str) -> Path:
     if candidate.exists():
         return candidate
 
-    msg = f"Cannot find bundled resource: {resource_path}"
-    raise FileNotFoundError(msg)
+    error_message = f"Cannot find bundled resource: {resource_path}"
+    raise FileNotFoundError(error_message)
 
 
 def _copy_tree(source: Path, destination: Path) -> None:

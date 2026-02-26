@@ -87,7 +87,7 @@ pyright src/         # type check (strict mode)
 
 ## Test conventions
 
-- **Naming:** `test_action_expectation` (e.g. `test_create_score_sets_key_signature`)
+- **Naming:** `test_<action>_<expected_outcome>` (e.g. `test_create_score_sets_key_signature`)
 - **Structure:** Arrange / Act / Assert comments in every test
 - **Lean:** every test must earn its place by covering a meaningful path. No trivial tests (issubclass checks, json.dumps wrappers, constant assertions). No tests of library or built-in functionality
 - **No duplication:** shared protocol logic is tested once in the base class test file, not repeated per subclass. Per-subclass tests cover only subclass-specific behavior (defaults, overrides)

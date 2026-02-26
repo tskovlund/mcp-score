@@ -10,7 +10,7 @@ from mcp_score.bridge.sibelius import DEFAULT_PORT, SibeliusBridge
 
 
 class TestSibeliusBridgeDefaults:
-    def test_default_port(self) -> None:
+    def test_init_sets_default_port(self) -> None:
         # Arrange / Act
         bridge = SibeliusBridge()
 
@@ -18,21 +18,21 @@ class TestSibeliusBridgeDefaults:
         assert bridge.port == DEFAULT_PORT
         assert bridge.port == 1898
 
-    def test_application_name(self) -> None:
+    def test_application_name_returns_sibelius(self) -> None:
         # Arrange / Act
         bridge = SibeliusBridge()
 
         # Assert
         assert bridge.application_name == "Sibelius"
 
-    def test_uri_uses_default_port(self) -> None:
+    def test_uri_includes_default_port(self) -> None:
         # Arrange / Act
         bridge = SibeliusBridge()
 
         # Assert
         assert bridge.uri == "ws://localhost:1898"
 
-    def test_custom_host_and_port(self) -> None:
+    def test_init_with_custom_values_sets_host_and_port(self) -> None:
         # Arrange / Act
         bridge = SibeliusBridge(host="192.168.1.10", port=9999)
 

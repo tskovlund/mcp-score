@@ -45,6 +45,17 @@ DEFAULT_CLIENT_NAME = "mcp-score"
 #: Handshake protocol version.
 HANDSHAKE_VERSION = "1.0"
 
+# ── Protocol constants ────────────────────────────────────────────────
+
+#: Response code indicating a successful connection.
+RESPONSE_CONNECTED = "kConnected"
+
+#: Response code indicating an error.
+RESPONSE_ERROR = "kError"
+
+#: Message type for a session token response from the application.
+MESSAGE_SESSION_TOKEN = "sessiontoken"
+
 #: Barline type to command name mapping (shared by Dorico and Sibelius).
 BARLINE_COMMANDS: dict[str, str] = {
     "double": "AddBarlineDouble",
@@ -89,17 +100,6 @@ class RemoteControlBridge(ScoreBridge):
         """WebSocket URI."""
         return f"ws://{self.host}:{self.port}"
 
-    @property
-    def is_connected(self) -> bool:
-        """Whether there is an active, open WebSocket connection."""
-        conn = self._connection
-        if conn is None:
-            return False
-        try:
-            return conn.protocol.state.name == "OPEN"  # pyright: ignore[reportUnknownMemberType]
-        except AttributeError:
-            return False  # Fallback: assume disconnected if state is unknown
-
     async def connect(self) -> bool:
         """Connect to the application and perform the handshake.
 
@@ -109,12 +109,12 @@ class RemoteControlBridge(ScoreBridge):
         try:
             self._connection = await websockets.connect(self.uri)
             logger.info("WebSocket opened to %s at %s", self.application_name, self.uri)
-        except (OSError, websockets.exceptions.WebSocketException) as exc:
+        except (OSError, websockets.exceptions.WebSocketException) as exception:
             logger.error(
                 "Failed to connect to %s at %s: %s",
                 self.application_name,
                 self.uri,
-                exc,
+                exception,
             )
             self._connection = None
             return False
@@ -129,8 +129,8 @@ class RemoteControlBridge(ScoreBridge):
             TimeoutError,
             websockets.exceptions.WebSocketException,
             HandshakeError,
-        ) as exc:
-            logger.error("%s handshake failed: %s", self.application_name, exc)
+        ) as exception:
+            logger.error("%s handshake failed: %s", self.application_name, exception)
             await self._close_connection()
             return False
 
@@ -349,7 +349,7 @@ class RemoteControlBridge(ScoreBridge):
         }
         response = await self._send_and_receive(connect_message)
 
-        if response.get("message") != "sessiontoken":
+        if response.get("message") != MESSAGE_SESSION_TOKEN:
             raise HandshakeError(f"Expected 'sessiontoken' response, got: {response}")
 
         session_token = response.get("sessionToken")
@@ -363,10 +363,10 @@ class RemoteControlBridge(ScoreBridge):
         accept_response = await self._send_and_receive(accept_message)
 
         code = accept_response.get("code")
-        if code == "kError":
+        if code == RESPONSE_ERROR:
             detail = accept_response.get("detail", "unknown error")
             raise HandshakeError(f"Handshake rejected: {detail}")
-        if code != "kConnected":
+        if code != RESPONSE_CONNECTED:
             raise HandshakeError(
                 f"Expected 'kConnected' after accepting token, got: {accept_response}"
             )
@@ -384,11 +384,11 @@ class RemoteControlBridge(ScoreBridge):
         response = await self._send_and_receive(connect_message)
 
         code = response.get("code")
-        if code == "kConnected":
+        if code == RESPONSE_CONNECTED:
             return
 
         # Session token may have expired — try fresh handshake.
-        if response.get("message") == "sessiontoken":
+        if response.get("message") == MESSAGE_SESSION_TOKEN:
             session_token = response.get("sessionToken")
             if not session_token or not isinstance(session_token, str):
                 raise HandshakeError("No sessionToken in response")
@@ -400,10 +400,10 @@ class RemoteControlBridge(ScoreBridge):
             accept_response = await self._send_and_receive(accept_message)
 
             code = accept_response.get("code")
-            if code == "kError":
+            if code == RESPONSE_ERROR:
                 detail = accept_response.get("detail", "unknown error")
                 raise HandshakeError(f"Handshake rejected: {detail}")
-            if code != "kConnected":
+            if code != RESPONSE_CONNECTED:
                 raise HandshakeError(
                     f"Expected 'kConnected' after accepting token, "
                     f"got: {accept_response}"
@@ -454,35 +454,39 @@ class RemoteControlBridge(ScoreBridge):
                 }
             try:
                 return await self._send_and_receive(message)
-            except Exception as exc:  # noqa: BLE001
-                return {"error": f"Request failed after reconnect: {exc}"}
+            except Exception as exception:  # noqa: BLE001
+                return {"error": f"Request failed after reconnect: {exception}"}
 
     async def _send_and_receive(self, message: dict[str, Any]) -> dict[str, Any]:
         """Send a JSON message and wait for the response."""
-        conn = self._connection
-        if conn is None:
+        connection = self._connection
+        if connection is None:
             return {"error": "No active connection"}
 
         message_json = json.dumps(message)
         logger.debug("Sending to %s: %s", self.application_name, message_json)
-        await conn.send(message_json)
+        await connection.send(message_json)
 
-        response_raw = await asyncio.wait_for(conn.recv(), timeout=self.RECV_TIMEOUT)
+        response_raw = await asyncio.wait_for(
+            connection.recv(), timeout=self.RECV_TIMEOUT
+        )
         if not isinstance(response_raw, str):
             return {"error": f"Received non-text response from {self.application_name}"}
 
         logger.debug("Received from %s: %s", self.application_name, response_raw)
         try:
             result: dict[str, Any] = json.loads(response_raw)
-        except json.JSONDecodeError as exc:
-            return {"error": f"Invalid JSON from {self.application_name}: {exc}"}
+        except json.JSONDecodeError as exception:
+            return {
+                "error": (f"Invalid JSON from {self.application_name}: {exception}")
+            }
         return result
 
     async def _send_json(self, message: dict[str, Any]) -> None:
         """Send a JSON message without waiting for a response."""
-        conn = self._connection
-        if conn is not None:
-            await conn.send(json.dumps(message))
+        connection = self._connection
+        if connection is not None:
+            await connection.send(json.dumps(message))
 
     async def _close_connection(self) -> None:
         """Close the WebSocket connection and clear internal state."""

@@ -4,7 +4,7 @@ from mcp_score.server import mcp
 
 
 class TestServer:
-    def test_server_name(self) -> None:
+    def test_server_name_is_mcp_score(self) -> None:
         # Arrange / Act
         name = mcp.name
 

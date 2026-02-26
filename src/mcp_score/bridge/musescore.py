@@ -14,9 +14,12 @@ from mcp_score.bridge.base import ScoreBridge
 if TYPE_CHECKING:
     from websockets.asyncio.client import ClientConnection
 
-__all__ = ["MuseScoreBridge"]
+__all__ = ["DEFAULT_PORT", "MuseScoreBridge"]
 
 logger = logging.getLogger(__name__)
+
+#: Default WebSocket port for the MuseScore QML plugin.
+DEFAULT_PORT = 8765
 
 
 class MuseScoreBridge(ScoreBridge):
@@ -29,7 +32,7 @@ class MuseScoreBridge(ScoreBridge):
     #: Timeout in seconds for receiving a response from MuseScore.
     RECV_TIMEOUT: float = 30.0
 
-    def __init__(self, host: str = "localhost", port: int = 8765) -> None:
+    def __init__(self, host: str = "localhost", port: int = DEFAULT_PORT) -> None:
         self.host = host
         self.port = port
         self._connection: ClientConnection | None = None
@@ -44,18 +47,6 @@ class MuseScoreBridge(ScoreBridge):
         """WebSocket URI."""
         return f"ws://{self.host}:{self.port}"
 
-    @property
-    def is_connected(self) -> bool:
-        """Whether there is an active, open WebSocket connection."""
-        conn = self._connection
-        if conn is None:
-            return False
-        # Check the actual connection state, not just object presence.
-        try:
-            return conn.protocol.state.name == "OPEN"  # pyright: ignore[reportUnknownMemberType]
-        except AttributeError:
-            return False  # Fallback: assume disconnected if state is unknown
-
     async def connect(self) -> bool:
         """Connect to the MuseScore WebSocket server.
 
@@ -66,8 +57,10 @@ class MuseScoreBridge(ScoreBridge):
             self._connection = await websockets.connect(self.uri)
             logger.info("Connected to MuseScore at %s", self.uri)
             return True
-        except (OSError, websockets.exceptions.WebSocketException) as exc:
-            logger.error("Failed to connect to MuseScore at %s: %s", self.uri, exc)
+        except (OSError, websockets.exceptions.WebSocketException) as exception:
+            logger.error(
+                "Failed to connect to MuseScore at %s: %s", self.uri, exception
+            )
             self._connection = None
             return False
 
@@ -80,19 +73,21 @@ class MuseScoreBridge(ScoreBridge):
 
     async def _send_raw(self, command_json: str) -> dict[str, Any]:
         """Send a raw JSON command string over the active connection."""
-        conn = self._connection
-        if conn is None:
+        connection = self._connection
+        if connection is None:
             return {"error": "No active connection"}
 
-        await conn.send(command_json)
-        response_raw = await asyncio.wait_for(conn.recv(), timeout=self.RECV_TIMEOUT)
+        await connection.send(command_json)
+        response_raw = await asyncio.wait_for(
+            connection.recv(), timeout=self.RECV_TIMEOUT
+        )
         if not isinstance(response_raw, str):
             return {"error": "Received non-text response from MuseScore"}
         logger.debug("Received: %s", response_raw)
         try:
             result: dict[str, Any] = json.loads(response_raw)
-        except json.JSONDecodeError as exc:
-            return {"error": f"Invalid JSON from MuseScore: {exc}"}
+        except json.JSONDecodeError as exception:
+            return {"error": f"Invalid JSON from MuseScore: {exception}"}
         return result
 
     async def send_command(
@@ -135,8 +130,8 @@ class MuseScoreBridge(ScoreBridge):
             # Retry the command once after reconnecting.
             try:
                 return await self._send_raw(command_json)
-            except Exception as exc:  # noqa: BLE001
-                return {"error": f"Command failed after reconnect: {exc}"}
+            except Exception as exception:  # noqa: BLE001
+                return {"error": f"Command failed after reconnect: {exception}"}
 
     async def ping(self) -> bool:
         """Check if the connection is alive."""

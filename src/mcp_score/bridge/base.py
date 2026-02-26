@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from websockets.asyncio.client import ClientConnection
 
 __all__ = ["ScoreBridge"]
+
+#: WebSocket protocol state name indicating an open connection.
+WEBSOCKET_STATE_OPEN = "OPEN"
 
 
 class ScoreBridge(ABC):
@@ -15,10 +21,21 @@ class ScoreBridge(ABC):
     interface so that MCP tools can work with any supported DAW.
     """
 
+    _connection: ClientConnection | None
+
     @property
-    @abstractmethod
     def is_connected(self) -> bool:
-        """Whether there is an active connection to the application."""
+        """Whether there is an active, open WebSocket connection."""
+        connection = self._connection
+        if connection is None:
+            return False
+        try:
+            return (
+                connection.protocol.state.name  # pyright: ignore[reportUnknownMemberType]
+                == WEBSOCKET_STATE_OPEN
+            )
+        except AttributeError:
+            return False
 
     @property
     @abstractmethod
