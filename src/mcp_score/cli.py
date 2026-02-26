@@ -83,7 +83,7 @@ def install_skill() -> bool:
     try:
         skill_dir = _package_path(str(Path(".claude") / "skills" / "score-generate"))
     except FileNotFoundError:
-        print("Error: skill files not found in package.")
+        sys.stderr.write("Error: skill files not found in package.\n")
         return False
 
     _copy_tree(skill_dir, _SKILL_DEST)
@@ -99,18 +99,18 @@ def install_plugin() -> bool:
     plugin_dir = _PLUGIN_DIRS.get(system)
 
     if plugin_dir is None:
-        print(f"Error: unsupported platform '{system}'.")
-        print("Supported: macOS (Darwin), Linux.")
-        print(
+        sys.stderr.write(f"Error: unsupported platform '{system}'.\n")
+        sys.stderr.write("Supported: macOS (Darwin), Linux.\n")
+        sys.stderr.write(
             "Manual install: copy src/mcp_score/musescore/plugin.qml"
-            " to your MuseScore Plugins directory."
+            " to your MuseScore Plugins directory.\n"
         )
         return False
 
     try:
         source = _package_path(str(Path("musescore") / "plugin.qml"))
     except FileNotFoundError:
-        print("Error: plugin.qml not found in package.")
+        sys.stderr.write("Error: plugin.qml not found in package.\n")
         return False
 
     destination = plugin_dir / "mcp-score-bridge.qml"
@@ -186,6 +186,6 @@ def main() -> NoReturn:
         print(_USAGE)
         sys.exit(0)
 
-    print(f"Unknown command: {command}")
-    print(_USAGE)
+    sys.stderr.write(f"Unknown command: {command}\n")
+    sys.stderr.write(_USAGE)
     sys.exit(1)
