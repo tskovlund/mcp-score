@@ -8,7 +8,7 @@ description: >
 allowed-tools: [Bash, Write, Read]
 metadata:
   author: tskovlund
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Score Generation
@@ -18,12 +18,18 @@ Generate music scores by writing and executing music21 Python scripts that expor
 ## Instructions
 
 1. **Understand the request** — identify: instrumentation, key, time signature, tempo, form/structure, chord progressions, specific notation elements.
-2. **Write a complete Python script** using music21 that builds the entire score. Save to `/tmp/generate_score.py`.
-3. **Execute** the script:
+2. **Gather missing metadata** — if the user hasn't specified title, composer, arranger, or other relevant details, **ask them** before generating. Only skip asking if the user explicitly says to use defaults or not to ask. Relevant metadata includes:
+   - **Title** (required — ask if not provided)
+   - **Composer** (ask if not provided)
+   - **Arranger** (ask if applicable, e.g. arrangements, charts)
+   - **Subtitle** (ask if the piece has a descriptive subtitle, genre, or dedication)
+   - **Copyright** (ask if the user wants a copyright notice)
+3. **Write a complete Python script** using music21 that builds the entire score. Save to `/tmp/generate_score.py`.
+4. **Execute** the script:
    ```bash
    mcp-score run /tmp/generate_score.py
    ```
-4. **Report** the output file path. The user opens it in MuseScore.
+5. **Report** the output file path. The user opens it in MuseScore.
 
 Default output location: `~/Desktop/<Title>.musicxml`
 
@@ -72,7 +78,7 @@ When the same chord spans multiple consecutive bars, do NOT notate it every bar:
 
 - **Notate at every chord change** — always.
 - **Re-notate at section boundaries** — rehearsal marks, repeat signs.
-- **For 4+ bars of the same chord** — re-notate every 4 bars.
+- **Re-notate at contextually appropriate intervals** — choose an interval that divides the phrase length evenly. For an 8- or 16-bar phrase, every 4 bars. For a 9-bar phrase, every 3 bars. For a 6-bar phrase, every 3 or 2 bars. The goal is orientation, not clutter.
 - **Never write the same chord on consecutive bars** unless it's a section boundary.
 
 Example — 12-bar blues in Bb, each `|` is a bar:
@@ -83,14 +89,20 @@ Chord symbols appear on bars 1, 5, 6, 7, 9, 10, 11, 12 — NOT every bar.
 
 ### Score Metadata
 
-Always set title (and composer if known) using `metadata.Metadata`:
+Always set title and any provided metadata using `metadata.Metadata`:
 
 ```python
 from music21 import metadata
 
 score.metadata = metadata.Metadata()
 score.metadata.title = "Score Title"
-score.metadata.composer = "Composer Name"  # if provided
+score.metadata.composer = "Composer Name"       # if provided
+score.metadata.movementName = "Subtitle Here"   # subtitle (shows below title in MusicXML)
+
+# Arranger and copyright are set via Contributor and Copyright objects:
+from music21 import metadata as md
+score.metadata.addContributor(md.Contributor(role="arranger", name="Arranger Name"))
+score.metadata.copyright = md.Copyright("© 2026 Author Name")
 ```
 
 ### Barlines Including Repeats

@@ -27,6 +27,12 @@ OUTPUT = Path.home() / "Desktop" / f"{TITLE}.musicxml"
 score = stream.Score()
 score.metadata = metadata.Metadata()
 score.metadata.title = TITLE
+# score.metadata.composer = "Composer Name"
+# score.metadata.movementName = "Subtitle"  # shows below title
+# score.metadata.addContributor(
+#     metadata.Contributor(role="arranger", name="Arranger Name")
+# )
+# score.metadata.copyright = metadata.Copyright("© 2026 Author Name")
 
 # ── Create parts ──────────────────────────────────────────────
 # See instruments.md for full instrument list.
