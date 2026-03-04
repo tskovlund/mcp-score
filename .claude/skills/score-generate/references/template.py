@@ -16,6 +16,7 @@ from music21 import (  # noqa: F401
     metadata,
     meter,
     note,
+    spanner,
     stream,
     tempo,
 )
@@ -105,6 +106,19 @@ def add_rehearsal(part: stream.Part, measure_num: int, label: str) -> None:
 #
 # Final barline on last measure:
 # part.measure(NUM_MEASURES).rightBarline = bar.Barline('final')
+
+# ── Volta brackets (1st/2nd endings) ────────────────────────
+# Spanners must be appended to the Part, not the Measure.
+# Add to ALL parts in multi-part scores.
+# for part in score.parts:
+#     m_first = part.measure(11)   # 1st ending
+#     m_second = part.measure(12)  # 2nd ending
+#     m_first.rightBarline = bar.Repeat(direction='end')  # repeat back
+#     part.append(spanner.RepeatBracket(m_first, number=1))
+#     part.append(spanner.RepeatBracket(m_second, number=2))
+#
+# Multi-measure ending:
+# part.append(spanner.RepeatBracket([m9, m10, m11], number=1))
 
 # ── Notes (replacing rests) ──────────────────────────────────
 # To write notes in a measure, clear existing content first:

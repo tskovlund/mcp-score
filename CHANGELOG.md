@@ -21,3 +21,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 - Skill now asks user for missing metadata (title, composer, arranger, subtitle, copyright) instead of silently using defaults
 - Chord repetition intervals are context-aware: divides phrase length evenly instead of fixed "every 4 bars"
+- Skill documents volta brackets (1st/2nd endings) via `spanner.RepeatBracket`
+- Skill documents MuseScore subtitle/arranger display limitation (known issue, data is in MusicXML)
+- Dependabot: bumped setup-uv 7.3.0→7.3.1, upload-artifact 4→7, download-artifact 4→8

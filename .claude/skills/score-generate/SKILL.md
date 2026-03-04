@@ -8,7 +8,7 @@ description: >
 allowed-tools: [Bash, Write, Read]
 metadata:
   author: tskovlund
-  version: "1.2"
+  version: "1.3"
 ---
 
 # Score Generation
@@ -119,6 +119,32 @@ measure.rightBarline = bar.Barline('double')
 measure.rightBarline = bar.Barline('final')
 ```
 
+### 1st/2nd Endings (Volta Brackets)
+
+Use `spanner.RepeatBracket` for volta brackets. Spanners must be appended to the **Part**, not the Measure.
+
+```python
+from music21 import spanner
+
+# After building all measures and adding parts to score:
+for part in score.parts:
+    m_first = part.measure(15)   # 1st ending measure
+    m_second = part.measure(16)  # 2nd ending measure
+    part.append(spanner.RepeatBracket(m_first, number=1))
+    part.append(spanner.RepeatBracket(m_second, number=2))
+```
+
+Volta brackets work with repeat barlines:
+- The **last measure of the 1st ending** gets `rightBarline = bar.Repeat(direction='end')` (player repeats back)
+- The **last measure of the 2nd ending** gets a regular barline (player continues)
+
+For multi-measure endings, pass a list of measures:
+```python
+part.append(spanner.RepeatBracket([m13, m14, m15], number=1))
+```
+
+**Important:** Add volta brackets to **all parts**, not just the first part. Standard MusicXML — works in MuseScore, Dorico, and Sibelius.
+
 ### Multi-Part Scores
 
 Each part needs its own key signature and time signature on measure 1:
@@ -184,6 +210,9 @@ Cause: Using `"Bb7"` instead of `"B-7"`. Fix: always use `-` for flats in roots.
 
 **Title not showing in MuseScore**
 Cause: Metadata not set properly. Fix: use `metadata.Metadata()` directly.
+
+**Subtitle or arranger not showing in MuseScore**
+Cause: music21 correctly exports `<movement-title>` and `<creator type="arranger">` in the MusicXML, but MuseScore 4 doesn't display them visually. This is a known MuseScore limitation — it expects `<credit>` elements for visual layout, which music21 doesn't generate from metadata. The data is in the file; the user can add subtitle/arranger text manually in MuseScore after import. Dorico and Sibelius may handle these fields better.
 
 **Repeat barlines not appearing**
 Cause: Using `bar.Barline('repeat-start')`. Fix: use `bar.Repeat(direction='start')`.
