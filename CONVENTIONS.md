@@ -72,8 +72,13 @@ first, then propagate to all repos.
 
 - **Lockfiles always committed** — `uv.lock`, `package-lock.json`,
   `flake.lock`, etc. Reproducible builds
-- **Pin direct dependencies to compatible ranges** — not exact (too noisy), not
-  fully open (too risky)
+- **Pin direct dependencies to compatible ranges with major version upper
+  bounds** — allow minor/patch updates, block major version bumps. Automated
+  dependency tools (Dependabot, Renovate) handle bumps; upper bounds ensure they
+  produce reviewable PRs instead of silent breakage. Examples:
+  - Python: `"websockets>=14.0,<15"` (not `">=14.0"`)
+  - Node: `"^14.0.0"` in `package.json` (caret is the default and correct)
+  - GitHub Actions: pin to commit SHA with version comment
 - **CodeQL scanning in CI** when available
 - **Dependabot/Renovate** for automated dependency updates when available
 - **No secrets in code** — env vars or secret managers. `.env` files gitignored

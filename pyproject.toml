@@ -18,9 +18,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "mcp[cli]>=1.0",
-    "music21>=9.0",
-    "websockets>=14.0",
+    "mcp[cli]>=1.0,<2",
+    "music21>=9.0,<10",
+    "websockets>=14.0,<17",
 ]
 
 [project.urls]
@@ -44,9 +44,9 @@ packages = ["src/mcp_score"]
 
 [dependency-groups]
 dev = [
-    "pyright>=1.1",
-    "pytest>=8.0",
-    "ruff>=0.15.0",
+    "pyright>=1.1,<2",
+    "pytest>=8.0,<10",
+    "ruff>=0.15.0,<1",
 ]
 
 [tool.ruff]

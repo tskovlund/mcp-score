@@ -593,16 +593,16 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.0" },
-    { name = "music21", specifier = ">=9.0" },
-    { name = "websockets", specifier = ">=14.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.0,<2" },
+    { name = "music21", specifier = ">=9.0,<10" },
+    { name = "websockets", specifier = ">=14.0,<17" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pyright", specifier = ">=1.1" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "ruff", specifier = ">=0.15.0" },
+    { name = "pyright", specifier = ">=1.1,<2" },
+    { name = "pytest", specifier = ">=8.0,<10" },
+    { name = "ruff", specifier = ">=0.15.0,<1" },
 ]
 
 [[package]]
