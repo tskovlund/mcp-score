@@ -100,7 +100,7 @@ class TestInstallPlugin:
 
     def test_install_plugin_on_unsupported_platform_returns_false(self) -> None:
         # Arrange
-        with patch("mcp_score.cli.platform.system", return_value="Windows"):
+        with patch("mcp_score.cli.platform.system", return_value="FreeBSD"):
             # Act
             result = install_plugin()
 
