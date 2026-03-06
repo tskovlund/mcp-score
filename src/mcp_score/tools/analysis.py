@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_score.app import mcp
+from mcp_score.bridge.musescore import MuseScoreBridge
 from mcp_score.bridge.remote_control import RemoteControlBridge
 from mcp_score.tools import NOT_CONNECTED, check_measure, connected_bridge, to_json
 
@@ -45,9 +46,13 @@ async def read_passage(
 
     elements: list[dict[str, Any]] = []
     for measure_num in range(start_measure, end_measure + 1):
-        await bridge.go_to_measure(measure_num)
+        navigation_result = await bridge.go_to_measure(measure_num)
+        if "error" in navigation_result:
+            return to_json(navigation_result)
         if staff is not None:
-            await bridge.go_to_staff(staff)
+            navigation_result = await bridge.go_to_staff(staff)
+            if "error" in navigation_result:
+                return to_json(navigation_result)
         cursor_info = await bridge.get_cursor_info()
         elements.append(
             {
@@ -84,12 +89,23 @@ async def get_measure_content(measure: int, staff: int = 0) -> str:
     if error := check_measure(measure):
         return error
 
-    await bridge.go_to_measure(measure)
-    await bridge.go_to_staff(staff)
+    navigation_result = await bridge.go_to_measure(measure)
+    if "error" in navigation_result:
+        return to_json(navigation_result)
+    navigation_result = await bridge.go_to_staff(staff)
+    if "error" in navigation_result:
+        return to_json(navigation_result)
+
+    if not isinstance(bridge, MuseScoreBridge):
+        return to_json(
+            {
+                "warning": _REMOTE_CONTROL_ANALYSIS_WARNING,
+                "measure": measure,
+                "staff": staff,
+            }
+        )
 
     result = await bridge.send_command("selectCurrentMeasure")
-    if isinstance(bridge, RemoteControlBridge) and "error" not in result:
-        result["warning"] = _REMOTE_CONTROL_ANALYSIS_WARNING
     return to_json(result)
 
 

@@ -340,18 +340,13 @@ class RemoteControlBridge(ScoreBridge):
         else:
             await self._handshake_without_session_token()
 
-    async def _handshake_without_session_token(self) -> None:
-        """Fresh handshake: connect -> receive session token -> accept."""
-        connect_message = {
-            "message": "connect",
-            "clientName": self.client_name,
-            "handshakeVersion": HANDSHAKE_VERSION,
-        }
-        response = await self._send_and_receive(connect_message)
+    async def _accept_session_token(self, response: dict[str, Any]) -> None:
+        """Extract, accept, and store a session token from a server response.
 
-        if response.get("message") != MESSAGE_SESSION_TOKEN:
-            raise HandshakeError(f"Expected 'sessiontoken' response, got: {response}")
-
+        Raises:
+            HandshakeError: If the token is missing, rejected, or the
+                server responds unexpectedly.
+        """
         session_token = response.get("sessionToken")
         if not session_token or not isinstance(session_token, str):
             raise HandshakeError("No sessionToken in response")
@@ -373,6 +368,20 @@ class RemoteControlBridge(ScoreBridge):
 
         self._session_token = session_token
 
+    async def _handshake_without_session_token(self) -> None:
+        """Fresh handshake: connect -> receive session token -> accept."""
+        connect_message = {
+            "message": "connect",
+            "clientName": self.client_name,
+            "handshakeVersion": HANDSHAKE_VERSION,
+        }
+        response = await self._send_and_receive(connect_message)
+
+        if response.get("message") != MESSAGE_SESSION_TOKEN:
+            raise HandshakeError(f"Expected 'sessiontoken' response, got: {response}")
+
+        await self._accept_session_token(response)
+
     async def _handshake_with_session_token(self) -> None:
         """Reconnect using a cached session token."""
         connect_message = {
@@ -389,26 +398,7 @@ class RemoteControlBridge(ScoreBridge):
 
         # Session token may have expired — try fresh handshake.
         if response.get("message") == MESSAGE_SESSION_TOKEN:
-            session_token = response.get("sessionToken")
-            if not session_token or not isinstance(session_token, str):
-                raise HandshakeError("No sessionToken in response")
-
-            accept_message = {
-                "message": "acceptsessiontoken",
-                "sessionToken": session_token,
-            }
-            accept_response = await self._send_and_receive(accept_message)
-
-            code = accept_response.get("code")
-            if code == RESPONSE_ERROR:
-                detail = accept_response.get("detail", "unknown error")
-                raise HandshakeError(f"Handshake rejected: {detail}")
-            if code != RESPONSE_CONNECTED:
-                raise HandshakeError(
-                    f"Expected 'kConnected' after accepting token, "
-                    f"got: {accept_response}"
-                )
-            self._session_token = session_token
+            await self._accept_session_token(response)
             return
 
         # Unexpected response — invalidate cached token and fail.
@@ -491,7 +481,7 @@ class RemoteControlBridge(ScoreBridge):
     async def _close_connection(self) -> None:
         """Close the WebSocket connection and clear internal state."""
         if self._connection is not None:
-            with contextlib.suppress(websockets.exceptions.WebSocketException):
+            with contextlib.suppress(websockets.exceptions.WebSocketException, OSError):
                 await self._connection.close()
             self._connection = None
 

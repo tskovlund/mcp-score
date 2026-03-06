@@ -260,6 +260,12 @@ MuseScore {
         return (value !== undefined) ? value : null;
     }
 
+    /// Parse a value to integer, returning null if the result is NaN.
+    function safeParseInt(value) {
+        var parsed = parseInt(value);
+        return isNaN(parsed) ? null : parsed;
+    }
+
     /// Describe a score element as a plain object for JSON serialization.
     function describeElement(element) {
         if (!element) return null;
@@ -379,7 +385,10 @@ MuseScore {
             return { error: "Missing required parameter: measure" };
         }
 
-        var measureNumber = parseInt(params.measure);
+        var measureNumber = safeParseInt(params.measure);
+        if (measureNumber === null) {
+            return { error: "Invalid value for measure: " + params.measure };
+        }
         var totalMeasures = countMeasures();
 
         if (measureNumber < 1 || measureNumber > totalMeasures) {
@@ -399,7 +408,10 @@ MuseScore {
             return { error: "Missing required parameter: staff" };
         }
 
-        var staffIndex = parseInt(params.staff);
+        var staffIndex = safeParseInt(params.staff);
+        if (staffIndex === null) {
+            return { error: "Invalid value for staff: " + params.staff };
+        }
         if (staffIndex < 0 || staffIndex >= curScore.nstaves) {
             return { error: "Staff " + staffIndex + " out of range (0-" + (curScore.nstaves - 1) + ")" };
         }
@@ -423,9 +435,22 @@ MuseScore {
             return { error: "Missing required parameter: pitch" };
         }
 
-        var pitch = parseInt(params.pitch);
-        var numerator = (params.duration && params.duration.numerator) ? parseInt(params.duration.numerator) : 1;
-        var denominator = (params.duration && params.duration.denominator) ? parseInt(params.duration.denominator) : 4;
+        var pitch = safeParseInt(params.pitch);
+        if (pitch === null) {
+            return { error: "Invalid value for pitch: " + params.pitch };
+        }
+        var numerator = 1;
+        var denominator = 4;
+        if (params.duration) {
+            if (params.duration.numerator !== undefined) {
+                numerator = safeParseInt(params.duration.numerator);
+                if (numerator === null) return { error: "Invalid duration numerator" };
+            }
+            if (params.duration.denominator !== undefined) {
+                denominator = safeParseInt(params.duration.denominator);
+                if (denominator === null) return { error: "Invalid duration denominator" };
+            }
+        }
         var advance = (params.advanceCursorAfterAction !== false);
 
         curScore.startCmd("addNote");
@@ -458,6 +483,10 @@ MuseScore {
             return { error: "Missing required parameter: text" };
         }
 
+        if (!cursor.segment) {
+            return { error: "No valid segment at cursor position" };
+        }
+
         curScore.startCmd("addRehearsalMark");
         var rehearsalMark = newElement(Element.REHEARSAL_MARK);
         rehearsalMark.text = params.text;
@@ -484,12 +513,14 @@ MuseScore {
                 ". Valid types: " + Object.keys(barlineTypes).join(", ") };
         }
 
-        curScore.startCmd("setBarline");
-        if (cursor.measure) {
-            var barline = newElement(Element.BAR_LINE);
-            barline.barlineType = barlineType;
-            cursor.add(barline);
+        if (!cursor.measure) {
+            return { error: "No valid measure at cursor position" };
         }
+
+        curScore.startCmd("setBarline");
+        var barline = newElement(Element.BAR_LINE);
+        barline.barlineType = barlineType;
+        cursor.add(barline);
         curScore.endCmd();
 
         return { result: { type: params.type, measure: cursorMeasure } };
@@ -506,9 +537,15 @@ MuseScore {
             return { error: "Missing required parameter: fifths" };
         }
 
-        var fifths = parseInt(params.fifths);
+        var fifths = safeParseInt(params.fifths);
+        if (fifths === null) {
+            return { error: "Invalid value for fifths: " + params.fifths };
+        }
         if (fifths < minFifths || fifths > maxFifths) {
             return { error: "fifths must be between " + minFifths + " and " + maxFifths + ", got: " + fifths };
+        }
+        if (!cursor.segment) {
+            return { error: "No valid segment at cursor position" };
         }
 
         curScore.startCmd("setKeySignature");
@@ -531,8 +568,14 @@ MuseScore {
             return { error: "Missing required parameters: numerator and denominator" };
         }
 
-        var numerator = parseInt(params.numerator);
-        var denominator = parseInt(params.denominator);
+        var numerator = safeParseInt(params.numerator);
+        var denominator = safeParseInt(params.denominator);
+        if (numerator === null || denominator === null) {
+            return { error: "Invalid time signature values" };
+        }
+        if (!cursor.segment) {
+            return { error: "No valid segment at cursor position" };
+        }
 
         curScore.startCmd("setTimeSignature");
         var timeSig = newElement(Element.TIMESIG);
@@ -554,8 +597,15 @@ MuseScore {
             return { error: "Missing required parameter: bpm" };
         }
 
-        var bpm = parseInt(params.bpm);
+        var bpm = safeParseInt(params.bpm);
+        if (bpm === null) {
+            return { error: "Invalid value for bpm: " + params.bpm };
+        }
         var displayText = params.text || ("\u2669 = " + bpm);
+
+        if (!cursor.segment) {
+            return { error: "No valid segment at cursor position" };
+        }
 
         curScore.startCmd("setTempo");
         var tempo = newElement(Element.TEMPO_TEXT);
@@ -579,12 +629,14 @@ MuseScore {
             return { error: "Missing required parameter: text" };
         }
 
+        if (!cursor.segment) {
+            return { error: "No valid segment at cursor position" };
+        }
+
         curScore.startCmd("addChordSymbol");
         var harmony = newElement(Element.HARMONY);
         harmony.text = params.text;
-        if (cursor.segment) {
-            cursor.add(harmony);
-        }
+        cursor.add(harmony);
         curScore.endCmd();
 
         return { result: { text: params.text, measure: cursorMeasure } };
@@ -599,6 +651,10 @@ MuseScore {
 
         if (params.type === undefined || params.type === "") {
             return { error: "Missing required parameter: type" };
+        }
+
+        if (!cursor.segment) {
+            return { error: "No valid segment at cursor position" };
         }
 
         curScore.startCmd("addDynamic");
@@ -623,8 +679,8 @@ MuseScore {
             return { error: "Missing required parameter: count" };
         }
 
-        var count = parseInt(params.count);
-        if (count < 1) {
+        var count = safeParseInt(params.count);
+        if (count === null || count < 1) {
             return { error: "count must be at least 1, got: " + count };
         }
 
@@ -731,7 +787,10 @@ MuseScore {
             return { error: "Missing required parameter: semitones" };
         }
 
-        var semitones = parseInt(params.semitones);
+        var semitones = safeParseInt(params.semitones);
+        if (semitones === null) {
+            return { error: "Invalid value for semitones: " + params.semitones };
+        }
 
         if (!curScore.selection || !curScore.selection.elements ||
             curScore.selection.elements.length === 0) {
@@ -762,6 +821,17 @@ MuseScore {
         if (scoreErr) return scoreErr;
 
         cmd("undo");
+
+        // Clamp cursor to valid bounds — undo may have changed the score
+        // structure (removed measures, changed staves).
+        var totalMeasures = countMeasures();
+        if (totalMeasures > 0 && cursorMeasure > totalMeasures) {
+            cursorMeasure = totalMeasures;
+        }
+        if (curScore.nstaves > 0 && cursorStaff >= curScore.nstaves) {
+            cursorStaff = curScore.nstaves - 1;
+        }
+
         return { result: "ok" };
     }
 
@@ -849,7 +919,9 @@ MuseScore {
             case "goToMeasure": {
                 if (params.measure === undefined)
                     return { error: "Missing required parameter: measure" };
-                var measureNum = parseInt(params.measure);
+                var measureNum = safeParseInt(params.measure);
+                if (measureNum === null)
+                    return { error: "Invalid value for measure: " + params.measure };
                 var total = countMeasures();
                 if (measureNum < 1 || measureNum > total)
                     return { error: "Measure " + measureNum + " out of range (1-" + total + ")" };
@@ -860,7 +932,9 @@ MuseScore {
             case "goToStaff": {
                 if (params.staff === undefined)
                     return { error: "Missing required parameter: staff" };
-                var staffIdx = parseInt(params.staff);
+                var staffIdx = safeParseInt(params.staff);
+                if (staffIdx === null)
+                    return { error: "Invalid value for staff: " + params.staff };
                 if (staffIdx < 0 || staffIdx >= curScore.nstaves)
                     return { error: "Staff " + staffIdx + " out of range (0-" + (curScore.nstaves - 1) + ")" };
                 cursorStaff = staffIdx;
@@ -870,9 +944,21 @@ MuseScore {
             case "addNote": {
                 if (params.pitch === undefined)
                     return { error: "Missing required parameter: pitch" };
-                var pitch = parseInt(params.pitch);
-                var noteNum = (params.duration && params.duration.numerator) ? parseInt(params.duration.numerator) : 1;
-                var noteDen = (params.duration && params.duration.denominator) ? parseInt(params.duration.denominator) : 4;
+                var pitch = safeParseInt(params.pitch);
+                if (pitch === null)
+                    return { error: "Invalid value for pitch: " + params.pitch };
+                var noteNum = 1;
+                var noteDen = 4;
+                if (params.duration) {
+                    if (params.duration.numerator !== undefined) {
+                        noteNum = safeParseInt(params.duration.numerator);
+                        if (noteNum === null) return { error: "Invalid duration numerator" };
+                    }
+                    if (params.duration.denominator !== undefined) {
+                        noteDen = safeParseInt(params.duration.denominator);
+                        if (noteDen === null) return { error: "Invalid duration denominator" };
+                    }
+                }
                 var advance = (params.advanceCursorAfterAction !== false);
                 var noteCursor = positionedCursor();
                 if (!noteCursor) return { error: "Could not position cursor" };
@@ -889,6 +975,7 @@ MuseScore {
                     return { error: "Missing required parameter: text" };
                 var rmCursor = positionedCursor();
                 if (!rmCursor) return { error: "Could not position cursor" };
+                if (!rmCursor.segment) return { error: "No valid segment at cursor position" };
                 var rehearsalMark = newElement(Element.REHEARSAL_MARK);
                 rehearsalMark.text = params.text;
                 rmCursor.add(rehearsalMark);
@@ -903,6 +990,7 @@ MuseScore {
                     return { error: "Unknown barline type: " + params.type };
                 var blCursor = positionedCursor();
                 if (!blCursor) return { error: "Could not position cursor" };
+                if (!blCursor.measure) return { error: "No valid measure at cursor position" };
                 var barline = newElement(Element.BAR_LINE);
                 barline.barlineType = barlineValue;
                 blCursor.add(barline);
@@ -912,11 +1000,14 @@ MuseScore {
             case "setKeySignature": {
                 if (params.fifths === undefined)
                     return { error: "Missing required parameter: fifths" };
-                var fifths = parseInt(params.fifths);
+                var fifths = safeParseInt(params.fifths);
+                if (fifths === null)
+                    return { error: "Invalid value for fifths: " + params.fifths };
                 if (fifths < minFifths || fifths > maxFifths)
                     return { error: "fifths must be between " + minFifths + " and " + maxFifths };
                 var ksCursor = positionedCursor();
                 if (!ksCursor) return { error: "Could not position cursor" };
+                if (!ksCursor.segment) return { error: "No valid segment at cursor position" };
                 var keySig = newElement(Element.KEYSIG);
                 keySig.key = fifths;
                 ksCursor.add(keySig);
@@ -926,10 +1017,13 @@ MuseScore {
             case "setTimeSignature": {
                 if (params.numerator === undefined || params.denominator === undefined)
                     return { error: "Missing required parameters: numerator and denominator" };
-                var tsNum = parseInt(params.numerator);
-                var tsDen = parseInt(params.denominator);
+                var tsNum = safeParseInt(params.numerator);
+                var tsDen = safeParseInt(params.denominator);
+                if (tsNum === null || tsDen === null)
+                    return { error: "Invalid time signature values" };
                 var tsCursor = positionedCursor();
                 if (!tsCursor) return { error: "Could not position cursor" };
+                if (!tsCursor.segment) return { error: "No valid segment at cursor position" };
                 var timeSig = newElement(Element.TIMESIG);
                 timeSig.timesig = fraction(tsNum, tsDen);
                 tsCursor.add(timeSig);
@@ -939,10 +1033,13 @@ MuseScore {
             case "setTempo": {
                 if (params.bpm === undefined)
                     return { error: "Missing required parameter: bpm" };
-                var bpm = parseInt(params.bpm);
+                var bpm = safeParseInt(params.bpm);
+                if (bpm === null)
+                    return { error: "Invalid value for bpm: " + params.bpm };
                 var tempoText = params.text || ("\u2669 = " + bpm);
                 var tempoCursor = positionedCursor();
                 if (!tempoCursor) return { error: "Could not position cursor" };
+                if (!tempoCursor.segment) return { error: "No valid segment at cursor position" };
                 var tempoMark = newElement(Element.TEMPO_TEXT);
                 tempoMark.text = tempoText;
                 tempoMark.tempo = bpm / secondsPerMinute;
@@ -956,6 +1053,7 @@ MuseScore {
                     return { error: "Missing required parameter: text" };
                 var chordCursor = positionedCursor();
                 if (!chordCursor) return { error: "Could not position cursor" };
+                if (!chordCursor.segment) return { error: "No valid segment at cursor position" };
                 var harmony = newElement(Element.HARMONY);
                 harmony.text = params.text;
                 chordCursor.add(harmony);
@@ -967,6 +1065,7 @@ MuseScore {
                     return { error: "Missing required parameter: type" };
                 var dynCursor = positionedCursor();
                 if (!dynCursor) return { error: "Could not position cursor" };
+                if (!dynCursor.segment) return { error: "No valid segment at cursor position" };
                 var dynamic = newElement(Element.DYNAMIC);
                 dynamic.text = params.type;
                 if (dynamicVelocities[params.type] !== undefined) {
@@ -979,8 +1078,8 @@ MuseScore {
             case "appendMeasures": {
                 if (params.count === undefined)
                     return { error: "Missing required parameter: count" };
-                var appendCount = parseInt(params.count);
-                if (appendCount < 1)
+                var appendCount = safeParseInt(params.count);
+                if (appendCount === null || appendCount < 1)
                     return { error: "count must be at least 1" };
                 curScore.appendMeasures(appendCount);
                 return { result: { count: appendCount, totalMeasures: countMeasures() } };
@@ -997,12 +1096,12 @@ MuseScore {
             }
 
             case "selectCustomRange": {
-                var srStartMeasure = parseInt(params.startMeasure);
-                var srEndMeasure = parseInt(params.endMeasure);
-                var srStartStaff = parseInt(params.startStaff);
-                var srEndStaff = parseInt(params.endStaff);
-                if (isNaN(srStartMeasure) || isNaN(srEndMeasure) ||
-                    isNaN(srStartStaff) || isNaN(srEndStaff))
+                var srStartMeasure = safeParseInt(params.startMeasure);
+                var srEndMeasure = safeParseInt(params.endMeasure);
+                var srStartStaff = safeParseInt(params.startStaff);
+                var srEndStaff = safeParseInt(params.endStaff);
+                if (srStartMeasure === null || srEndMeasure === null ||
+                    srStartStaff === null || srEndStaff === null)
                     return { error: "Missing required parameters: startMeasure, endMeasure, startStaff, endStaff" };
                 var srTotal = countMeasures();
                 if (srStartMeasure < 1 || srStartMeasure > srTotal ||
@@ -1027,7 +1126,9 @@ MuseScore {
             case "transpose": {
                 if (params.semitones === undefined)
                     return { error: "Missing required parameter: semitones" };
-                var trSemitones = parseInt(params.semitones);
+                var trSemitones = safeParseInt(params.semitones);
+                if (trSemitones === null)
+                    return { error: "Invalid value for semitones: " + params.semitones };
                 if (!curScore.selection || !curScore.selection.elements ||
                     curScore.selection.elements.length === 0)
                     return { error: "No active selection. Use selectCurrentMeasure or selectCustomRange first." };

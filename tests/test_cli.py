@@ -246,7 +246,8 @@ class TestPackagePaths:
         # Act / Assert
         assert expected == _SKILL_DEST
 
-    def test_plugin_dirs_includes_darwin_and_linux(self) -> None:
+    def test_plugin_dirs_includes_all_supported_platforms(self) -> None:
         # Arrange / Act / Assert
         assert "Darwin" in _PLUGIN_DIRS
         assert "Linux" in _PLUGIN_DIRS
+        assert "Windows" in _PLUGIN_DIRS

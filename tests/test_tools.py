@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from mcp_score.bridge.musescore import MuseScoreBridge
 from mcp_score.tools import (
     NOT_CONNECTED,
     check_measure,
@@ -380,8 +381,10 @@ class TestGetMeasureContent:
         # Arrange
         from mcp_score.tools.analysis import get_measure_content
 
-        mock_bridge = AsyncMock()
+        mock_bridge = AsyncMock(spec=MuseScoreBridge)
         mock_bridge.is_connected = True
+        mock_bridge.go_to_measure = AsyncMock(return_value={"result": "ok"})
+        mock_bridge.go_to_staff = AsyncMock(return_value={"result": "ok"})
         mock_bridge.send_command = AsyncMock(return_value={"notes": ["C4"]})
 
         with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
@@ -434,8 +437,10 @@ class TestTransposePassageErrorBranch:
         # Arrange
         from mcp_score.tools.manipulation import transpose_passage
 
-        mock_bridge = AsyncMock()
+        mock_bridge = AsyncMock(spec=MuseScoreBridge)
         mock_bridge.is_connected = True
+        mock_bridge.go_to_measure = AsyncMock(return_value={"result": "ok"})
+        mock_bridge.go_to_staff = AsyncMock(return_value={"result": "ok"})
         mock_bridge.send_command = AsyncMock(return_value={"error": "Invalid range"})
 
         with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
@@ -564,7 +569,7 @@ class TestManipulationMeasureValidation:
         # Arrange
         from mcp_score.tools.manipulation import transpose_passage
 
-        mock_bridge = AsyncMock()
+        mock_bridge = AsyncMock(spec=MuseScoreBridge)
         mock_bridge.is_connected = True
 
         # Act
@@ -620,8 +625,10 @@ class TestManipulationHappyPaths:
         # Arrange
         from mcp_score.tools.manipulation import transpose_passage
 
-        mock_bridge = AsyncMock()
+        mock_bridge = AsyncMock(spec=MuseScoreBridge)
         mock_bridge.is_connected = True
+        mock_bridge.go_to_measure = AsyncMock(return_value={"result": "ok"})
+        mock_bridge.go_to_staff = AsyncMock(return_value={"result": "ok"})
         mock_bridge.send_command = AsyncMock(return_value={"result": "ok"})
 
         with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
@@ -639,6 +646,64 @@ class TestManipulationHappyPaths:
         assert transpose_call.args[1]["semitones"] == 5
 
     @pytest.mark.anyio()
+    async def test_set_barline_navigates_and_delegates(self) -> None:
+        # Arrange
+        from mcp_score.tools.manipulation import set_live_barline
+
+        mock_bridge = AsyncMock()
+        mock_bridge.is_connected = True
+        mock_bridge.set_barline = AsyncMock(return_value={"result": {"type": "double"}})
+
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
+            # Act
+            result = json.loads(await set_live_barline(3, "double"))
+
+        # Assert
+        mock_bridge.go_to_measure.assert_called_once_with(3)
+        mock_bridge.set_barline.assert_called_once_with("double")
+        assert result["result"]["type"] == "double"
+
+    @pytest.mark.anyio()
+    async def test_set_key_signature_navigates_and_delegates(self) -> None:
+        # Arrange
+        from mcp_score.tools.manipulation import set_live_key_signature
+
+        mock_bridge = AsyncMock()
+        mock_bridge.is_connected = True
+        mock_bridge.set_key_signature = AsyncMock(
+            return_value={"result": {"fifths": -3}}
+        )
+
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
+            # Act
+            result = json.loads(await set_live_key_signature(1, -3))
+
+        # Assert
+        mock_bridge.go_to_measure.assert_called_once_with(1)
+        mock_bridge.set_key_signature.assert_called_once_with(-3)
+        assert result["result"]["fifths"] == -3
+
+    @pytest.mark.anyio()
+    async def test_add_chord_symbol_navigates_and_delegates(self) -> None:
+        # Arrange
+        from mcp_score.tools.manipulation import add_live_chord_symbol
+
+        mock_bridge = AsyncMock()
+        mock_bridge.is_connected = True
+        mock_bridge.add_chord_symbol = AsyncMock(
+            return_value={"result": {"text": "Dm7"}}
+        )
+
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
+            # Act
+            result = json.loads(await add_live_chord_symbol(2, "Dm7"))
+
+        # Assert
+        mock_bridge.go_to_measure.assert_called_once_with(2)
+        mock_bridge.add_chord_symbol.assert_called_once_with("Dm7")
+        assert result["result"]["text"] == "Dm7"
+
+    @pytest.mark.anyio()
     async def test_undo_delegates_to_bridge_undo(self) -> None:
         # Arrange
         from mcp_score.tools.manipulation import undo_last_action
@@ -654,3 +719,85 @@ class TestManipulationHappyPaths:
         # Assert
         mock_bridge.undo.assert_called_once()
         assert result["result"] == "ok"
+
+
+class TestBridgeTypeGuards:
+    """Tools that use MuseScore-specific commands must reject other bridges."""
+
+    @pytest.mark.anyio()
+    async def test_transpose_with_non_musescore_bridge_returns_error(self) -> None:
+        # Arrange
+        from mcp_score.tools.manipulation import transpose_passage
+
+        mock_bridge = AsyncMock()
+        mock_bridge.is_connected = True
+        mock_bridge.application_name = "Dorico"
+
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
+            # Act
+            result = json.loads(await transpose_passage(1, 4, 0, 2))
+
+        # Assert
+        assert "only supported with MuseScore" in result["error"]
+
+    @pytest.mark.anyio()
+    async def test_get_measure_content_with_non_musescore_returns_warning(
+        self,
+    ) -> None:
+        # Arrange
+        from mcp_score.tools.analysis import get_measure_content
+
+        mock_bridge = AsyncMock()
+        mock_bridge.is_connected = True
+        mock_bridge.go_to_measure = AsyncMock(return_value={"result": "ok"})
+        mock_bridge.go_to_staff = AsyncMock(return_value={"result": "ok"})
+
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
+            # Act
+            result = json.loads(await get_measure_content(1, staff=0))
+
+        # Assert
+        assert "warning" in result
+        mock_bridge.send_command.assert_not_called()
+
+
+class TestNavigationErrorHandling:
+    """Tools must propagate navigation errors instead of proceeding."""
+
+    @pytest.mark.anyio()
+    async def test_read_passage_with_navigation_error_returns_error(self) -> None:
+        # Arrange
+        from mcp_score.tools.analysis import read_passage
+
+        mock_bridge = AsyncMock()
+        mock_bridge.is_connected = True
+        mock_bridge.go_to_measure = AsyncMock(
+            return_value={"error": "Measure 99 out of range"}
+        )
+
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
+            # Act
+            result = json.loads(await read_passage(99, 100))
+
+        # Assert
+        assert "error" in result
+        mock_bridge.get_cursor_info.assert_not_called()
+
+    @pytest.mark.anyio()
+    async def test_transpose_with_navigation_error_returns_error(self) -> None:
+        # Arrange
+        from mcp_score.tools.manipulation import transpose_passage
+
+        mock_bridge = AsyncMock(spec=MuseScoreBridge)
+        mock_bridge.is_connected = True
+        mock_bridge.go_to_measure = AsyncMock(
+            return_value={"error": "Measure 99 out of range"}
+        )
+
+        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
+            # Act
+            result = json.loads(await transpose_passage(99, 100, 0, 2))
+
+        # Assert
+        assert "error" in result
+        mock_bridge.send_command.assert_not_called()

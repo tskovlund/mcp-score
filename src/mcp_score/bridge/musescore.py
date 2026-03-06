@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -67,7 +68,8 @@ class MuseScoreBridge(ScoreBridge):
     async def disconnect(self) -> None:
         """Close the WebSocket connection."""
         if self._connection is not None:
-            await self._connection.close()
+            with contextlib.suppress(websockets.exceptions.WebSocketException, OSError):
+                await self._connection.close()
             self._connection = None
             logger.info("Disconnected from MuseScore")
 
@@ -123,6 +125,9 @@ class MuseScoreBridge(ScoreBridge):
             TimeoutError,
         ):
             logger.warning("Connection lost, attempting reconnect...")
+            with contextlib.suppress(websockets.exceptions.WebSocketException, OSError):
+                if self._connection is not None:
+                    await self._connection.close()
             self._connection = None
             if not await self.connect():
                 return {"error": "Lost connection to MuseScore and reconnect failed"}

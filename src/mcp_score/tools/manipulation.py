@@ -1,6 +1,7 @@
 """Score manipulation tools — modify the live score in a connected application."""
 
 from mcp_score.app import mcp
+from mcp_score.bridge.musescore import MuseScoreBridge
 from mcp_score.tools import NOT_CONNECTED, check_measure, connected_bridge, to_json
 
 __all__: list[str] = []
@@ -121,13 +122,27 @@ async def transpose_passage(
     bridge = connected_bridge()
     if bridge is None:
         return to_json({"error": NOT_CONNECTED})
+    if not isinstance(bridge, MuseScoreBridge):
+        return to_json(
+            {
+                "error": (
+                    "transpose_passage is only supported with MuseScore. "
+                    f"{bridge.application_name}'s Remote Control API does not "
+                    "support programmatic range selection and transposition."
+                )
+            }
+        )
     if error := check_measure(start_measure, "start_measure"):
         return error
     if end_measure < start_measure:
         return to_json({"error": "end_measure must be >= start_measure."})
 
-    await bridge.go_to_measure(start_measure)
-    await bridge.go_to_staff(staff)
+    navigation_result = await bridge.go_to_measure(start_measure)
+    if "error" in navigation_result:
+        return to_json(navigation_result)
+    navigation_result = await bridge.go_to_staff(staff)
+    if "error" in navigation_result:
+        return to_json(navigation_result)
 
     result = await bridge.send_command(
         "selectCustomRange",
