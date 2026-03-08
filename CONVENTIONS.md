@@ -169,6 +169,8 @@ Shared conventions for all tskovlund repositories.
   of these conventions in its own docs. Redundancy across repos is intentional
   so that every contributor picks them up
 
+<!-- Language-specific conventions are appended per-repo by the sync workflow -->
+
 ## Python
 
 - **src layout** — all package code under `src/<package>/`
