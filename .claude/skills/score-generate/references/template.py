@@ -130,4 +130,4 @@ def add_rehearsal(part: stream.Part, measure_num: int, label: str) -> None:
 
 # ── Export ────────────────────────────────────────────────────
 score.write("musicxml", fp=str(OUTPUT))
-print(f"Exported: {OUTPUT}")
+print(f"Exported: {OUTPUT}")  # noqa: T201
