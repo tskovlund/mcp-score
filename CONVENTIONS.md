@@ -1,8 +1,6 @@
 # Code Conventions
 
-Shared conventions for all tskovlund repositories. The canonical source of truth
-is in [`tskovlund/.github`](https://github.com/tskovlund/.github). Update there
-first, then propagate to all repos.
+Shared conventions for all tskovlund repositories.
 
 ## Code Quality
 
@@ -25,6 +23,12 @@ first, then propagate to all repos.
   not `resp`
 - **Idempotency** — scripts, migrations, and deployments must be safe to run
   twice
+- **Sorted imports** — enforce automatically via tooling (Prettier plugin,
+  Ruff `isort`, etc.). Order: built-in → third-party → internal aliases →
+  relative, with blank lines between groups
+- **No debug logging in production code** — no `console.log`, `print()`,
+  `Debug.Log`, etc. Use proper logging frameworks or remove before commit.
+  Enforce via linter (`no-console`, Ruff `T20`)
 
 ## Configuration
 
@@ -78,12 +82,16 @@ first, then propagate to all repos.
   produce reviewable PRs instead of silent breakage. Examples:
   - Python: `"websockets>=14.0,<15"` (not `">=14.0"`)
   - Node: `"^14.0.0"` in `package.json` (caret is the default and correct)
-  - GitHub Actions: pin to commit SHA with version comment
+  - Nix flakes: `follows` pins; lockfile is the version constraint
+  - GitHub Actions: pin to commit SHA with version comment (e.g.
+    `actions/checkout@<sha> # v6`)
 - **CodeQL scanning in CI** when available
 - **Dependabot/Renovate** for automated dependency updates when available
 - **No secrets in code** — env vars or secret managers. `.env` files gitignored
 
 ## Testing
+
+### Test Design
 
 - **Naming:** `test_<action>_<expected_outcome>`
 - **Structure:** Arrange / Act / Assert comments in every test
@@ -95,6 +103,35 @@ first, then propagate to all repos.
 - **Integration tests alongside unit tests** — unit tests verify components in
   isolation, integration tests verify outcomes end-to-end. Both complement each
   other
+
+### Universal Rules
+
+- **`make check` as universal validation gate** — lint + typecheck + test. Must
+  pass before any commit is merged. Same command runs locally and in CI
+- **`make test` for fast feedback** — unit tests only, runs in seconds
+- **`make test-integration` for container-based tests** — separated from unit
+  tests so the fast loop stays fast
+- **Offline-capable unit tests** — no network calls, mock external APIs. Unit
+  tests must work on a plane
+- **CI parity** — developers run the exact same commands locally that CI runs.
+  Devbox or Nix dev shells ensure identical tooling everywhere. No "works on my
+  machine" gaps
+
+### Per-Archetype Minimum Test Types
+
+| Archetype | Test types |
+|-----------|-----------|
+| Python library/tool (cambr, mcp-score) | Unit (pytest), property-based (hypothesis) for pure functions |
+| Static website (skovlund.dev) | A11y (Playwright + axe-core, blocking), E2E navigation (Playwright), visual regression (`toHaveScreenshot()`, non-blocking initially) |
+| Nix configuration (nix-config) | `nix flake check --all-systems` |
+
+### Integration Test Infrastructure
+
+- **Testcontainers for container-based integration tests** — add only when repos
+  interact with external services (databases, message brokers, APIs)
+- **Dev shells set Podman env vars** — `DOCKER_HOST`,
+  `TESTCONTAINERS_RYUK_DISABLED` configured in Nix dev shells so Testcontainers
+  works with Podman out of the box
 
 ## Git & Workflow
 
@@ -132,7 +169,7 @@ first, then propagate to all repos.
   of these conventions in its own docs. Redundancy across repos is intentional
   so that every contributor picks them up
 
-## Python-Specific
+## Python
 
 - **src layout** — all package code under `src/<package>/`
 - **Pyright strict mode** — all function signatures fully typed

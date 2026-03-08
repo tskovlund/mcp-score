@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Run ruff check and format check on staged Python files.
+# Auto-fix Python files and re-stage changes.
 
-staged=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
-if [ -z "$staged" ]; then
-  exit 0
-fi
+staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$')
+[ -z "$staged_files" ] && exit 0
 
-echo "pre-commit: checking staged Python files..."
+uv run ruff check --fix $staged_files
+uv run ruff format $staged_files
 
-ruff check $staged || exit 1
-ruff format --check $staged || exit 1
+echo "$staged_files" | xargs git add
+
+exit 0

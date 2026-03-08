@@ -16,13 +16,9 @@ __all__ = ["main"]
 _SKILL_DEST = Path.home() / ".claude" / "skills" / "score-generate"
 
 _PLUGIN_DIRS: dict[str, Path] = {
-    "Darwin": (
-        Path.home() / "Library" / "Application Support" / "MuseScore4" / "Plugins"
-    ),
-    "Linux": Path.home() / ".local" / "share" / "MuseScore4" / "Plugins",
-    "Windows": (
-        Path.home() / "AppData" / "Local" / "MuseScore" / "MuseScore4" / "Plugins"
-    ),
+    "Darwin": Path.home() / "Documents" / "MuseScore4" / "Plugins",
+    "Linux": Path.home() / "Documents" / "MuseScore4" / "Plugins",
+    "Windows": Path.home() / "Documents" / "MuseScore4" / "Plugins",
 }
 
 
@@ -90,9 +86,9 @@ def install_skill() -> bool:
         return False
 
     _copy_tree(skill_dir, _SKILL_DEST)
-    print(f"Installed score-generate skill to {_SKILL_DEST}")
-    print(f"  SKILL.md:       {_SKILL_DEST / 'SKILL.md'}")
-    print(f"  instruments.md: {_SKILL_DEST / 'references' / 'instruments.md'}")
+    print(f"Installed score-generate skill to {_SKILL_DEST}")  # noqa: T201
+    print(f"  SKILL.md:       {_SKILL_DEST / 'SKILL.md'}")  # noqa: T201
+    print(f"  instruments.md: {_SKILL_DEST / 'references' / 'instruments.md'}")  # noqa: T201
     return True
 
 
@@ -118,8 +114,8 @@ def install_plugin() -> bool:
 
     destination = plugin_dir / "mcp-score-bridge.qml"
     _copy_file(source, destination)
-    print(f"Installed MuseScore plugin to {destination}")
-    print("Enable it in MuseScore: Plugins > Plugin Manager > MCP Score Bridge")
+    print(f"Installed MuseScore plugin to {destination}")  # noqa: T201
+    print("Enable it in MuseScore: Plugins > Manage Plugins > MCP Score Bridge")  # noqa: T201
     return True
 
 
@@ -138,7 +134,7 @@ def run_script(script_args: list[str]) -> NoReturn:
     import subprocess
 
     if not script_args:
-        print("Usage: mcp-score run <script.py> [args...]")
+        print("Usage: mcp-score run <script.py> [args...]")  # noqa: T201
         sys.exit(1)
 
     result = subprocess.run([sys.executable, *script_args])
@@ -186,7 +182,7 @@ def main() -> NoReturn:
         sys.exit(0 if ok else 1)
 
     if command in ("help", "--help", "-h"):
-        print(_USAGE)
+        print(_USAGE)  # noqa: T201
         sys.exit(0)
 
     sys.stderr.write(f"Unknown command: {command}\n")

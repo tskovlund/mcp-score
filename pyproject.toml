@@ -44,8 +44,10 @@ packages = ["src/mcp_score"]
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.0,<7",
     "pyright>=1.1,<2",
     "pytest>=8.0,<10",
+    "pytest-cov>=6.0,<7",
     "ruff>=0.15.0,<1",
 ]
 
@@ -54,7 +56,7 @@ src = ["src"]
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "SIM", "TCH"]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "TCH", "T20"]
 
 [tool.ruff.format]
 docstring-code-format = true
