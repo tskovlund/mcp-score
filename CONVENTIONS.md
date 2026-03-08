@@ -93,7 +93,9 @@ Shared conventions for all tskovlund repositories.
 
 ### Test Design
 
-- **Naming:** `test_<action>_<expected_outcome>`
+- **Naming:** `test` + `<action>` + `<expected outcome>`, cased per language
+  convention (e.g., `test_action_expected_outcome` in Python,
+  `testActionExpectedOutcome` in Lean/Kotlin)
 - **Structure:** Arrange / Act / Assert comments in every test
 - **Lean:** every test must earn its place. No trivial tests, no tests of
   library/built-in functionality
