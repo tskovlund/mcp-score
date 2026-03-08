@@ -151,8 +151,9 @@ Shared conventions for all tskovlund repositories.
   where the README already covers everything, `docs/` is not required
 - **CONTRIBUTING.md** when external contributors are expected — references
   CONVENTIONS.md for standards, covers dev setup and PR process
-- **Author section at the bottom of every README** — always present. Licensed
-  repos also have a License section (linking to the LICENSE file) after it
+- **Author section at the bottom of every README** — always present. Format:
+  `Name — [site](url) · [email](mailto:email)`. Licensed repos also have a
+  License section (linking to the LICENSE file) after it
 
 ## Project Structure
 
