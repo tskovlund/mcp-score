@@ -125,6 +125,7 @@ Shared conventions for all tskovlund repositories.
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Python library/tool (cambr, mcp-score) | Unit (pytest), property-based (hypothesis) for pure functions                                                                         |
 | Static website (skovlund.dev)          | A11y (Playwright + axe-core, blocking), E2E navigation (Playwright), visual regression (`toHaveScreenshot()`, non-blocking initially) |
+| Lean 4 (qed)                           | Unit tests (`lake test`), formal proofs (`Qed/Proofs/`), no `sorry` check in CI                                                      |
 | Nix configuration (nix-config)         | `nix flake check --all-systems`                                                                                                       |
 
 ### Integration Test Infrastructure
