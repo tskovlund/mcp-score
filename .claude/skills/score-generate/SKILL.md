@@ -32,6 +32,7 @@ Generate music scores by writing and executing music21 Python scripts that expor
 5. **Report** the output file path. The user opens it in MuseScore.
 
 Default output location: `~/Desktop/<Title>.musicxml`
+If the output location already exists, add a numeric suffix before the extension: `Title-2.musicxml`, `Title-3.musicxml`, etc.
 
 ## Critical Conventions
 
