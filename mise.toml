@@ -1,0 +1,29 @@
+[settings]
+experimental = true # Required to have support for lockfile and hooks
+lockfile = true # Enable the lockfile system
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tools]
+uv = "0.7.12"
+"pipx:pre-commit" = { version = "4.3.0", uvx_args = "--with pre-commit-uv" }
+
+[prepare.uv]
+auto = true
+
+[prepare.pre-commit]
+auto = true
+sources = [".pre-commit-config.yaml"]
+outputs = [".git/hooks/"]
+run = "pre-commit install --overwrite -t pre-push -t pre-commit -t commit-msg"
+description = "Install pre-commit hooks to ensure code quality and consistency before commits and pushes."
+
+[[hooks.postinstall]]
+script = '''
+    # Ensures project dependencies are ready
+    mise prepare
+'''
+
+[tasks.test]
+run = "pytest"

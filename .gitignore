@@ -23,6 +23,9 @@ coverage.xml
 # macOS
 .DS_Store
 
+# mise
+.mise/
+
 # Nix / Devbox
 result
 .devbox/
@@ -36,3 +39,4 @@ result
 
 # Generated scores (user output, not tracked)
 output/
+score-projects/
