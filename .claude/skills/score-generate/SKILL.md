@@ -15,10 +15,15 @@ metadata:
 
 Generate music scores by writing and executing music21 Python scripts that export MusicXML.
 
+**Dependency: read the `work-on-score` skill first** — it defines the project structure,
+`metadata.md` format, and output location convention. After generating, update the
+`## Score description` section of the project's `metadata.md`.
+
 ## Instructions
 
-1. **Understand the request** — identify: instrumentation, key, time signature, tempo, form/structure, chord progressions, specific notation elements.
-2. **Gather missing metadata** — if the user hasn't specified title, composer, arranger, or other relevant details, **ask them** before generating. Only skip asking if the user explicitly says to use defaults or not to ask. Relevant metadata includes:
+1. **Read `metadata.md`** if working inside a score project — it may already answer questions about instrumentation, tempo, and arrangement intent.
+2. **Understand the request** — identify: instrumentation, key, time signature, tempo, form/structure, chord progressions, specific notation elements.
+3. **Gather missing metadata** — if the user hasn't specified title, composer, arranger, or other relevant details, **ask them** before generating. Only skip asking if the user explicitly says to use defaults or not to ask. Relevant metadata includes:
    - **Title** (required — ask if not provided)
    - **Composer** (ask if not provided)
    - **Arranger** (ask if applicable, e.g. arrangements, charts)
