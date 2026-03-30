@@ -29,12 +29,47 @@ Generate music scores by writing and executing music21 Python scripts that expor
    - **Arranger** (ask if applicable, e.g. arrangements, charts)
    - **Subtitle** (ask if the piece has a descriptive subtitle, genre, or dedication)
    - **Copyright** (ask if the user wants a copyright notice)
-3. **Write a complete Python script** using music21 that builds the entire score. Save to `/tmp/generate_score.py`.
-4. **Execute** the script:
+4. **Assess size** — for large scores (many parts × many bars), use the strategies below to avoid losing work to session rate limits.
+5. **Write the script to the project directory** (not `/tmp/`) so it survives a session ending:
+   - Small scores: `<project-dir>/generate_score.py`
+   - Multi-section scores: `<project-dir>/generate_section1.py`, `generate_section2.py`, etc.
+6. **Confirm the script is complete** before running. If the session hits a limit mid-write, the partial file is on disk — start a new session, read the file, and continue from where it left off.
+7. **Execute** the script:
    ```bash
-   mcp-score run /tmp/generate_score.py
+   mcp-score run <project-dir>/generate_score.py
    ```
-5. **Report** the output file path. The user opens it in MuseScore.
+8. **Report** the output file path. The user opens it in MuseScore.
+
+## Large score strategy
+
+A large score (e.g. full concert band × 4 minutes) produces a script too long to write in a single session. Two complementary strategies:
+
+### Generate one section at a time
+
+Break the piece into sections and generate a separate MusicXML file per section:
+
+```
+generate_section1.py  →  section1-opening.xml
+generate_section2.py  →  section2-battle.xml
+...
+```
+
+Each section script includes its **outgoing transition bars** (the last few bars that bridge into the next section), so files are self-contained and can be paste-joined in MuseScore without hard cuts.
+
+Document the transitions in `metadata.md` before generating — each section script can then reference the transition design.
+
+Final assembly: import all section files into MuseScore and copy-paste into a single combined score.
+
+**Rule of thumb:** if the piece has more than ~20 parts OR more than ~60 bars, split by section.
+
+### Write to disk before running
+
+Always write the script to a named file in the project directory rather than to `/tmp/` or inline. This means:
+- The script is saved to disk as it is written — even a partial file survives a session ending.
+- If generation is interrupted, start a new session, read the file with `Read`, and ask Claude to complete it from where it left off.
+- Once the script looks complete, run it with `mcp-score run`.
+
+Never write large scripts directly to `/tmp/generate_score.py` for large pieces — that file is ephemeral and lost if the session ends.
 
 Default output location: `~/Desktop/<Title>.musicxml`
 If the output location already exists, add a numeric suffix before the extension: `Title-2.musicxml`, `Title-3.musicxml`, etc.
