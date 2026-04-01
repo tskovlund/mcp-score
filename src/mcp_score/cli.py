@@ -107,9 +107,9 @@ def install_plugin() -> bool:
         return False
 
     try:
-        source = _package_path(str(Path("musescore") / "plugin.qml"))
+        source = _package_path(str(Path("musescore") / "plugin_ms4.qml"))
     except FileNotFoundError:
-        sys.stderr.write("Error: plugin.qml not found in package.\n")
+        sys.stderr.write("Error: plugin_ms4.qml not found in package.\n")
         return False
 
     destination = plugin_dir / "mcp-score-bridge.qml"

@@ -123,6 +123,31 @@ class TestInstallPlugin:
         # Assert
         assert result is False
 
+    def test_install_plugin_uses_ms4_source_file(self, tmp_path: Path) -> None:
+        # Arrange — verify that install_plugin requests plugin_ms4.qml (not plugin.qml)
+        plugin_dir = tmp_path / "Plugins"
+        plugin_dir.mkdir()
+
+        fake_qml = tmp_path / "plugin_ms4.qml"
+        fake_qml.write_text("// ms4 plugin")
+
+        captured: list[str] = []
+
+        def capture_path(resource_path: str) -> Path:
+            captured.append(resource_path)
+            return fake_qml
+
+        with (
+            patch.dict("mcp_score.cli._PLUGIN_DIRS", {"Darwin": plugin_dir}),
+            patch("mcp_score.cli.platform.system", return_value="Darwin"),
+            patch("mcp_score.cli._package_path", side_effect=capture_path),
+        ):
+            result = install_plugin()
+
+        assert result is True
+        assert len(captured) == 1
+        assert "plugin_ms4.qml" in captured[0]
+
 
 class TestMainCli:
     def test_main_without_args_runs_serve(self) -> None:
