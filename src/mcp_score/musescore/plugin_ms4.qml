@@ -18,7 +18,7 @@
 //   processSequence
 
 import QtQuick 2.9
-import MuseScore 4.0
+import MuseScore 3.0
 import QtWebSockets 1.0
 
 MuseScore {
@@ -89,14 +89,14 @@ MuseScore {
                 statusText.color = "green";
             } else if (status === WebSocket.Closed) {
                 console.warn(logPrefix, "Disconnected from mcp-score server -- retrying in 3s");
-                statusText.text = "Disconnected";
+                statusText.text = "Connecting...";
                 statusText.color = "orange";
+                socket.active = false;
                 reconnectTimer.start();
             } else if (status === WebSocket.Error) {
                 console.warn(logPrefix, "WebSocket error:", socket.errorString);
-                statusText.text = "Error: " + socket.errorString;
-                statusText.color = "red";
-                reconnectTimer.start();
+                socket.active = false;
+                // Closed will fire immediately after Error — let it handle the retry.
             }
         }
 

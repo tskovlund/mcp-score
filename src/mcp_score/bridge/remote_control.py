@@ -483,7 +483,7 @@ class RemoteControlBridge(ScoreBridge):
         if self._connection is not None:
             with contextlib.suppress(websockets.exceptions.WebSocketException, OSError):
                 await self._connection.close()
-            self._connection = None
+            self._connection = None  # type: ignore
 
 
 class HandshakeError(Exception):

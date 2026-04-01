@@ -176,7 +176,7 @@ class MuseScoreBridge(ScoreBridge):
             with contextlib.suppress(websockets.exceptions.WebSocketException, OSError):
                 if self._connection is not None:
                     await self._connection.close()
-            self._connection = None
+            self._connection = None  # type: ignore
             if not await self.connect():
                 return {"error": "Lost connection to MuseScore and reconnect failed"}
 
