@@ -4,13 +4,15 @@
 
 ## Overview
 
-The MuseScore plugin runs inside MuseScore 4 and opens a WebSocket server on `localhost:8765`. The mcp-score Python server connects to this WebSocket to read from and write to the active score.
+The mcp-score Python server opens a WebSocket server on `localhost:8765`. The MuseScore plugin connects outward to this server as a WebSocket client, allowing mcp-score to read from and write to the active score.
+
+**Start `mcp-score serve` first, then run the plugin in MuseScore.** The plugin connects outward to the server and retries automatically if the server is not yet up.
 
 The plugin is only needed for **manipulation** and **analysis** tools (reading passages, arranging, transposing, etc.). **Generation** tools work without it -- they produce MusicXML files that MuseScore can open directly.
 
 ## Prerequisites
 
-- MuseScore 4 (4.0 or later)
+- MuseScore 4.4 or later (the plugin system changed in 4.4; earlier versions are not supported)
 - QtWebSockets support (included in standard MuseScore 4 builds)
 
 ## Installation
@@ -24,33 +26,46 @@ The plugin is only needed for **manipulation** and **analysis** tools (reading p
 
    ```bash
    # macOS
-   cp src/mcp_score/musescore/plugin.qml ~/Library/Application\ Support/MuseScore4/Plugins/mcp-score-bridge.qml
+   cp src/mcp_score/musescore/plugin_ms4.qml ~/Library/Application\ Support/MuseScore4/Plugins/mcp-score-bridge.qml
 
    # Linux
-   cp src/mcp_score/musescore/plugin.qml ~/.local/share/MuseScore4/Plugins/mcp-score-bridge.qml
+   cp src/mcp_score/musescore/plugin_ms4.qml ~/.local/share/MuseScore4/Plugins/mcp-score-bridge.qml
+   ```
+
+   Or use the CLI helper (installs the correct plugin for MuseScore 4 automatically):
+
+   ```bash
+   mcp-score install-plugin
    ```
 
 3. In MuseScore, go to **Plugins > Plugin Manager** and enable "MCP Score Bridge"
 
-4. Run the plugin: **Plugins > MCP Score Bridge**
+4. Start the mcp-score server: `mcp-score serve`
 
-The plugin starts a WebSocket server on port 8765. It runs as a dock plugin (invisible) so it stays active as long as MuseScore is open. The mcp-score Python server connects automatically when you use manipulation or analysis tools.
+5. Run the plugin in MuseScore: **Plugins > MCP Score Bridge**
+
+The plugin opens a status window showing the connection state. It connects outward to the Python WebSocket server (port 8765) and retries every 3 seconds until the server is available.
 
 ## Verifying the connection
 
-After enabling the plugin, you can verify it is running by checking the MuseScore console (View > Console in some builds) for the message:
+After running the plugin, the status window inside MuseScore should show **Connected** (green). You can also check the MuseScore console (View > Console in some builds) for:
 
 ```
-[mcp-score] Bridge plugin started -- WebSocket server on port 8765
+[mcp-score] Connected to WebSocket server
 ```
 
-You can also test the connection with any WebSocket client:
+The WebSocket server is on the Python side (`mcp-score serve`), not inside MuseScore. You can verify the server is listening:
 
 ```bash
-# Using websocat (install with: cargo install websocat)
-echo '{"command": "ping"}' | websocat ws://localhost:8765
+lsof -i :8765
+```
 
-# Expected response: {"result":"pong"}
+To test the full round-trip with an MCP tool:
+
+```bash
+mcp-score connect-to-musescore
+mcp-score ping-score-app
+# Expected: pong
 ```
 
 ## Protocol
@@ -224,11 +239,17 @@ This example uses `processSequence` to write a four-note melody in the first mea
 - Restart MuseScore after adding the plugin
 - Check that the file is named with a `.qml` extension
 
-### WebSocket connection fails
+### Plugin shows "Connecting..." indefinitely
 
-- Ensure the plugin is running (look for the `[mcp-score]` log messages in MuseScore's console)
+- Ensure `mcp-score serve` is running **before** starting the plugin in MuseScore
+- The plugin retries every 3 seconds automatically; it will connect once the server is up
 - Verify no other application is using port 8765: `lsof -i :8765`
 - Check MuseScore's console for error messages
+
+### WebSocket connection fails
+
+- Confirm the Python server is running: `lsof -i :8765` should show a listening process
+- Restart `mcp-score serve` and re-run the plugin in MuseScore
 
 ### "No score is currently open" errors
 
