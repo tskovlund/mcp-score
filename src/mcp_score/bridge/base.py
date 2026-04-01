@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from websockets.asyncio.client import ClientConnection
+    from websockets.asyncio.connection import Connection
 
 __all__ = ["ScoreBridge"]
 
@@ -21,7 +21,7 @@ class ScoreBridge(ABC):
     interface so that MCP tools can work with any supported DAW.
     """
 
-    _connection: ClientConnection | None
+    _connection: Connection | None
 
     @property
     def is_connected(self) -> bool:

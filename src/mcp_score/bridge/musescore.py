@@ -1,4 +1,10 @@
-"""WebSocket client for the MuseScore plugin bridge."""
+"""WebSocket server for the MuseScore plugin bridge.
+
+The MuseScore 4.4+ plugin system sandboxes plugins and forbids server-side
+socket operations. The QML plugin therefore runs as a WebSocket *client* that
+connects outward to this server on localhost:8765. The JSON command/response
+protocol is unchanged; only the direction of the TCP connection is flipped.
+"""
 
 from __future__ import annotations
 
@@ -9,11 +15,12 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import websockets
+import websockets.asyncio.server
 
 from mcp_score.bridge.base import ScoreBridge
 
 if TYPE_CHECKING:
-    from websockets.asyncio.client import ClientConnection
+    from websockets.asyncio.server import Server, ServerConnection
 
 __all__ = ["DEFAULT_PORT", "MuseScoreBridge"]
 
@@ -22,12 +29,16 @@ logger = logging.getLogger(__name__)
 #: Default WebSocket port for the MuseScore QML plugin.
 DEFAULT_PORT = 8765
 
+#: Timeout in seconds to wait for the MuseScore plugin to connect.
+_CONNECT_TIMEOUT: float = 30.0
+
 
 class MuseScoreBridge(ScoreBridge):
-    """WebSocket client for communicating with the MuseScore QML plugin.
+    """WebSocket server that waits for the MuseScore QML plugin to connect.
 
-    The QML plugin runs inside MuseScore and exposes a WebSocket server.
-    This client sends commands and receives responses.
+    Start this server first (via ``mcp-score serve``), then run the QML plugin
+    inside MuseScore. The plugin dials out to ``ws://localhost:8765``, and this
+    class sends commands and receives responses over that connection.
     """
 
     #: Timeout in seconds for receiving a response from MuseScore.
@@ -36,7 +47,9 @@ class MuseScoreBridge(ScoreBridge):
     def __init__(self, host: str = "localhost", port: int = DEFAULT_PORT) -> None:
         self.host = host
         self.port = port
-        self._connection: ClientConnection | None = None
+        self._connection: ServerConnection | None = None
+        self._server: Server | None = None
+        self._client_connected: asyncio.Event = asyncio.Event()
 
     @property
     def application_name(self) -> str:
@@ -45,33 +58,68 @@ class MuseScoreBridge(ScoreBridge):
 
     @property
     def uri(self) -> str:
-        """WebSocket URI."""
+        """WebSocket URI the server listens on."""
         return f"ws://{self.host}:{self.port}"
 
+    async def _handle_client(self, connection: ServerConnection) -> None:
+        """Accept an incoming connection from the MuseScore plugin."""
+        logger.info("MuseScore plugin connected from %s", connection.remote_address)
+        self._connection = connection
+        self._client_connected.set()
+        try:
+            await connection.wait_closed()
+        finally:
+            logger.info("MuseScore plugin disconnected")
+            if self._connection is connection:
+                self._connection = None
+
     async def connect(self) -> bool:
-        """Connect to the MuseScore WebSocket server.
+        """Start the WebSocket server and wait for the MuseScore plugin to connect.
 
         Returns:
-            True if connected successfully, False otherwise.
+            True if the plugin connected within the timeout, False otherwise.
         """
+        self._client_connected.clear()
         try:
-            self._connection = await websockets.connect(self.uri)
-            logger.info("Connected to MuseScore at %s", self.uri)
-            return True
-        except (OSError, websockets.exceptions.WebSocketException) as exception:
-            logger.error(
-                "Failed to connect to MuseScore at %s: %s", self.uri, exception
+            self._server = await websockets.asyncio.server.serve(
+                self._handle_client, self.host, self.port
             )
-            self._connection = None
+            logger.info("WebSocket server listening at %s", self.uri)
+        except OSError as exception:
+            logger.error(
+                "Failed to start WebSocket server at %s: %s", self.uri, exception
+            )
+            self._server = None
             return False
 
+        try:
+            await asyncio.wait_for(
+                self._client_connected.wait(), timeout=_CONNECT_TIMEOUT
+            )
+            logger.info("MuseScore plugin connected")
+            return True
+        except TimeoutError:
+            logger.error("Timed out waiting for MuseScore plugin to connect")
+            await self._stop_server()
+            return False
+
+    async def _stop_server(self) -> None:
+        """Stop the WebSocket server."""
+        if self._server is not None:
+            self._server.close()
+            with contextlib.suppress(Exception):
+                await self._server.wait_closed()
+            self._server = None
+
     async def disconnect(self) -> None:
-        """Close the WebSocket connection."""
+        """Close the plugin connection and stop the WebSocket server."""
         if self._connection is not None:
             with contextlib.suppress(websockets.exceptions.WebSocketException, OSError):
                 await self._connection.close()
             self._connection = None
-            logger.info("Disconnected from MuseScore")
+        await self._stop_server()
+        self._client_connected.clear()
+        logger.info("Disconnected from MuseScore")
 
     async def _send_raw(self, command_json: str) -> dict[str, Any]:
         """Send a raw JSON command string over the active connection."""
@@ -97,8 +145,8 @@ class MuseScoreBridge(ScoreBridge):
     ) -> dict[str, Any]:
         """Send a command to MuseScore and return the response.
 
-        Auto-connects if not already connected. Attempts one reconnect
-        on connection failure.
+        If not already connected, starts the server and waits for the plugin
+        to connect. Attempts one reconnect on connection failure.
 
         Args:
             action: Command action name (e.g. "getScore", "addNote").
