@@ -46,7 +46,7 @@ packages = ["src/mcp_score"]
 dev = [
     "hypothesis>=6.0,<7",
     "pyright>=1.1,<2",
-    "pytest>=8.0,<10",
+    "pytest>=9.0.3,<10",
     "pytest-cov>=6.0,<8",
     "ruff>=0.15.0,<1",
 ]
