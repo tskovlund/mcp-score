@@ -5,57 +5,57 @@
       "last_modified": "2026-02-11T21:01:36Z",
       "resolved": "github:NixOS/nixpkgs/2343bbb58f99267223bc2aac4fc9ea301a155a16?lastModified=1770843696"
     },
-    "pyright@latest": {
-      "last_modified": "2026-01-23T17:20:52Z",
-      "resolved": "github:NixOS/nixpkgs/a1bab9e494f5f4939442a57a58d0449a109593fe#pyright",
+    "pyright@1.1.411": {
+      "last_modified": "2026-06-30T12:14:11Z",
+      "resolved": "github:NixOS/nixpkgs/e52c192be9d7b2c4bd4aed326c8731b35f8bb75c#pyright",
       "source": "devbox-search",
-      "version": "1.1.407",
+      "version": "1.1.411",
       "systems": {
         "aarch64-darwin": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/cy14fnhp2a8z3kz1pspbp17zr5zsgl1d-pyright-1.1.407",
+              "path": "/nix/store/g2yqz167jd5h3zh0y488i0nm2rw3g5rl-pyright-1.1.411",
               "default": true
             }
           ],
-          "store_path": "/nix/store/cy14fnhp2a8z3kz1pspbp17zr5zsgl1d-pyright-1.1.407"
+          "store_path": "/nix/store/g2yqz167jd5h3zh0y488i0nm2rw3g5rl-pyright-1.1.411"
         },
         "aarch64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/2r04ac9l9cvawaz70ra4jb639nczy6v6-pyright-1.1.407",
+              "path": "/nix/store/8b51mly5krqzp2pmwr5wk01mh1d8kgr3-pyright-1.1.411",
               "default": true
             }
           ],
-          "store_path": "/nix/store/2r04ac9l9cvawaz70ra4jb639nczy6v6-pyright-1.1.407"
+          "store_path": "/nix/store/8b51mly5krqzp2pmwr5wk01mh1d8kgr3-pyright-1.1.411"
         },
         "x86_64-darwin": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/ic48a0m66b8ban1j4bp1lgqiq4pvd49w-pyright-1.1.407",
+              "path": "/nix/store/vwizs533p21gsmacqyx3ng93z41p64rj-pyright-1.1.411",
               "default": true
             }
           ],
-          "store_path": "/nix/store/ic48a0m66b8ban1j4bp1lgqiq4pvd49w-pyright-1.1.407"
+          "store_path": "/nix/store/vwizs533p21gsmacqyx3ng93z41p64rj-pyright-1.1.411"
         },
         "x86_64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/h7f5vym2ykpl7ls8icw0wiqgmv9xiwnx-pyright-1.1.407",
+              "path": "/nix/store/mqllsns0gq46jsjff2vv0qn9rykwwx8d-pyright-1.1.411",
               "default": true
             }
           ],
-          "store_path": "/nix/store/h7f5vym2ykpl7ls8icw0wiqgmv9xiwnx-pyright-1.1.407"
+          "store_path": "/nix/store/mqllsns0gq46jsjff2vv0qn9rykwwx8d-pyright-1.1.411"
         }
       }
     },
     "python@3.13": {
       "last_modified": "2025-05-16T20:19:48Z",
-      "plugin_version": "0.0.4",
+      "plugin_version": "0.0.5",
       "resolved": "github:NixOS/nixpkgs/12a55407652e04dcf2309436eb06fef0d3713ef3#python313",
       "source": "devbox-search",
       "version": "3.13.3",
