@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.16.0/.schema/devbox.schema.json",
-  "packages": ["python@3.13", "uv@latest", "ruff@latest", "pyright@1.1.411"],
+  "packages": ["python@3.13", "uv@latest", "ruff@0.15.20", "pyright@1.1.411"],
   "shell": {
     "init_hook": [
       "if [ ! -d .venv ]; then uv venv --python python3.13; fi",

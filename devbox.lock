@@ -110,51 +110,51 @@
         }
       }
     },
-    "ruff@latest": {
-      "last_modified": "2026-02-06T12:24:04Z",
-      "resolved": "github:NixOS/nixpkgs/ae67888ff7ef9dff69b3cf0cc0fbfbcd3a722abe#ruff",
+    "ruff@0.15.20": {
+      "last_modified": "2026-06-28T08:48:41Z",
+      "resolved": "github:NixOS/nixpkgs/e1c1b84752fb0897897380a3cae9dc7fcab91ca3#ruff",
       "source": "devbox-search",
-      "version": "0.15.0",
+      "version": "0.15.20",
       "systems": {
         "aarch64-darwin": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/9hxb1b34i1hxscnsz62lpyygrk0vnz2x-ruff-0.15.0",
+              "path": "/nix/store/xzg11r2zjmrf0hykdpa5rsg08szy1031-ruff-0.15.20",
               "default": true
             }
           ],
-          "store_path": "/nix/store/9hxb1b34i1hxscnsz62lpyygrk0vnz2x-ruff-0.15.0"
+          "store_path": "/nix/store/xzg11r2zjmrf0hykdpa5rsg08szy1031-ruff-0.15.20"
         },
         "aarch64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/i6bpdgax04775kxrsq7w0rcdx5nys91w-ruff-0.15.0",
+              "path": "/nix/store/x36i9a4qjs84f6hs3pq5pvg4rx0ghvk1-ruff-0.15.20",
               "default": true
             }
           ],
-          "store_path": "/nix/store/i6bpdgax04775kxrsq7w0rcdx5nys91w-ruff-0.15.0"
+          "store_path": "/nix/store/x36i9a4qjs84f6hs3pq5pvg4rx0ghvk1-ruff-0.15.20"
         },
         "x86_64-darwin": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/6dlgjcnlfskjwdpp9xbnwi8gwkga7nq8-ruff-0.15.0",
+              "path": "/nix/store/06ns7wsp1j3zd2qxf3xs5b4acvbhc5s1-ruff-0.15.20",
               "default": true
             }
           ],
-          "store_path": "/nix/store/6dlgjcnlfskjwdpp9xbnwi8gwkga7nq8-ruff-0.15.0"
+          "store_path": "/nix/store/06ns7wsp1j3zd2qxf3xs5b4acvbhc5s1-ruff-0.15.20"
         },
         "x86_64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/vj1bblwn6zf60ikcsrxk410ha3mg9mrq-ruff-0.15.0",
+              "path": "/nix/store/k2v9f3y5ghvcg7r84x9cpd8xpaig5dn9-ruff-0.15.20",
               "default": true
             }
           ],
-          "store_path": "/nix/store/vj1bblwn6zf60ikcsrxk410ha3mg9mrq-ruff-0.15.0"
+          "store_path": "/nix/store/k2v9f3y5ghvcg7r84x9cpd8xpaig5dn9-ruff-0.15.20"
         }
       }
     },
