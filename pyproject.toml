@@ -19,7 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "mcp[cli]>=1.0,<2",
-    "music21>=9.0,<10",
+    "music21>=10.5,<11",
     "websockets>=14.0,<17",
 ]
 
