@@ -140,7 +140,9 @@ Shared conventions for all tskovlund repositories.
 
 - **Conventional commits** — `feat:`, `fix:`, `refactor:`, `docs:`, `test:`,
   `chore:`
-- **Direct to main** for small changes, **branch + PR** for structural work
+- **Direct to main** for small changes, **branch + PR** for structural work.
+  Product repos with external users (e.g. kammer) may enforce PR-only with
+  required checks via a ruleset — the strictness is per-repo, deliberate
 - **PR review loop** before merge on structural changes
 
 ## Documentation
@@ -163,7 +165,9 @@ Shared conventions for all tskovlund repositories.
 - **Follow established conventions per language/framework** — `src/` layout in
   Python, standard framework structures elsewhere
 - **AGENTS.md in every repo** with a CLAUDE.md symlink — the canonical file for
-  AI agent instructions
+  AI agent instructions. Repos are de-personalized factsheets by default;
+  kammer's AGENTS.md is intentionally exempt — it is an owner-specific
+  operations manual for autonomous agent work, and stays that way
 - **Shared CI via `tskovlund/.github`** — reusable workflows for common
   patterns. Repos reference shared workflows instead of duplicating CI
   configuration
