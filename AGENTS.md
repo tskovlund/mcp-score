@@ -45,7 +45,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed design documentati
 
 ## Dev environment
 
-Devbox + uv. Devbox provides Python 3.13, uv, ruff, pyright via Nix. uv manages Python packages in `.venv/`.
+Devbox + uv. Devbox provides Python 3.14, uv, ruff, pyright via Nix. uv manages Python packages in `.venv/`.
 
 ```bash
 direnv allow         # or: devbox shell

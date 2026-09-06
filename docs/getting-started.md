@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- Python 3.13+
+- Python 3.14+
 - An MCP-compatible client (Claude Desktop, Claude Code, etc.)
 - [MuseScore 4](https://musescore.org/en/download) (optional -- needed for live manipulation features)
 

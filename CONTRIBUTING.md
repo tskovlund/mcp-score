@@ -4,7 +4,7 @@ Thanks for your interest in contributing! This guide covers everything you need 
 
 ## Prerequisites
 
-- **Python 3.13+**
+- **Python 3.14+**
 - **[Devbox](https://www.jetify.com/devbox)** (recommended) or manually install `uv`, `ruff`, `pyright`
 - **MuseScore 4** (for testing the QML plugin and live manipulation features)
 
@@ -21,7 +21,7 @@ direnv allow
 devbox shell
 
 # Option C: manual (if not using devbox)
-uv venv --python python3.13
+uv venv --python python3.14
 source .venv/bin/activate
 uv sync
 ```
