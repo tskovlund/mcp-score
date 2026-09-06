@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MCP server for AI-driven music score generation and manipulation"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 authors = [{ name = "Thomas Skovlund Hansen" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -12,7 +12,7 @@ classifiers = [
     "Intended Audience :: Other Audience",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Multimedia :: Sound/Audio",
     "Topic :: Artistic Software",
     "Typing :: Typed",
@@ -64,7 +64,7 @@ docstring-code-format = true
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = false
 reportUnknownVariableType = "warning"

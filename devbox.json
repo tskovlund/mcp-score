@@ -3,7 +3,7 @@
   "packages": ["python@3.14", "uv@0.12.5", "ruff@0.16.4", "pyright@1.1.412"],
   "shell": {
     "init_hook": [
-      "if [ ! -d .venv ]; then uv venv --python python3.13; fi",
+      "if [ ! -d .venv ]; then uv venv --python python3.14; fi",
       "source .venv/bin/activate",
       "uv sync",
       "git config core.hooksPath .githooks 2>/dev/null || true"
