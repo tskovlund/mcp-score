@@ -41,23 +41,23 @@ music21 uses `-` for flats in note names, key names, and chord symbol **roots**.
 
 ```python
 # WRONG — "Bb7" is parsed as B root with a b7 alteration, NOT Bb dominant 7th
-harmony.ChordSymbol("Bb7")   # B major + flat-7 — wrong!
+harmony.ChordSymbol("Bb7")  # B major + flat-7 — wrong!
 
 # CORRECT — use '-' for flats in the root
-harmony.ChordSymbol("B-7")   # Bb dominant 7th
-harmony.ChordSymbol("E-7")   # Eb dominant 7th
-harmony.ChordSymbol("A-maj7") # Ab major 7th
-harmony.ChordSymbol("D-9")   # Db dominant 9th
+harmony.ChordSymbol("B-7")  # Bb dominant 7th
+harmony.ChordSymbol("E-7")  # Eb dominant 7th
+harmony.ChordSymbol("A-maj7")  # Ab major 7th
+harmony.ChordSymbol("D-9")  # Db dominant 9th
 
 # Sharps use '#' as expected in roots
 harmony.ChordSymbol("F#m7")  # F# minor 7th
-harmony.ChordSymbol("C#7")   # C# dominant 7th
+harmony.ChordSymbol("C#7")  # C# dominant 7th
 
 # In extensions/alterations, 'b' and '#' work normally
-harmony.ChordSymbol("Cm7b5")    # C half-diminished
-harmony.ChordSymbol("Cmaj7#11") # C major 7 sharp 11
-harmony.ChordSymbol("G7b9")     # G dominant 7 flat 9
-harmony.ChordSymbol("C7#5")     # C augmented dominant 7
+harmony.ChordSymbol("Cm7b5")  # C half-diminished
+harmony.ChordSymbol("Cmaj7#11")  # C major 7 sharp 11
+harmony.ChordSymbol("G7b9")  # G dominant 7 flat 9
+harmony.ChordSymbol("C7#5")  # C augmented dominant 7
 ```
 
 **Rule:** `-` for flats in the **root/bass** only. `b`/`#` for alterations in **extensions**.
@@ -65,11 +65,11 @@ harmony.ChordSymbol("C7#5")     # C augmented dominant 7
 The same `-` convention applies to note names and keys:
 
 ```python
-note.Note("B-4")    # Bb4
-key.Key("B-")       # Bb major
-key.Key("e-")       # Eb minor (lowercase = minor)
-key.Key("F#")       # F# major
-key.Key("f#")       # F# minor
+note.Note("B-4")  # Bb4
+key.Key("B-")  # Bb major
+key.Key("e-")  # Eb minor (lowercase = minor)
+key.Key("F#")  # F# major
+key.Key("f#")  # F# minor
 ```
 
 ### Chord Repetition
@@ -98,11 +98,14 @@ from music21 import metadata
 
 score.metadata = metadata.Metadata()
 score.metadata.title = "Score Title"
-score.metadata.composer = "Composer Name"       # if provided
-score.metadata.movementName = "Subtitle Here"   # subtitle (shows below title in MusicXML)
+score.metadata.composer = "Composer Name"  # if provided
+score.metadata.movementName = (
+    "Subtitle Here"  # subtitle (shows below title in MusicXML)
+)
 
 # Arranger and copyright are set via Contributor and Copyright objects:
 from music21 import metadata as md
+
 score.metadata.addContributor(md.Contributor(role="arranger", name="Arranger Name"))
 score.metadata.copyright = md.Copyright("© 2026 Author Name")
 ```
@@ -113,12 +116,12 @@ score.metadata.copyright = md.Copyright("© 2026 Author Name")
 from music21 import bar
 
 # Repeat signs — use bar.Repeat, NOT bar.Barline
-measure.leftBarline = bar.Repeat(direction='start')
-measure.rightBarline = bar.Repeat(direction='end')
+measure.leftBarline = bar.Repeat(direction="start")
+measure.rightBarline = bar.Repeat(direction="end")
 
 # Standard barlines
-measure.rightBarline = bar.Barline('double')
-measure.rightBarline = bar.Barline('final')
+measure.rightBarline = bar.Barline("double")
+measure.rightBarline = bar.Barline("final")
 ```
 
 ### 1st/2nd Endings (Volta Brackets)
@@ -130,7 +133,7 @@ from music21 import spanner
 
 # After building all measures and adding parts to score:
 for part in score.parts:
-    m_first = part.measure(15)   # 1st ending measure
+    m_first = part.measure(15)  # 1st ending measure
     m_second = part.measure(16)  # 2nd ending measure
     part.append(spanner.RepeatBracket(m_first, number=1))
     part.append(spanner.RepeatBracket(m_second, number=2))
