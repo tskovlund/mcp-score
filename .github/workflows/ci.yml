@@ -11,6 +11,6 @@ concurrency:
 
 jobs:
   check:
-    uses: tskovlund/.github/.github/workflows/python-ci.yml@41c6ecc50d1ace4c64329706878f1ec6dc99634b # main
+    uses: tskovlund/.github/.github/workflows/python-ci.yml@7d7b797de0edefa4922c24275e3528da0e15861b # main
     with:
       python-version: "3.14"
