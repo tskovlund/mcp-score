@@ -259,6 +259,13 @@ def install(settings: Settings) -> Path:
 
     if not executable.exists():
         raise HarnessError(f"installation did not produce {executable}")
+    if settings.system == "Darwin":
+        # On GitHub's macOS runners the first launch of a freshly copied app
+        # bundle aborts (crashpad reports "(os/kern) failure") while macOS
+        # registers it; every launch after that works. A throwaway launch
+        # absorbs that so the first real export is not the one that fails.
+        logger.info("warming up the app bundle")
+        run([str(executable), "--version"], check=False)
     return executable
 
 
