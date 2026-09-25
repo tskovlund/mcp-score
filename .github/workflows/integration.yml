@@ -10,17 +10,30 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Pinned MuseScore Studio release; scripts/musescore-headless.sh has the same defaults.
-  MUSESCORE_VERSION: "4.7.5"
-  MUSESCORE_APPIMAGE_URL: https://github.com/musescore/MuseScore/releases/download/v4.7.5/MuseScore-Studio-4.7.5.260831071-x86_64.AppImage
   MCP_SCORE_INTEGRATION: "1"
   # Interpreter with the websockets package, used by the script to poll the bridge.
   PYTHON: ${{ github.workspace }}/.venv/bin/python
 
 jobs:
   musescore:
+    name: MuseScore ${{ matrix.musescore.version }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest supported line (4.4 introduced the plugin WebSocket API),
+        # a release in the middle, and the newest one.
+        musescore:
+          - version: "4.4.4"
+            appimage: https://github.com/musescore/MuseScore/releases/download/v4.4.4/MuseScore-Studio-4.4.4.243461245-x86_64.AppImage
+          - version: "4.6.2"
+            appimage: https://github.com/musescore/MuseScore/releases/download/v4.6.2/MuseScore-Studio-4.6.2.252830930-x86_64.AppImage
+          - version: "4.7.5"
+            appimage: https://github.com/musescore/MuseScore/releases/download/v4.7.5/MuseScore-Studio-4.7.5.260831071-x86_64.AppImage
+    env:
+      MUSESCORE_VERSION: ${{ matrix.musescore.version }}
+      MUSESCORE_APPIMAGE_URL: ${{ matrix.musescore.appimage }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -67,6 +80,6 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: musescore-logs
+          name: musescore-logs-${{ matrix.musescore.version }}
           path: musescore-logs/
           if-no-files-found: ignore

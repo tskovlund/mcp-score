@@ -155,10 +155,10 @@ Not supported with Dorico — returns an error for that application.
 
 Set a barline type at the end of the specified measure.
 
-| Parameter      | Type  | Description                                                  |
-| -------------- | ----- | ------------------------------------------------------------ |
-| `measure`      | `int` | Measure number (1-indexed)                                   |
-| `barline_type` | `str` | One of `"double"`, `"final"`, `"startRepeat"`, `"endRepeat"` |
+| Parameter      | Type  | Description                                                                                                                                                                                                                                         |
+| -------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `measure`      | `int` | Measure number (1-indexed)                                                                                                                                                                                                                          |
+| `barline_type` | `str` | One of `"normal"`, `"double"`, `"final"`, `"dashed"`, `"dotted"`, `"tick"`, `"short"`, `"startRepeat"`, `"endRepeat"`, `"endStartRepeat"`. Repeat types set the measure's repeat flags; `"endStartRepeat"` also starts a repeat in the next measure |
 
 Works with both applications.
 
@@ -187,7 +187,7 @@ Not supported with Dorico — returns an error for that application.
 
 ### `transpose_passage`
 
-Transpose a passage by a number of semitones.
+Transpose the notes of a passage by a number of semitones, with conventional spelling (a minor second up turns C into Db). Key signatures and chord symbols in the passage are left unchanged.
 
 | Parameter       | Type  | Description                                             |
 | --------------- | ----- | ------------------------------------------------------- |

@@ -79,9 +79,23 @@ MuseScore {
         "fz": 112
     })
 
-    // Semitone -> diatonic interval (within one octave).
-    // Used for chromatic transposition with correct enharmonic spelling.
-    readonly property var semitoneToDiatonic: [0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6]
+    // Semitone interval (0-11, upward) -> change in tonal pitch class.
+    // Gives the conventional spelling for each interval: a minor second
+    // up spells C as Db (tpc -5), a major second up as D (tpc +2), and
+    // so on. Downward intervals use the same table via modulo 12.
+    readonly property var semitoneToTpcDelta: [0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5]
+
+    // Tonal pitch class bounds (Fbb .. B##) and the enharmonic step.
+    readonly property int minTpc: -1
+    readonly property int maxTpc: 33
+    readonly property int tpcEnharmonicStep: 12
+
+    // MIDI pitch bounds.
+    readonly property int minMidiPitch: 0
+    readonly property int maxMidiPitch: 127
+
+    // Tracks per staff in MuseScore (four voices).
+    readonly property int voicesPerStaff: 4
 
     // ===================================================================
     // WebSocket server
@@ -153,7 +167,7 @@ MuseScore {
 
         try {
             switch (command) {
-                case "ping":                return handlePing();
+            case "ping":                return handlePing();
                 case "getScore":            return handleGetScore();
                 case "getCursorInfo":       return handleGetCursorInfo();
                 case "goToMeasure":         return handleGoToMeasure(params);
@@ -432,12 +446,50 @@ MuseScore {
     }
 
     // ===================================================================
+    // Undo-step wrapper
+    // ===================================================================
+
+    /// Run `fn` inside one MuseScore undo step named `name`.
+    /// The step is committed when `fn` returns a result and rolled back
+    /// when it returns an error or throws, so a failed command never
+    /// leaves partial changes in the score.
+    function withUndoStep(name, fn) {
+        var scoreErr = requireScore();
+        if (scoreErr) return scoreErr;
+
+        curScore.startCmd(name);
+        var response;
+        try {
+            response = fn();
+        } catch (e) {
+            curScore.endCmd(true);
+            throw e;
+        }
+        curScore.endCmd(response.error !== undefined);
+        return response;
+    }
+
+    /// Action code that undoes the last step in the running MuseScore.
+    /// MuseScore 4.7 moved notation actions to query-style codes; the
+    /// plain "undo" code is what 4.4-4.6 register.
+    function undoActionCode() {
+        var queryStyleActions = mscoreMajorVersion > 4
+            || (mscoreMajorVersion === 4 && mscoreMinorVersion >= 7);
+        return queryStyleActions ? "action://notation/undo" : "undo";
+    }
+
+    // ===================================================================
     // Command handlers -- score modification
+    //
+    // Each command has an `apply*` function that validates its parameters
+    // and mutates the score without opening an undo step. The `handle*`
+    // wrapper runs it inside one undo step; processSequence runs several
+    // inside a single step so the whole batch undoes together.
     // ===================================================================
 
     /// Add a note at the current cursor position.
     /// Params: { pitch, duration?: { numerator, denominator }, advanceCursorAfterAction?: bool }
-    function handleAddNote(params) {
+    function applyAddNote(params) {
         var req = requireCursor();
         if (req.error) return req.error;
         var cursor = req.cursor;
@@ -445,11 +497,14 @@ MuseScore {
         if (params.pitch === undefined) {
             return { error: "Missing required parameter: pitch" };
         }
-
         var pitch = safeParseInt(params.pitch);
         if (pitch === null) {
             return { error: "Invalid value for pitch: " + params.pitch };
         }
+        if (pitch < minMidiPitch || pitch > maxMidiPitch) {
+            return { error: "pitch must be between " + minMidiPitch + " and " + maxMidiPitch + ", got: " + pitch };
+        }
+
         var numerator = 1;
         var denominator = 4;
         if (params.duration) {
@@ -464,10 +519,8 @@ MuseScore {
         }
         var advance = (params.advanceCursorAfterAction !== false);
 
-        curScore.startCmd("addNote");
         cursor.setDuration(numerator, denominator);
         cursor.addNote(pitch);
-        curScore.endCmd();
 
         if (advance) {
             cursorMeasure = measureNumberAtTick(cursor.tick);
@@ -483,9 +536,13 @@ MuseScore {
         };
     }
 
+    function handleAddNote(params) {
+        return withUndoStep("addNote", function() { return applyAddNote(params); });
+    }
+
     /// Add a rehearsal mark at the current cursor position.
     /// Params: { text }
-    function handleAddRehearsalMark(params) {
+    function applyAddRehearsalMark(params) {
         var req = requireCursor();
         if (req.error) return req.error;
         var cursor = req.cursor;
@@ -493,23 +550,29 @@ MuseScore {
         if (params.text === undefined || params.text === "") {
             return { error: "Missing required parameter: text" };
         }
-
         if (!cursor.segment) {
             return { error: "No valid segment at cursor position" };
         }
 
-        curScore.startCmd("addRehearsalMark");
         var rehearsalMark = newElement(Element.REHEARSAL_MARK);
         rehearsalMark.text = params.text;
         cursor.add(rehearsalMark);
-        curScore.endCmd();
 
         return { result: { text: params.text, measure: cursorMeasure } };
     }
 
-    /// Set the barline type at the current cursor position.
+    function handleAddRehearsalMark(params) {
+        return withUndoStep("addRehearsalMark", function() { return applyAddRehearsalMark(params); });
+    }
+
+    /// Set the barline at the end of the measure at the cursor position.
     /// Params: { type }
-    function handleSetBarline(params) {
+    ///
+    /// MuseScore 4 rejects bar lines inserted through Cursor.add (it
+    /// crashes), so this changes the measure's existing end bar line on
+    /// every staff instead. Repeats are measure flags in MuseScore, so
+    /// the repeat types set those.
+    function applySetBarline(params) {
         var req = requireCursor();
         if (req.error) return req.error;
         var cursor = req.cursor;
@@ -517,29 +580,59 @@ MuseScore {
         if (params.type === undefined) {
             return { error: "Missing required parameter: type" };
         }
-
         var barlineType = barlineTypeFromString(params.type);
         if (barlineType === null) {
             return { error: "Unknown barline type: " + params.type +
                 ". Valid types: " + Object.keys(barlineTypes).join(", ") };
         }
-
-        if (!cursor.measure) {
+        var measure = cursor.measure;
+        if (!measure) {
             return { error: "No valid measure at cursor position" };
         }
 
-        curScore.startCmd("setBarline");
-        var barline = newElement(Element.BAR_LINE);
-        barline.barlineType = barlineType;
-        cursor.add(barline);
-        curScore.endCmd();
+        if (params.type === "startRepeat") {
+            measure.repeatStart = true;
+            return { result: { type: params.type, measure: cursorMeasure } };
+        }
+        if (params.type === "endStartRepeat") {
+            var next = measure.nextMeasure;
+            if (!next) {
+                return { error: "endStartRepeat needs a following measure to start the repeat in" };
+            }
+            measure.repeatEnd = true;
+            next.repeatStart = true;
+            return { result: { type: params.type, measure: cursorMeasure } };
+        }
+        if (params.type === "endRepeat") {
+            measure.repeatEnd = true;
+            return { result: { type: params.type, measure: cursorMeasure } };
+        }
+
+        // A plain type replaces any end repeat on this measure.
+        measure.repeatEnd = false;
+        var endSegment = measure.lastSegment;
+        var changed = 0;
+        for (var staff = 0; staff < curScore.nstaves; staff++) {
+            var element = endSegment ? endSegment.elementAt(staff * voicesPerStaff) : null;
+            if (element && element.type === Element.BAR_LINE) {
+                element.barlineType = barlineType;
+                changed++;
+            }
+        }
+        if (changed === 0) {
+            return { error: "No end bar line found for measure " + cursorMeasure };
+        }
 
         return { result: { type: params.type, measure: cursorMeasure } };
     }
 
+    function handleSetBarline(params) {
+        return withUndoStep("setBarline", function() { return applySetBarline(params); });
+    }
+
     /// Set the key signature at the current cursor position.
     /// Params: { fifths } (-7 to 7 on the circle of fifths)
-    function handleSetKeySignature(params) {
+    function applySetKeySignature(params) {
         var req = requireCursor();
         if (req.error) return req.error;
         var cursor = req.cursor;
@@ -547,7 +640,6 @@ MuseScore {
         if (params.fifths === undefined) {
             return { error: "Missing required parameter: fifths" };
         }
-
         var fifths = safeParseInt(params.fifths);
         if (fifths === null) {
             return { error: "Invalid value for fifths: " + params.fifths };
@@ -559,18 +651,20 @@ MuseScore {
             return { error: "No valid segment at cursor position" };
         }
 
-        curScore.startCmd("setKeySignature");
         var keySig = newElement(Element.KEYSIG);
         keySig.key = fifths;
         cursor.add(keySig);
-        curScore.endCmd();
 
         return { result: { fifths: fifths, measure: cursorMeasure } };
     }
 
+    function handleSetKeySignature(params) {
+        return withUndoStep("setKeySignature", function() { return applySetKeySignature(params); });
+    }
+
     /// Set the time signature at the current cursor position.
     /// Params: { numerator, denominator }
-    function handleSetTimeSignature(params) {
+    function applySetTimeSignature(params) {
         var req = requireCursor();
         if (req.error) return req.error;
         var cursor = req.cursor;
@@ -578,7 +672,6 @@ MuseScore {
         if (params.numerator === undefined || params.denominator === undefined) {
             return { error: "Missing required parameters: numerator and denominator" };
         }
-
         var numerator = safeParseInt(params.numerator);
         var denominator = safeParseInt(params.denominator);
         if (numerator === null || denominator === null) {
@@ -588,18 +681,20 @@ MuseScore {
             return { error: "No valid segment at cursor position" };
         }
 
-        curScore.startCmd("setTimeSignature");
         var timeSig = newElement(Element.TIMESIG);
         timeSig.timesig = fraction(numerator, denominator);
         cursor.add(timeSig);
-        curScore.endCmd();
 
         return { result: { numerator: numerator, denominator: denominator, measure: cursorMeasure } };
     }
 
+    function handleSetTimeSignature(params) {
+        return withUndoStep("setTimeSignature", function() { return applySetTimeSignature(params); });
+    }
+
     /// Set a tempo marking at the current cursor position.
     /// Params: { bpm, text? }
-    function handleSetTempo(params) {
+    function applySetTempo(params) {
         var req = requireCursor();
         if (req.error) return req.error;
         var cursor = req.cursor;
@@ -607,31 +702,34 @@ MuseScore {
         if (params.bpm === undefined) {
             return { error: "Missing required parameter: bpm" };
         }
-
         var bpm = safeParseInt(params.bpm);
         if (bpm === null) {
             return { error: "Invalid value for bpm: " + params.bpm };
         }
-        var displayText = params.text || ("\u2669 = " + bpm);
-
+        var displayText = params.text || ("♩ = " + bpm);
         if (!cursor.segment) {
             return { error: "No valid segment at cursor position" };
         }
 
-        curScore.startCmd("setTempo");
         var tempo = newElement(Element.TEMPO_TEXT);
         tempo.text = displayText;
         tempo.tempo = bpm / secondsPerMinute;
         tempo.followText = false;
         cursor.add(tempo);
-        curScore.endCmd();
 
         return { result: { bpm: bpm, text: displayText, measure: cursorMeasure } };
     }
 
+    function handleSetTempo(params) {
+        return withUndoStep("setTempo", function() { return applySetTempo(params); });
+    }
+
     /// Add a chord symbol at the current cursor position.
     /// Params: { text }
-    function handleAddChordSymbol(params) {
+    ///
+    /// The text is set after the element is in the score: MuseScore 4
+    /// crashes when a chord symbol is parsed before it has a parent.
+    function applyAddChordSymbol(params) {
         var req = requireCursor();
         if (req.error) return req.error;
         var cursor = req.cursor;
@@ -639,23 +737,24 @@ MuseScore {
         if (params.text === undefined || params.text === "") {
             return { error: "Missing required parameter: text" };
         }
-
         if (!cursor.segment) {
             return { error: "No valid segment at cursor position" };
         }
 
-        curScore.startCmd("addChordSymbol");
         var harmony = newElement(Element.HARMONY);
-        harmony.text = params.text;
         cursor.add(harmony);
-        curScore.endCmd();
+        harmony.text = params.text;
 
         return { result: { text: params.text, measure: cursorMeasure } };
     }
 
+    function handleAddChordSymbol(params) {
+        return withUndoStep("addChordSymbol", function() { return applyAddChordSymbol(params); });
+    }
+
     /// Add a dynamic marking at the current cursor position.
     /// Params: { type }
-    function handleAddDynamic(params) {
+    function applyAddDynamic(params) {
         var req = requireCursor();
         if (req.error) return req.error;
         var cursor = req.cursor;
@@ -663,43 +762,42 @@ MuseScore {
         if (params.type === undefined || params.type === "") {
             return { error: "Missing required parameter: type" };
         }
-
         if (!cursor.segment) {
             return { error: "No valid segment at cursor position" };
         }
 
-        curScore.startCmd("addDynamic");
         var dynamic = newElement(Element.DYNAMIC);
         dynamic.text = params.type;
         if (dynamicVelocities[params.type] !== undefined) {
             dynamic.velocity = dynamicVelocities[params.type];
         }
         cursor.add(dynamic);
-        curScore.endCmd();
 
         return { result: { type: params.type, measure: cursorMeasure } };
     }
 
+    function handleAddDynamic(params) {
+        return withUndoStep("addDynamic", function() { return applyAddDynamic(params); });
+    }
+
     /// Append empty measures to the end of the score.
     /// Params: { count }
-    function handleAppendMeasures(params) {
-        var scoreErr = requireScore();
-        if (scoreErr) return scoreErr;
-
+    function applyAppendMeasures(params) {
         if (params.count === undefined) {
             return { error: "Missing required parameter: count" };
         }
-
         var count = safeParseInt(params.count);
         if (count === null || count < 1) {
             return { error: "count must be at least 1, got: " + count };
         }
 
-        curScore.startCmd("appendMeasures");
         curScore.appendMeasures(count);
-        curScore.endCmd();
 
         return { result: { count: count, totalMeasures: countMeasures() } };
+    }
+
+    function handleAppendMeasures(params) {
+        return withUndoStep("appendMeasures", function() { return applyAppendMeasures(params); });
     }
 
     // ===================================================================
@@ -707,7 +805,7 @@ MuseScore {
     // ===================================================================
 
     /// Select all elements in the measure at the current cursor position.
-    function handleSelectCurrentMeasure() {
+    function applySelectCurrentMeasure() {
         var req = requireCursor();
         if (req.error) return req.error;
         var cursor = req.cursor;
@@ -718,31 +816,26 @@ MuseScore {
 
         var measureStart = cursor.measure.firstSegment.tick;
         var measureEnd = cursor.measure.lastSegment.tick + 1;
-
-        curScore.startCmd("selectCurrentMeasure");
-        curScore.selection.selectRange(
-            measureStart, measureEnd,
-            cursorStaff, cursorStaff + 1
-        );
-        curScore.endCmd();
+        curScore.selection.selectRange(measureStart, measureEnd, cursorStaff, cursorStaff + 1);
 
         return { result: { measure: cursorMeasure, staff: cursorStaff } };
+    }
+
+    function handleSelectCurrentMeasure() {
+        return withUndoStep("selectCurrentMeasure", function() { return applySelectCurrentMeasure(); });
     }
 
     /// Select a range of measures and staves.
     /// Params: { startMeasure, endMeasure, startStaff, endStaff }
     /// Measures are 1-indexed (inclusive). Staves are 0-indexed (inclusive).
-    function handleSelectCustomRange(params) {
-        var scoreErr = requireScore();
-        if (scoreErr) return scoreErr;
+    function applySelectCustomRange(params) {
+        var startMeasure = safeParseInt(params.startMeasure);
+        var endMeasure = safeParseInt(params.endMeasure);
+        var startStaff = safeParseInt(params.startStaff);
+        var endStaff = safeParseInt(params.endStaff);
 
-        var startMeasure = parseInt(params.startMeasure);
-        var endMeasure = parseInt(params.endMeasure);
-        var startStaff = parseInt(params.startStaff);
-        var endStaff = parseInt(params.endStaff);
-
-        if (isNaN(startMeasure) || isNaN(endMeasure) ||
-            isNaN(startStaff) || isNaN(endStaff)) {
+        if (startMeasure === null || endMeasure === null ||
+            startStaff === null || endStaff === null) {
             return { error: "Missing required parameters: startMeasure, endMeasure, startStaff, endStaff" };
         }
 
@@ -764,18 +857,13 @@ MuseScore {
         var cursor = curScore.newCursor();
         advanceCursorToMeasure(cursor, startMeasure);
         var startTick = cursor.tick;
-
         for (var j = startMeasure; j <= endMeasure; j++) {
             cursor.nextMeasure();
         }
         var endTick = cursor.measure ? cursor.tick : curScore.lastSegment.tick + 1;
 
-        curScore.startCmd("selectCustomRange");
-        curScore.selection.selectRange(
-            startTick, endTick,
-            startStaff, endStaff + 1  // selectRange uses exclusive end for staves
-        );
-        curScore.endCmd();
+        // selectRange uses an exclusive end for staves.
+        curScore.selection.selectRange(startTick, endTick, startStaff, endStaff + 1);
 
         return {
             result: {
@@ -787,43 +875,72 @@ MuseScore {
         };
     }
 
-    /// Transpose the current selection by a number of semitones.
+    function handleSelectCustomRange(params) {
+        return withUndoStep("selectCustomRange", function() { return applySelectCustomRange(params); });
+    }
+
+    /// Bring a tonal pitch class back into range by respelling it
+    /// enharmonically (e.g. B## becomes C#).
+    function respellTpc(tpc) {
+        while (tpc > maxTpc) tpc -= tpcEnharmonicStep;
+        while (tpc < minTpc) tpc += tpcEnharmonicStep;
+        return tpc;
+    }
+
+    /// Transpose the notes in the current selection by a number of semitones.
     /// Params: { semitones }
     /// Requires an active selection (use selectCurrentMeasure or selectCustomRange first).
-    function handleTranspose(params) {
-        var scoreErr = requireScore();
-        if (scoreErr) return scoreErr;
-
+    ///
+    /// MuseScore 4's plugin API has no transpose call, so each selected
+    /// note is shifted directly, with its spelling moved by the
+    /// conventional interval. Key signatures and chord symbols are not
+    /// transposed.
+    function applyTranspose(params) {
         if (params.semitones === undefined) {
             return { error: "Missing required parameter: semitones" };
         }
-
         var semitones = safeParseInt(params.semitones);
         if (semitones === null) {
             return { error: "Invalid value for semitones: " + params.semitones };
         }
-
         if (!curScore.selection || !curScore.selection.elements ||
             curScore.selection.elements.length === 0) {
             return { error: "No active selection. Use selectCurrentMeasure or selectCustomRange first." };
         }
 
-        var direction = semitones >= 0 ? 0 : 1;
-        var absSemitones = Math.abs(semitones);
+        var elements = curScore.selection.elements;
+        var notes = [];
+        for (var i = 0; i < elements.length; i++) {
+            if (elements[i].type === Element.NOTE) {
+                notes.push(elements[i]);
+            }
+        }
+        if (notes.length === 0) {
+            return { error: "The selection contains no notes" };
+        }
 
-        // Map semitones to diatonic + chromatic interval pair for correct
-        // enharmonic spelling in the transposition.
-        var diatonicInterval = semitoneToDiatonic[absSemitones % 12]
-            + Math.floor(absSemitones / 12) * 7;
+        // Validate every target pitch before changing anything.
+        for (var v = 0; v < notes.length; v++) {
+            var target = notes[v].pitch + semitones;
+            if (target < minMidiPitch || target > maxMidiPitch) {
+                return { error: "Transposition would move a note to MIDI pitch " + target +
+                    ", outside " + minMidiPitch + "-" + maxMidiPitch };
+            }
+        }
 
-        curScore.startCmd("transpose");
-        // transpose(mode, direction, key, diatonicInterval, chromaticInterval,
-        //           transposeKeySignatures, transposeChordNames)
-        // mode 0 = by interval, direction 0 = up / 1 = down, key 0 = unused
-        curScore.transpose(0, direction, 0, diatonicInterval, absSemitones, true, true);
-        curScore.endCmd();
+        var tpcDelta = semitoneToTpcDelta[((semitones % 12) + 12) % 12];
+        for (var n = 0; n < notes.length; n++) {
+            var note = notes[n];
+            note.pitch = note.pitch + semitones;
+            note.tpc1 = respellTpc(note.tpc1 + tpcDelta);
+            note.tpc2 = respellTpc(note.tpc2 + tpcDelta);
+        }
 
-        return { result: { semitones: semitones } };
+        return { result: { semitones: semitones, notes: notes.length } };
+    }
+
+    function handleTranspose(params) {
+        return withUndoStep("transpose", function() { return applyTranspose(params); });
     }
 
     /// Undo the last action.
@@ -831,9 +948,9 @@ MuseScore {
         var scoreErr = requireScore();
         if (scoreErr) return scoreErr;
 
-        cmd("undo");
+        cmd(undoActionCode());
 
-        // Clamp cursor to valid bounds — undo may have changed the score
+        // Clamp cursor to valid bounds -- undo may have changed the score
         // structure (removed measures, changed staves).
         var totalMeasures = countMeasures();
         if (totalMeasures > 0 && cursorMeasure > totalMeasures) {
@@ -850,8 +967,9 @@ MuseScore {
     // Command handler -- processSequence (atomic batch execution)
     // ===================================================================
 
-    /// Execute multiple actions atomically in a single undo group.
-    /// If any action fails, all preceding actions are rolled back.
+    /// Execute multiple actions in a single undo step.
+    /// If any action fails, the score and the cursor are restored to
+    /// their state before the sequence.
     ///
     /// Params: { sequence: [{ action, params }, ...] }
     function handleProcessSequence(params) {
@@ -861,295 +979,67 @@ MuseScore {
         if (!params.sequence || !Array.isArray(params.sequence)) {
             return { error: "Missing required parameter: sequence (array of {action, params})" };
         }
-
         var sequence = params.sequence;
         if (sequence.length === 0) {
             return { result: { results: [], count: 0 } };
         }
 
-        var results = [];
+        var savedMeasure = cursorMeasure;
+        var savedStaff = cursorStaff;
 
-        // Single startCmd/endCmd wraps all steps into one undo group.
-        curScore.startCmd("processSequence");
+        var response = withUndoStep("processSequence", function() {
+            var results = [];
+            for (var i = 0; i < sequence.length; i++) {
+                var step = sequence[i];
+                var action = step.action;
+                if (!action) {
+                    return { error: "Step " + i + " is missing 'action' field", failedIndex: i, results: results };
+                }
 
-        for (var i = 0; i < sequence.length; i++) {
-            var step = sequence[i];
-            var action = step.action;
-            var actionParams = step.params || {};
-
-            if (!action) {
-                curScore.endCmd();
-                cmd("undo");
-                return {
-                    error: "Step " + i + " is missing 'action' field",
-                    failedIndex: i,
-                    results: results
-                };
+                var stepResult;
+                try {
+                    stepResult = executeSequenceStep(action, step.params || {});
+                } catch (e) {
+                    stepResult = { error: e.message || String(e) };
+                }
+                if (stepResult.error) {
+                    return {
+                        error: "Step " + i + " (" + action + ") failed: " + stepResult.error,
+                        failedAction: action,
+                        failedIndex: i,
+                        results: results
+                    };
+                }
+                results.push(stepResult.result);
             }
+            return { result: { results: results, count: results.length } };
+        });
 
-            var stepResult;
-            try {
-                stepResult = executeSequenceStep(action, actionParams);
-            } catch (e) {
-                curScore.endCmd();
-                cmd("undo");
-                return {
-                    error: "Step " + i + " (" + action + ") failed: " + (e.message || String(e)),
-                    failedAction: action,
-                    failedIndex: i,
-                    results: results
-                };
-            }
-
-            if (stepResult.error) {
-                curScore.endCmd();
-                cmd("undo");
-                return {
-                    error: "Step " + i + " (" + action + ") failed: " + stepResult.error,
-                    failedAction: action,
-                    failedIndex: i,
-                    results: results
-                };
-            }
-
-            results.push(stepResult.result);
+        if (response.error !== undefined) {
+            cursorMeasure = savedMeasure;
+            cursorStaff = savedStaff;
         }
-
-        curScore.endCmd();
-
-        return { result: { results: results, count: results.length } };
+        return response;
     }
 
-    /// Execute a single step within processSequence WITHOUT its own
-    /// startCmd/endCmd (the caller manages the undo group).
+    /// Execute one step of processSequence inside the caller's undo step.
     function executeSequenceStep(action, params) {
         switch (action) {
-            case "ping":
-                return { result: "pong" };
-
-            case "goToMeasure": {
-                if (params.measure === undefined)
-                    return { error: "Missing required parameter: measure" };
-                var measureNum = safeParseInt(params.measure);
-                if (measureNum === null)
-                    return { error: "Invalid value for measure: " + params.measure };
-                var total = countMeasures();
-                if (measureNum < 1 || measureNum > total)
-                    return { error: "Measure " + measureNum + " out of range (1-" + total + ")" };
-                cursorMeasure = measureNum;
-                return { result: { measure: cursorMeasure, staff: cursorStaff } };
-            }
-
-            case "goToStaff": {
-                if (params.staff === undefined)
-                    return { error: "Missing required parameter: staff" };
-                var staffIdx = safeParseInt(params.staff);
-                if (staffIdx === null)
-                    return { error: "Invalid value for staff: " + params.staff };
-                if (staffIdx < 0 || staffIdx >= curScore.nstaves)
-                    return { error: "Staff " + staffIdx + " out of range (0-" + (curScore.nstaves - 1) + ")" };
-                cursorStaff = staffIdx;
-                return { result: { measure: cursorMeasure, staff: cursorStaff } };
-            }
-
-            case "addNote": {
-                if (params.pitch === undefined)
-                    return { error: "Missing required parameter: pitch" };
-                var pitch = safeParseInt(params.pitch);
-                if (pitch === null)
-                    return { error: "Invalid value for pitch: " + params.pitch };
-                var noteNum = 1;
-                var noteDen = 4;
-                if (params.duration) {
-                    if (params.duration.numerator !== undefined) {
-                        noteNum = safeParseInt(params.duration.numerator);
-                        if (noteNum === null) return { error: "Invalid duration numerator" };
-                    }
-                    if (params.duration.denominator !== undefined) {
-                        noteDen = safeParseInt(params.duration.denominator);
-                        if (noteDen === null) return { error: "Invalid duration denominator" };
-                    }
-                }
-                var advance = (params.advanceCursorAfterAction !== false);
-                var noteCursor = positionedCursor();
-                if (!noteCursor) return { error: "Could not position cursor" };
-                noteCursor.setDuration(noteNum, noteDen);
-                noteCursor.addNote(pitch);
-                if (advance) {
-                    cursorMeasure = measureNumberAtTick(noteCursor.tick);
-                }
-                return { result: { pitch: pitch, duration: { numerator: noteNum, denominator: noteDen }, measure: cursorMeasure } };
-            }
-
-            case "addRehearsalMark": {
-                if (!params.text)
-                    return { error: "Missing required parameter: text" };
-                var rmCursor = positionedCursor();
-                if (!rmCursor) return { error: "Could not position cursor" };
-                if (!rmCursor.segment) return { error: "No valid segment at cursor position" };
-                var rehearsalMark = newElement(Element.REHEARSAL_MARK);
-                rehearsalMark.text = params.text;
-                rmCursor.add(rehearsalMark);
-                return { result: { text: params.text, measure: cursorMeasure } };
-            }
-
-            case "setBarline": {
-                if (!params.type)
-                    return { error: "Missing required parameter: type" };
-                var barlineValue = barlineTypeFromString(params.type);
-                if (barlineValue === null)
-                    return { error: "Unknown barline type: " + params.type };
-                var blCursor = positionedCursor();
-                if (!blCursor) return { error: "Could not position cursor" };
-                if (!blCursor.measure) return { error: "No valid measure at cursor position" };
-                var barline = newElement(Element.BAR_LINE);
-                barline.barlineType = barlineValue;
-                blCursor.add(barline);
-                return { result: { type: params.type, measure: cursorMeasure } };
-            }
-
-            case "setKeySignature": {
-                if (params.fifths === undefined)
-                    return { error: "Missing required parameter: fifths" };
-                var fifths = safeParseInt(params.fifths);
-                if (fifths === null)
-                    return { error: "Invalid value for fifths: " + params.fifths };
-                if (fifths < minFifths || fifths > maxFifths)
-                    return { error: "fifths must be between " + minFifths + " and " + maxFifths };
-                var ksCursor = positionedCursor();
-                if (!ksCursor) return { error: "Could not position cursor" };
-                if (!ksCursor.segment) return { error: "No valid segment at cursor position" };
-                var keySig = newElement(Element.KEYSIG);
-                keySig.key = fifths;
-                ksCursor.add(keySig);
-                return { result: { fifths: fifths, measure: cursorMeasure } };
-            }
-
-            case "setTimeSignature": {
-                if (params.numerator === undefined || params.denominator === undefined)
-                    return { error: "Missing required parameters: numerator and denominator" };
-                var tsNum = safeParseInt(params.numerator);
-                var tsDen = safeParseInt(params.denominator);
-                if (tsNum === null || tsDen === null)
-                    return { error: "Invalid time signature values" };
-                var tsCursor = positionedCursor();
-                if (!tsCursor) return { error: "Could not position cursor" };
-                if (!tsCursor.segment) return { error: "No valid segment at cursor position" };
-                var timeSig = newElement(Element.TIMESIG);
-                timeSig.timesig = fraction(tsNum, tsDen);
-                tsCursor.add(timeSig);
-                return { result: { numerator: tsNum, denominator: tsDen, measure: cursorMeasure } };
-            }
-
-            case "setTempo": {
-                if (params.bpm === undefined)
-                    return { error: "Missing required parameter: bpm" };
-                var bpm = safeParseInt(params.bpm);
-                if (bpm === null)
-                    return { error: "Invalid value for bpm: " + params.bpm };
-                var tempoText = params.text || ("\u2669 = " + bpm);
-                var tempoCursor = positionedCursor();
-                if (!tempoCursor) return { error: "Could not position cursor" };
-                if (!tempoCursor.segment) return { error: "No valid segment at cursor position" };
-                var tempoMark = newElement(Element.TEMPO_TEXT);
-                tempoMark.text = tempoText;
-                tempoMark.tempo = bpm / secondsPerMinute;
-                tempoMark.followText = false;
-                tempoCursor.add(tempoMark);
-                return { result: { bpm: bpm, text: tempoText, measure: cursorMeasure } };
-            }
-
-            case "addChordSymbol": {
-                if (!params.text)
-                    return { error: "Missing required parameter: text" };
-                var chordCursor = positionedCursor();
-                if (!chordCursor) return { error: "Could not position cursor" };
-                if (!chordCursor.segment) return { error: "No valid segment at cursor position" };
-                var harmony = newElement(Element.HARMONY);
-                harmony.text = params.text;
-                chordCursor.add(harmony);
-                return { result: { text: params.text, measure: cursorMeasure } };
-            }
-
-            case "addDynamic": {
-                if (!params.type)
-                    return { error: "Missing required parameter: type" };
-                var dynCursor = positionedCursor();
-                if (!dynCursor) return { error: "Could not position cursor" };
-                if (!dynCursor.segment) return { error: "No valid segment at cursor position" };
-                var dynamic = newElement(Element.DYNAMIC);
-                dynamic.text = params.type;
-                if (dynamicVelocities[params.type] !== undefined) {
-                    dynamic.velocity = dynamicVelocities[params.type];
-                }
-                dynCursor.add(dynamic);
-                return { result: { type: params.type, measure: cursorMeasure } };
-            }
-
-            case "appendMeasures": {
-                if (params.count === undefined)
-                    return { error: "Missing required parameter: count" };
-                var appendCount = safeParseInt(params.count);
-                if (appendCount === null || appendCount < 1)
-                    return { error: "count must be at least 1" };
-                curScore.appendMeasures(appendCount);
-                return { result: { count: appendCount, totalMeasures: countMeasures() } };
-            }
-
-            case "selectCurrentMeasure": {
-                var selCursor = positionedCursor();
-                if (!selCursor) return { error: "Could not position cursor" };
-                if (!selCursor.measure) return { error: "No measure at current cursor position" };
-                var selStart = selCursor.measure.firstSegment.tick;
-                var selEnd = selCursor.measure.lastSegment.tick + 1;
-                curScore.selection.selectRange(selStart, selEnd, cursorStaff, cursorStaff + 1);
-                return { result: { measure: cursorMeasure, staff: cursorStaff } };
-            }
-
-            case "selectCustomRange": {
-                var srStartMeasure = safeParseInt(params.startMeasure);
-                var srEndMeasure = safeParseInt(params.endMeasure);
-                var srStartStaff = safeParseInt(params.startStaff);
-                var srEndStaff = safeParseInt(params.endStaff);
-                if (srStartMeasure === null || srEndMeasure === null ||
-                    srStartStaff === null || srEndStaff === null)
-                    return { error: "Missing required parameters: startMeasure, endMeasure, startStaff, endStaff" };
-                var srTotal = countMeasures();
-                if (srStartMeasure < 1 || srStartMeasure > srTotal ||
-                    srEndMeasure < 1 || srEndMeasure > srTotal ||
-                    srStartMeasure > srEndMeasure)
-                    return { error: "Invalid measure range: " + srStartMeasure + "-" + srEndMeasure };
-                if (srStartStaff < 0 || srStartStaff >= curScore.nstaves ||
-                    srEndStaff < 0 || srEndStaff >= curScore.nstaves ||
-                    srStartStaff > srEndStaff)
-                    return { error: "Invalid staff range: " + srStartStaff + "-" + srEndStaff };
-                var srCursor = curScore.newCursor();
-                advanceCursorToMeasure(srCursor, srStartMeasure);
-                var srStartTick = srCursor.tick;
-                for (var k = srStartMeasure; k <= srEndMeasure; k++) {
-                    srCursor.nextMeasure();
-                }
-                var srEndTick = srCursor.measure ? srCursor.tick : curScore.lastSegment.tick + 1;
-                curScore.selection.selectRange(srStartTick, srEndTick, srStartStaff, srEndStaff + 1);
-                return { result: { startMeasure: srStartMeasure, endMeasure: srEndMeasure, startStaff: srStartStaff, endStaff: srEndStaff } };
-            }
-
-            case "transpose": {
-                if (params.semitones === undefined)
-                    return { error: "Missing required parameter: semitones" };
-                var trSemitones = safeParseInt(params.semitones);
-                if (trSemitones === null)
-                    return { error: "Invalid value for semitones: " + params.semitones };
-                if (!curScore.selection || !curScore.selection.elements ||
-                    curScore.selection.elements.length === 0)
-                    return { error: "No active selection. Use selectCurrentMeasure or selectCustomRange first." };
-                var trDirection = trSemitones >= 0 ? 0 : 1;
-                var trAbs = Math.abs(trSemitones);
-                var trDiatonic = semitoneToDiatonic[trAbs % 12] + Math.floor(trAbs / 12) * 7;
-                curScore.transpose(0, trDirection, 0, trDiatonic, trAbs, true, true);
-                return { result: { semitones: trSemitones } };
-            }
-
+            case "ping":                 return handlePing();
+            case "goToMeasure":          return handleGoToMeasure(params);
+            case "goToStaff":            return handleGoToStaff(params);
+            case "addNote":              return applyAddNote(params);
+            case "addRehearsalMark":     return applyAddRehearsalMark(params);
+            case "setBarline":           return applySetBarline(params);
+            case "setKeySignature":      return applySetKeySignature(params);
+            case "setTimeSignature":     return applySetTimeSignature(params);
+            case "setTempo":             return applySetTempo(params);
+            case "addChordSymbol":       return applyAddChordSymbol(params);
+            case "addDynamic":           return applyAddDynamic(params);
+            case "appendMeasures":       return applyAppendMeasures(params);
+            case "selectCurrentMeasure": return applySelectCurrentMeasure();
+            case "selectCustomRange":    return applySelectCustomRange(params);
+            case "transpose":            return applyTranspose(params);
             default:
                 return { error: "Unknown action in sequence: " + action };
         }

@@ -127,26 +127,45 @@ seed_musescore_configuration() {
     mkdir -p "$MUSESCORE_PLUGIN_DIR"
     cp "$PLUGIN_SOURCE" "$MUSESCORE_PLUGIN_DIR/$MUSESCORE_PLUGIN_FILE"
 
-    # Skip the first-launch wizard and the welcome dialog; both would steal
-    # focus from the score window and block the keyboard shortcut.
+    # Skip the first-launch wizard and the "What's new" welcome dialog; both
+    # would steal focus from the score window and block the keyboard
+    # shortcut. MuseScore forces the welcome dialog back on whenever the
+    # last version it was shown for is older than the running one, so the
+    # recorded version is set far into the future.
     mkdir -p "$(dirname "$MUSESCORE_SETTINGS_FILE")"
     cat >"$MUSESCORE_SETTINGS_FILE" <<'EOF'
 [application]
 hasCompletedFirstLaunchSetup=true
 welcomeDialogShowOnStartup=false
+welcomeDialogLastShownVersion=99.0.0
 EOF
 
     # Enable the plugin (the equivalent of Plugins > Manage Plugins > Enable)
     # and bind it to a keyboard shortcut. Plugins cannot be started from the
     # command line: `--test-case` runs MuseScore in console mode without a
     # GUI, so the shortcut sent through xdotool is the way to run it.
+    # MuseScore 4.4 identifies plugins with a muse:// URI, 4.5 and later
+    # with musescore://; each version ignores the entry it does not know.
     mkdir -p "$MUSESCORE_DATA_DIR/extensions"
     cat >"$MUSESCORE_DATA_DIR/extensions/config.json" <<EOF
-[{"uri":"musescore://extensions/v1/$MUSESCORE_PLUGIN_FILE","actions":[{"code":"main","exec_point":"manually"}]}]
+[{"uri":"muse://extensions/v1/$MUSESCORE_PLUGIN_FILE","actions":[{"code":"main","exec_point":"manually"}]},
+ {"uri":"musescore://extensions/v1/$MUSESCORE_PLUGIN_FILE","actions":[{"code":"main","exec_point":"manually"}]}]
 EOF
+    # The action code that runs a plugin changed across 4.x releases:
+    # muse://...?action=main in 4.4, action://...?action=main from 4.5.
+    # MuseScore ignores shortcuts for codes it does not know, so every
+    # known form is bound to the same key.
     cat >"$MUSESCORE_DATA_DIR/shortcuts.xml" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <Shortcuts>
+  <SC>
+    <key>muse://extensions/v1/$MUSESCORE_PLUGIN_FILE?action=main</key>
+    <seq>$PLUGIN_SHORTCUT_MUSESCORE</seq>
+  </SC>
+  <SC>
+    <key>musescore://extensions/v1/$MUSESCORE_PLUGIN_FILE?action=main</key>
+    <seq>$PLUGIN_SHORTCUT_MUSESCORE</seq>
+  </SC>
   <SC>
     <key>action://extensions/v1/$MUSESCORE_PLUGIN_FILE?action=main</key>
     <seq>$PLUGIN_SHORTCUT_MUSESCORE</seq>
