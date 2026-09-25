@@ -33,7 +33,7 @@ class TestInstallSkill:
 
         with (
             patch("mcp_score.cli._SKILL_DEST", skill_dest),
-            patch("mcp_score.cli._package_path", return_value=fake_skill),
+            patch("mcp_score.cli.package_path", return_value=fake_skill),
         ):
             # Act
             result = install_skill()
@@ -46,7 +46,7 @@ class TestInstallSkill:
     def test_install_skill_without_files_returns_false(self) -> None:
         # Arrange
         with patch(
-            "mcp_score.cli._package_path",
+            "mcp_score.cli.package_path",
             side_effect=FileNotFoundError("not found"),
         ):
             # Act
@@ -69,7 +69,7 @@ class TestInstallPlugin:
         with (
             patch.dict("mcp_score.cli._PLUGIN_DIRS", {"Darwin": plugin_dir}),
             patch("mcp_score.cli.platform.system", return_value="Darwin"),
-            patch("mcp_score.cli._package_path", return_value=fake_qml),
+            patch("mcp_score.cli.package_path", return_value=fake_qml),
         ):
             # Act
             result = install_plugin()
@@ -90,7 +90,7 @@ class TestInstallPlugin:
         with (
             patch.dict("mcp_score.cli._PLUGIN_DIRS", {"Linux": plugin_dir}),
             patch("mcp_score.cli.platform.system", return_value="Linux"),
-            patch("mcp_score.cli._package_path", return_value=fake_qml),
+            patch("mcp_score.cli.package_path", return_value=fake_qml),
         ):
             # Act
             result = install_plugin()
@@ -113,7 +113,7 @@ class TestInstallPlugin:
         with (
             patch("mcp_score.cli.platform.system", return_value="Darwin"),
             patch(
-                "mcp_score.cli._package_path",
+                "mcp_score.cli.package_path",
                 side_effect=FileNotFoundError("not found"),
             ),
         ):

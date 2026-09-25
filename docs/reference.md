@@ -2,11 +2,35 @@
 
 > Reference -- complete list of MCP tools provided by mcp-score.
 
-Score generation is handled by the `score-generate` Claude Code skill (not MCP tools). See the [skill documentation](../README.md#score-generation-skill) for usage.
+In Claude Code, score generation is driven by the `score-generate` skill. The generation tools below make the same workflow available in any MCP client.
 
-The MCP server provides tools in four categories. Connection, analysis and manipulation tools work with any connected application — MuseScore or Dorico — though some operations are limited or unavailable depending on what the application's WebSocket API exposes. Rendering tools work on score files and need no connection.
+Connection, analysis and manipulation tools work with any connected application — MuseScore or Dorico — though some operations are limited or unavailable depending on what the application's WebSocket API exposes. Generation and rendering tools work on files and need no connection.
 
 Dorico support is experimental: it uses Dorico's undocumented Remote Control WebSocket API, is command-only (it cannot read note content), and has not been verified against a running Dorico instance.
+
+## Generation tools
+
+Generate a score file from a music21 script. No connection to a score application is needed. The script runs on the user's machine, with the user's privileges, in the same Python interpreter as the server (so music21 is importable).
+
+### `score_generation_guide`
+
+Return the bundled `score-generate` guide as Markdown: the skill instructions (music21 conventions, troubleshooting), the instrument class reference, and the template script. No parameters. Read it before calling `generate_score`. Returns `{"error": ...}` if the bundled skill files cannot be found.
+
+The same text is also exposed as the MCP prompt `score-generate`, so clients that support prompts can load it as a slash command.
+
+### `generate_score`
+
+Run a complete music21 Python script that ends by calling `score.write("musicxml", fp="<Title>.musicxml")`. The script is written to a temp file and executed in a subprocess; files created in the working directory during the run are reported back.
+
+| Parameter    | Type          | Default    | Description                                                                                                                  |
+| ------------ | ------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `script`     | `str`         | (required) | Complete Python source of the generation script                                                                              |
+| `output_dir` | `str \| None` | `None`     | Working directory for the run. Defaults to a fresh directory under the user's Desktop (or home directory when there is none) |
+| `timeout`    | `float`       | `120`      | Seconds to wait before the script is killed                                                                                  |
+
+On success returns `{"success": true, "output_files": [...], "stdout": ...}` with absolute paths of the new files. On failure returns `{"error": ..., "stderr": ..., "returncode": ...}` with the tail of the script's stderr.
+
+---
 
 ## Connection tools (6)
 

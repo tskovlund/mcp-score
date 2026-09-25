@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import importlib.resources
 import platform
 import shutil
 import sys
 from pathlib import Path
 from typing import NoReturn
+
+from mcp_score.resources import PLUGIN_FILE, SKILL_DIRECTORY, package_path
 
 __all__ = ["main"]
 
@@ -23,41 +24,6 @@ _PLUGIN_DIRS: dict[str, Path] = {
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
-
-
-def _package_path(resource_path: str) -> Path:
-    """Resolve a path relative to the installed mcp_score package.
-
-    Falls back to the source tree layout for development installs.
-    """
-    # importlib.resources works for installed packages.
-    anchor = importlib.resources.files("mcp_score")
-    # Walk up one level to reach the project root (src/mcp_score -> project).
-    package_dir = Path(str(anchor))
-
-    # For the skill files, they live at <project>/.claude/skills/...
-    # relative to the package, that's ../../.claude/skills/...
-    # But when installed via pip, we bundle them inside the wheel using
-    # hatch artifacts, so they end up under the package directory.
-    candidate = package_dir / resource_path
-    if candidate.exists():
-        return candidate
-
-    # Development: resolve from source tree.
-    # package_dir = <repo>/src/mcp_score -> <repo>
-    project_root = package_dir.parent.parent
-    candidate = project_root / resource_path
-    if candidate.exists():
-        return candidate
-
-    # Last resort: try relative to the CLI file itself.
-    cli_dir = Path(__file__).resolve().parent
-    candidate = cli_dir / resource_path
-    if candidate.exists():
-        return candidate
-
-    error_message = f"Cannot find bundled resource: {resource_path}"
-    raise FileNotFoundError(error_message)
 
 
 def _copy_tree(source: Path, destination: Path) -> None:
@@ -80,7 +46,7 @@ def _copy_file(source: Path, destination: Path) -> None:
 def install_skill() -> bool:
     """Install the score-generate skill to ~/.claude/skills/."""
     try:
-        skill_dir = _package_path(str(Path(".claude") / "skills" / "score-generate"))
+        skill_dir = package_path(str(SKILL_DIRECTORY))
     except FileNotFoundError:
         sys.stderr.write("Error: skill files not found in package.\n")
         return False
@@ -107,7 +73,7 @@ def install_plugin() -> bool:
         return False
 
     try:
-        source = _package_path(str(Path("musescore") / "plugin.qml"))
+        source = package_path(str(PLUGIN_FILE))
     except FileNotFoundError:
         sys.stderr.write("Error: plugin.qml not found in package.\n")
         return False

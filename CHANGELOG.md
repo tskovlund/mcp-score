@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 
 - Score generation via Claude Code skill (music21 -> MusicXML)
+- `generate_score` and `score_generation_guide` MCP tools plus a `score-generate` MCP prompt, so score generation works in any MCP client
 - MCP server with 16 tools for live score manipulation (MuseScore, Dorico)
 - Multi-bridge architecture: MuseScore QML plugin, Dorico Remote Control
 - MuseScore 4 QML plugin with WebSocket bridge (19 commands)

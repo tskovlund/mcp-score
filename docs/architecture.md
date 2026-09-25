@@ -143,12 +143,14 @@ Such a plugin would complement the WebSocket API (not replace it), handling the 
 src/mcp_score/
   __init__.py           Package root
   app.py                Shared MCPServer instance ("mcp-score")
-  cli.py                CLI entry point (serve, install-skill, install-plugin)
+  cli.py                CLI entry point (serve, run, install-skill, install-plugin)
+  resources.py          Locate bundled files (skill directory, plugin.qml)
   server.py             MCP server -- imports tool modules, runs MCPServer
   tools/
     __init__.py         Shared helpers: connected_bridge(), to_json(), etc.
     connection.py       6 tools: connect/disconnect MuseScore & Dorico, ping, info
     analysis.py         3 tools: read_passage, get_measure_content, get_selection_properties
+    generate.py         2 tools: generate_score, score_generation_guide (+ score-generate prompt)
     manipulation.py     7 tools: live rehearsal marks, chords, barlines, keys,
                                  tempo, transpose, undo
   bridge/
