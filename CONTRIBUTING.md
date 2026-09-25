@@ -102,7 +102,7 @@ normal review process applies after implementation.
 src/mcp_score/
   cli.py              CLI entry point (serve, run, install-skill, install-plugin)
   server.py           MCP server setup and tool imports
-  app.py              Shared FastMCP instance
+  app.py              Shared MCPServer instance
   tools/
     connection.py     Connect/disconnect MuseScore, Dorico & Sibelius, ping, score info
     analysis.py       Score reading tools (read_passage, get_measure_content, get_selection_properties)

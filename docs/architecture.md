@@ -151,9 +151,9 @@ These bridge plugins would complement the WebSocket API (not replace it), handli
 ```
 src/mcp_score/
   __init__.py           Package root
-  app.py                Shared FastMCP instance ("mcp-score")
+  app.py                Shared MCPServer instance ("mcp-score")
   cli.py                CLI entry point (serve, install-skill, install-plugin)
-  server.py             MCP server -- imports tool modules, runs FastMCP
+  server.py             MCP server -- imports tool modules, runs MCPServer
   tools/
     __init__.py         Shared helpers: connected_bridge(), to_json(), etc.
     connection.py       8 tools: connect/disconnect MuseScore, Dorico & Sibelius, ping, info
@@ -181,9 +181,9 @@ docs/                   Documentation (Diataxis structure)
 
 ## Module responsibilities
 
-### `app.py` -- shared FastMCP instance
+### `app.py` -- shared MCPServer instance
 
-Creates the single `FastMCP("mcp-score")` instance that all tool modules import. Avoids circular imports: tool modules import `mcp` from `app`, and `server.py` imports `mcp` from `app` plus triggers tool registration via side-effect imports.
+Creates the single `MCPServer("mcp-score")` instance that all tool modules import. Avoids circular imports: tool modules import `mcp` from `app`, and `server.py` imports `mcp` from `app` plus triggers tool registration via side-effect imports.
 
 ### `cli.py` -- CLI entry point
 
@@ -281,6 +281,6 @@ The MCP server provides primitives. Claude is the musical intelligence.
 
 | Dependency   | Purpose                                   |
 | ------------ | ----------------------------------------- |
-| `mcp[cli]`   | MCP SDK (FastMCP server framework)        |
+| `mcp[cli]`   | MCP SDK (MCPServer framework, v2)         |
 | `music21`    | Music theory library, MusicXML generation |
 | `websockets` | WebSocket client for bridge connections   |
