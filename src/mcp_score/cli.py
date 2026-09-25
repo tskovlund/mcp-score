@@ -81,7 +81,7 @@ def install_plugin() -> bool:
     destination = plugin_dir / "mcp-score-bridge.qml"
     _copy_file(source, destination)
     print(f"Installed MuseScore plugin to {destination}")  # noqa: T201
-    print("Enable it in MuseScore: Plugins > Manage Plugins > MCP Score Bridge")  # noqa: T201
+    print("Enable it in MuseScore: Plugins > Manage plugins > MCP Score Bridge")  # noqa: T201
     print("Requires MuseScore Studio 4.4.2 or later.")  # noqa: T201
     return True
 

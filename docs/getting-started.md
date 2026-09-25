@@ -10,14 +10,16 @@
 
 ## Installation
 
+mcp-score is not on PyPI yet. Install from GitHub:
+
 ```bash
-pip install mcp-score
+pip install git+https://github.com/tskovlund/mcp-score
 ```
 
 Or with uv:
 
 ```bash
-uv tool install mcp-score
+uv tool install git+https://github.com/tskovlund/mcp-score
 ```
 
 ### Install the score generation skill
@@ -34,7 +36,7 @@ This copies the `score-generate` skill to `~/.claude/skills/score-generate/`.
 mcp-score install-plugin
 ```
 
-This copies the WebSocket bridge plugin to your MuseScore 4 plugins directory. Restart MuseScore, then enable it: Plugins > Manage plugins > MCP Score Bridge. Running the plugin opens a status window; keep it open while you work.
+This copies the WebSocket bridge plugin to `~/Documents/MuseScore4/Plugins/`. Restart MuseScore, then enable it: Plugins > Manage plugins > MCP Score Bridge. Running the plugin opens a status window; keep it open while you work.
 
 ## Configure your MCP client
 
@@ -73,12 +75,16 @@ More examples:
 
 > "Create a string quartet in D major, 3/4 time, 16 measures at 72 BPM."
 
+### Other MCP clients
+
+Clients other than Claude Code cannot load the skill, so the server offers the same workflow as tools. Ask the assistant to read `score_generation_guide` (or load the `score-generate` prompt, if the client supports prompts) and then call `generate_score` with its music21 script. The tool runs the script and returns the paths of the files it wrote.
+
 ## Live MuseScore manipulation
 
 For reading and modifying a score that's already open in MuseScore:
 
-1. Open a score in MuseScore 4
-2. Start the MCP Score Bridge plugin (Plugins menu)
+1. Open a score in MuseScore Studio 4.4.2 or later
+2. Start the MCP Score Bridge plugin (Plugins menu) and keep its window open
 3. Ask Claude:
 
 > "Connect to MuseScore."

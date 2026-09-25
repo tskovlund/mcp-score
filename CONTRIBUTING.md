@@ -6,7 +6,7 @@ Thanks for your interest in contributing! This guide covers everything you need 
 
 - **Python 3.14+**
 - **[Devbox](https://www.jetify.com/devbox)** (recommended) or manually install `uv`, `ruff`, `pyright`
-- **MuseScore 4** (for testing the QML plugin and live manipulation features)
+- **MuseScore Studio 4.4.2+** — only for the live features (the QML plugin, `render_score`) and the integration tests. Everything else runs without it
 
 ## Development setup
 
@@ -48,6 +48,8 @@ ruff format --check .
 pyright src/
 pytest
 ```
+
+Markdown is formatted with Prettier; CI checks it, so run `npx prettier --write "**/*.md"` on the files you touch.
 
 ## Code style
 
@@ -104,14 +106,24 @@ it, and keeps downloads in `MUSESCORE_CACHE_DIR`.
 ## PR process
 
 All contributions go through pull requests — **do not push directly to `main`**.
+Keep each PR to one change; small PRs get reviewed and merged faster.
 
 1. Fork or create a feature branch from `main`
 2. Make your changes
 3. Ensure `devbox run check` passes
 4. Push and create a pull request
-5. CI must pass (lint, format, typecheck, test)
+5. CI must pass: lint, format, typecheck, tests, Markdown formatting (Prettier)
+   and the integration tests against real MuseScore
 6. A maintainer will review your PR — address any feedback
-7. The maintainer merges once approved
+7. The maintainer squash-merges once approved
+
+Much of this project is written with Claude Code, and that is fine for
+contributions too. Every PR is reviewed by the maintainer before merge, so
+say what you tested and how.
+
+Releases follow [semver](https://semver.org/); versions stay 0.x until the
+tool set is stable, so minor releases may still change tool names and
+parameters.
 
 ### Prompt request PRs
 
@@ -134,29 +146,37 @@ normal review process applies after implementation.
 
 ```
 src/mcp_score/
-  cli.py              CLI entry point (serve, run, install-skill, install-plugin)
+  cli.py              CLI entry point (serve, run, install, install-skill, install-plugin)
   server.py           MCP server setup and tool imports
   app.py              Shared MCPServer instance
+  resources.py        Locate bundled files (skill directory, plugin.qml)
   tools/
     connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py       Score reading tools (read_passage, get_measure_content, get_selection_properties)
     generate.py       Score generation tools (generate_score, score_generation_guide) and the score-generate prompt
     manipulation.py   Score modification tools (barlines, chords, keys, tempo, transpose, undo)
+    render.py         render_score: export through the MuseScore command line
   bridge/
     base.py           ScoreBridge abstract base class
     remote_control.py Remote Control protocol layer (used by Dorico)
     musescore.py      WebSocket client for MuseScore plugin
     dorico.py         Dorico defaults (thin subclass of RemoteControlBridge, experimental)
   musescore/
-    plugin.qml        MuseScore 4 QML plugin (WebSocket server)
+    cli.py            MuseScore executable discovery and headless rendering
+    plugin.qml        MuseScore QML plugin (WebSocket server)
 
 .claude/skills/
   score-generate/     Claude Code skill for music21 score generation
     SKILL.md          Skill definition and instructions
     references/
       instruments.md  music21 instrument class reference
+      template.py     Complete, runnable generation script to start from
+
+scripts/
+  musescore_harness.py  Installs and drives a real MuseScore for the integration tests
 
 tests/                One test file per module
+tests/integration/    Tests against a real MuseScore (opt-in, see above)
 docs/                 Diataxis-structured documentation
 ```
 
@@ -168,14 +188,19 @@ The `score-generate` skill (`.claude/skills/score-generate/SKILL.md`) teaches Cl
 2. Test by running `mcp-score install-skill` and asking Claude Code to generate a score
 3. Common changes: adding instrument examples, fixing music21 API gotchas, updating the template
 
-The skill is bundled with the pip package so users can install it with `mcp-score install-skill`.
+The skill is bundled with the pip package so users can install it with `mcp-score install-skill`. The `score_generation_guide` tool and the `score-generate` MCP prompt serve the same files to other MCP clients, so a change to the skill reaches every client.
 
 ## Architecture decisions
 
-- **MusicXML** as interchange format (not `.mscz`/`.mscx`)
+- **MusicXML** as interchange format (not `.mscz`/`.mscx`, which are undocumented and version-fragile)
 - **music21** for programmatic score generation
-- **Skill over MCP for generation** — one script vs. dozens of tool calls
-- **MCP for live manipulation** — WebSocket bridge to MuseScore
-- **Python** — music21 is Python-only and MCP SDK has first-class Python support
+- **Skill in Claude Code, tools for other clients** — one script per score beats dozens of tool calls; `generate_score` and `score_generation_guide` give every MCP client the same workflow from the same skill text
+- **MCP for live manipulation** — WebSocket bridge to MuseScore Studio 4.4.2+ through a QML plugin built on MuseScore's built-in plugin WebSocket API; older MuseScore is not supported
+- **Dorico is experimental** (undocumented, command-only Remote Control API, unverified); **Sibelius was removed** as out of scope
+- **Integration tests against real MuseScore** in CI, on several versions and all three platforms
+- **Semver, 0.x until stable**
+- **Python** — music21 is Python-only and the MCP SDK has first-class Python support
 
-See [docs/architecture.md](docs/architecture.md) for the full rationale.
+See [docs/architecture.md](docs/architecture.md) for the full rationale and
+[issue #91](https://github.com/tskovlund/mcp-score/issues/91) for the decision
+ledger behind the beta.

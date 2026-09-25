@@ -1,4 +1,5 @@
 [![CI](https://github.com/tskovlund/mcp-score/actions/workflows/ci.yml/badge.svg)](https://github.com/tskovlund/mcp-score/actions/workflows/ci.yml)
+[![Integration](https://github.com/tskovlund/mcp-score/actions/workflows/integration.yml/badge.svg)](https://github.com/tskovlund/mcp-score/actions/workflows/integration.yml)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,13 +13,13 @@ Works with any MCP client (Claude Code, Claude Desktop, LM Studio, and others). 
 
 - **Generate scores.** The assistant writes a [music21](https://www.music21.org/) script that exports MusicXML, which opens in MuseScore, Dorico, or any notation app. In Claude Code this is driven by the bundled `score-generate` skill. In other MCP clients, the `generate_score` tool runs the script and `score_generation_guide` supplies the same instructions.
 - **Edit live scores.** MCP tools connect to a running MuseScore and read passages, add notes and chord symbols, set barlines, keys, tempo, transpose, and undo.
-- **Render.** Export PDF, MIDI or audio from a score file through the MuseScore command line.
+- **Render.** The `render_score` tool exports PDF, PNG, MIDI or audio from a score file through the MuseScore command line; MuseScore must be installed but not running.
 
 ## Supported applications
 
 | Application      | Versions        | Status                                                                                                |
 | ---------------- | --------------- | ----------------------------------------------------------------------------------------------------- |
-| MuseScore Studio | 4.4.2 and later | Supported. Earlier versions lack the plugin WebSocket API and are not supported.                      |
+| MuseScore Studio | 4.4.2 and later | Supported; tested in CI on 4.4, 4.6 and 4.7. Earlier versions lack the plugin WebSocket API.          |
 | Dorico           | 4 and later     | Experimental. Undocumented Remote Control API, command-only, not verified against a running instance. |
 | Any notation app | MusicXML import | Generated scores open anywhere MusicXML does.                                                         |
 
