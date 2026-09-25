@@ -17,6 +17,7 @@ from mcp_score.musescore.cli import (
     MUSESCORE_PATH_ENV_VAR,
     MuseScoreNotFoundError,
     RenderError,
+    RenderResult,
     find_musescore_command,
     render,
 )
@@ -25,14 +26,27 @@ from mcp_score.tools.render import render_score
 _MUSESCORE_COMMAND = ["/opt/musescore/mscore"]
 
 
-def _mock_process(returncode: int = 0, stderr: bytes = b"") -> MagicMock:
-    """Build a fake asyncio subprocess that completes with *returncode*."""
+def _mock_process(
+    returncode: int = 0, stderr: bytes = b"", writes: tuple[Path, ...] = ()
+) -> MagicMock:
+    """Build a fake asyncio subprocess that writes *writes* and exits *returncode*."""
+
+    async def communicate() -> tuple[bytes, bytes]:
+        for file in writes:
+            file.write_bytes(b"rendered")
+        return (b"", stderr)
+
     process = MagicMock()
     process.returncode = returncode
-    process.communicate = AsyncMock(return_value=(b"", stderr))
+    process.communicate = AsyncMock(side_effect=communicate)
     process.kill = MagicMock()
     process.wait = AsyncMock()
     return process
+
+
+def _rendering(*outputs: Path, warning: str | None = None) -> AsyncMock:
+    """A stand-in for ``render`` that reports *outputs* as written."""
+    return AsyncMock(return_value=RenderResult(outputs, warning))
 
 
 @pytest.fixture
@@ -184,7 +198,8 @@ class TestRender:
         self, tmp_path: Path
     ) -> None:
         # Arrange
-        create_subprocess = AsyncMock(return_value=_mock_process())
+        output = tmp_path / "out.pdf"
+        create_subprocess = AsyncMock(return_value=_mock_process(writes=(output,)))
 
         with (
             patch.object(
@@ -195,9 +210,10 @@ class TestRender:
             patch.dict("os.environ", {}, clear=True),
         ):
             # Act
-            await render(tmp_path / "in.musicxml", tmp_path / "out.pdf")
+            result = await render(tmp_path / "in.musicxml", output)
 
         # Assert
+        assert result == RenderResult((output,), None)
         arguments = create_subprocess.call_args.args
         assert arguments == (
             *_MUSESCORE_COMMAND,
@@ -212,7 +228,8 @@ class TestRender:
     @pytest.mark.anyio()
     async def test_render_on_linux_keeps_user_qt_platform(self, tmp_path: Path) -> None:
         # Arrange
-        create_subprocess = AsyncMock(return_value=_mock_process())
+        output = tmp_path / "out.pdf"
+        create_subprocess = AsyncMock(return_value=_mock_process(writes=(output,)))
 
         with (
             patch.object(
@@ -223,7 +240,7 @@ class TestRender:
             patch.dict("os.environ", {"QT_QPA_PLATFORM": "xcb"}),
         ):
             # Act
-            await render(tmp_path / "in.musicxml", tmp_path / "out.pdf")
+            await render(tmp_path / "in.musicxml", output)
 
         # Assert
         environment = create_subprocess.call_args.kwargs["env"]
@@ -234,7 +251,8 @@ class TestRender:
         self, tmp_path: Path
     ) -> None:
         # Arrange
-        create_subprocess = AsyncMock(return_value=_mock_process())
+        output = tmp_path / "out.pdf"
+        create_subprocess = AsyncMock(return_value=_mock_process(writes=(output,)))
 
         with (
             patch.object(
@@ -245,11 +263,101 @@ class TestRender:
             patch.dict("os.environ", {}, clear=True),
         ):
             # Act
-            await render(tmp_path / "in.musicxml", tmp_path / "out.pdf")
+            await render(tmp_path / "in.musicxml", output)
 
         # Assert
         environment = create_subprocess.call_args.kwargs["env"]
         assert "QT_QPA_PLATFORM" not in environment
+
+    @pytest.mark.anyio()
+    async def test_render_reports_page_series_written_for_output(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange: PNG export writes one numbered file per page, never the
+        # requested path itself.
+        output = tmp_path / "out.png"
+        pages = (tmp_path / "out-1.png", tmp_path / "out-2.png")
+        process = _mock_process(writes=pages)
+
+        with (
+            patch.object(
+                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+            ),
+            patch.object(
+                cli.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
+            ),
+        ):
+            # Act
+            result = await render(tmp_path / "in.musicxml", output)
+
+        # Assert
+        assert result == RenderResult(pages, None)
+
+    @pytest.mark.anyio()
+    async def test_render_with_output_written_and_unclean_exit_warns(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange: MuseScore exports the file and then aborts while shutting
+        # down, as MuseScore Studio 4.7 does on macOS 26 after a PDF export.
+        output = tmp_path / "out.pdf"
+        process = _mock_process(returncode=-6, writes=(output,))
+
+        with (
+            patch.object(
+                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+            ),
+            patch.object(
+                cli.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
+            ),
+        ):
+            # Act
+            result = await render(tmp_path / "in.musicxml", output)
+
+        # Assert
+        assert result.output_files == (output,)
+        assert result.warning is not None
+        assert "exited with code -6" in result.warning
+
+    @pytest.mark.anyio()
+    async def test_render_with_clean_exit_but_no_output_raises(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange
+        process = _mock_process(returncode=0)
+
+        with (
+            patch.object(
+                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+            ),
+            patch.object(
+                cli.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
+            ),
+            pytest.raises(RenderError, match="wrote no output file"),
+        ):
+            # Act / Assert
+            await render(tmp_path / "in.musicxml", tmp_path / "out.pdf")
+
+    @pytest.mark.anyio()
+    async def test_render_does_not_count_untouched_earlier_output(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange: a file from an earlier run is already there and MuseScore
+        # fails before overwriting it.
+        output = tmp_path / "out.pdf"
+        output.write_bytes(b"stale")
+        process = _mock_process(returncode=1, stderr=b"Error: cannot open file")
+
+        with (
+            patch.object(
+                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+            ),
+            patch.object(
+                cli.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
+            ),
+            pytest.raises(RenderError, match="exited with code 1"),
+        ):
+            # Act / Assert
+            await render(tmp_path / "in.musicxml", output)
 
     @pytest.mark.anyio()
     async def test_render_with_nonzero_exit_raises_with_stderr_tail(
@@ -315,17 +423,18 @@ class TestRenderScore:
         self, score_file: Path
     ) -> None:
         # Arrange
-        render_mock = AsyncMock()
+        expected_output = score_file.with_suffix(".pdf")
+        render_mock = _rendering(expected_output)
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
             result = json.loads(await render_score(str(score_file)))
 
         # Assert
-        expected_output = score_file.with_suffix(".pdf")
         assert result == {
             "success": True,
             "output_path": str(expected_output),
+            "output_files": [str(expected_output)],
             "format": "pdf",
         }
         render_mock.assert_awaited_once_with(score_file, expected_output)
@@ -335,7 +444,7 @@ class TestRenderScore:
         self, score_file: Path
     ) -> None:
         # Arrange
-        render_mock = AsyncMock()
+        render_mock = _rendering(score_file.with_suffix(".mid"))
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
@@ -352,7 +461,8 @@ class TestRenderScore:
         # Arrange
         output = tmp_path / "exports" / "piece.png"
         output.parent.mkdir()
-        render_mock = AsyncMock()
+        pages = (output.with_name("piece-1.png"), output.with_name("piece-2.png"))
+        render_mock = _rendering(*pages)
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
@@ -360,7 +470,24 @@ class TestRenderScore:
 
         # Assert
         assert result["success"] is True
+        assert result["output_files"] == [str(page) for page in pages]
         render_mock.assert_awaited_once_with(score_file, output)
+
+    @pytest.mark.anyio()
+    async def test_render_score_passes_on_render_warning(
+        self, score_file: Path
+    ) -> None:
+        # Arrange
+        output = score_file.with_suffix(".pdf")
+        render_mock = _rendering(output, warning="MuseScore exited with code -6.")
+
+        with patch("mcp_score.tools.render.render", render_mock):
+            # Act
+            result = json.loads(await render_score(str(score_file)))
+
+        # Assert
+        assert result["success"] is True
+        assert result["warning"] == "MuseScore exited with code -6."
 
     @pytest.mark.anyio()
     async def test_render_score_with_missing_input_returns_error(
@@ -483,7 +610,10 @@ class TestRenderScore:
         self, score_file: Path
     ) -> None:
         # Arrange: only the discovery and the subprocess are mocked.
-        create_subprocess = AsyncMock(return_value=_mock_process())
+        expected_output = score_file.with_suffix(".wav")
+        create_subprocess = AsyncMock(
+            return_value=_mock_process(writes=(expected_output,))
+        )
 
         with (
             patch.object(
@@ -495,10 +625,10 @@ class TestRenderScore:
             result = json.loads(await render_score(str(score_file), "wav"))
 
         # Assert
-        expected_output = str(score_file.with_suffix(".wav"))
         assert result == {
             "success": True,
-            "output_path": expected_output,
+            "output_path": str(expected_output),
+            "output_files": [str(expected_output)],
             "format": "wav",
         }
-        assert create_subprocess.call_args.args[-2] == expected_output
+        assert create_subprocess.call_args.args[-2] == str(expected_output)

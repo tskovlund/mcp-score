@@ -58,11 +58,10 @@ class TestRenderScoreWithMuseScore:
         response = await _render(fixture_score, render_format, output_path)
 
         # Assert
-        assert response == {
-            "success": True,
-            "output_path": str(output_path),
-            "format": render_format,
-        }
+        assert response["success"] is True
+        assert response["output_path"] == str(output_path)
+        assert response["output_files"] == [str(output_path)]
+        assert response["format"] == render_format
         assert output_path.stat().st_size > 0
         assert output_path.read_bytes().startswith(magic)
 

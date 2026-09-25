@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - GitHub security: CodeQL scanning, branch protection, SECURITY.md
 - Score metadata: subtitle (movementName), arranger (Contributor), copyright support
 - Prompt request PR workflow in CONTRIBUTING.md
-- `render_score` tool: export PDF, PNG, MIDI, MP3, WAV or MusicXML from a score file through the MuseScore command line, located via `MCP_SCORE_MUSESCORE_PATH`, PATH or the platform default install
+- `render_score` tool: export PDF, PNG, MIDI, MP3, WAV or MusicXML from a score file through the MuseScore command line, located via `MCP_SCORE_MUSESCORE_PATH`, PATH or the platform default install. Success is judged by the files MuseScore wrote (`output_files`), so a crash on shutdown after a finished export (MuseScore Studio 4.7 on macOS 26) yields a warning, not a failure
 - Integration tests against real MuseScore Studio installs (headless `render_score` export and the live plugin bridge) on Linux (4.4, 4.6, 4.7), Windows and macOS, run by the `Integration` workflow and locally via `scripts/musescore_harness.py`
 
 ### Fixed

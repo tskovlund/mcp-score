@@ -218,7 +218,7 @@ Render a score file to PDF, PNG, MIDI, MP3, WAV or MusicXML. The input is typica
 | `format`      | `str`         | `"pdf"`    | One of `"pdf"`, `"png"`, `"midi"`, `"mp3"`, `"wav"`, `"musicxml"`. PNG writes one file per page (`-1`, `-2`, ...)  |
 | `output_path` | `str \| None` | `None`     | Output file. Defaults to the input path with the format's extension. Must match the format; overwritten if present |
 
-Returns `{"success": true, "output_path": ..., "format": ...}` or `{"error": ...}` including the tail of MuseScore's stderr when the export fails.
+Returns `{"success": true, "output_path": ..., "output_files": [...], "format": ...}`, where `output_files` lists the files MuseScore actually wrote (one per page for PNG), or `{"error": ...}` including the tail of MuseScore's stderr when no output was written. A rendering counts as successful when its output exists; if MuseScore crashes while shutting down afterwards (seen with MuseScore Studio 4.7 on macOS 26 after PDF export), the result carries a `warning` instead of failing.
 
 ## CLI
 
