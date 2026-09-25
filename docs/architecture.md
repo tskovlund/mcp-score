@@ -57,23 +57,23 @@ mcp-score supports multiple score notation applications through a common bridge 
 `ScoreBridge` (in `bridge/base.py`) defines the common interface that all MCP tools depend on. The bridge hierarchy:
 
 ```
-ScoreBridge (ABC)
-├── MuseScoreBridge          -- custom protocol for MuseScore QML plugin
-└── RemoteControlBridge      -- Remote Control handshake/command protocol
-    └── DoricoBridge         -- Dorico defaults (port 4560)
+ScoreBridge (ABC)             -- the operations every tool needs
+└── WebSocketBridge           -- connection lifecycle over a WebSocketTransport, one reconnect
+    ├── MuseScoreBridge       -- the MuseScore QML plugin's command/params protocol
+    └── RemoteControlBridge   -- Remote Control handshake/command protocol
+        └── DoricoBridge      -- Dorico defaults (port 4560)
 ```
 
-- `MuseScoreBridge` -- connects to the MuseScore QML plugin's WebSocket server (different protocol)
-- `RemoteControlBridge` (in `bridge/remote_control.py`) -- Remote Control protocol logic, kept separate from application defaults: handshake with session tokens, command formatting, reconnection, barline mapping, and limitation messages
+- `ScoreBridge` -- the abstract interface: connection, navigation, reading, and every edit the tools offer, each returning a `CommandResult` dict (`{"error": ...}` when the application cannot do it)
+- `WebSocketTransport` -- owns the socket: open, close, send, and one request/reply exchange
+- `WebSocketBridge` -- connects a transport, auto-connects on the first command, reconnects once on a lost connection, and gives subclasses two hooks (`_on_connected`, `_on_disconnecting`) for their protocol's handshake
+- `MuseScoreBridge` -- frames commands for the MuseScore plugin and maps the interface to plugin commands
+- `RemoteControlBridge` -- Remote Control protocol logic, kept separate from application defaults: handshake with session tokens, command formatting, barline mapping, and limitation messages
 - `DoricoBridge` -- thin subclass providing Dorico-specific defaults
 
 ### Bridge registry
 
-`bridge/__init__.py` manages the active bridge:
-
-- `get_active_bridge()` -- returns the currently connected bridge (or None)
-- `set_active_bridge()` -- sets which bridge is active
-- Tools call `connected_bridge()` from `tools/__init__.py`, which returns the active bridge only if it's connected
+`bridge/registry.py` holds one bridge per application and tracks the active one. `BridgeRegistry.activate(bridge)` connects a bridge and disconnects whichever was active before; `deactivate(bridge)` disconnects it; `connected()` returns the active bridge only while it is connected. The tools share the module-level `registry` through `require_bridge()` in `tools/__init__.py`, which raises `ToolError` when nothing is connected.
 
 ### Remote Control protocol (Dorico)
 
@@ -146,23 +146,23 @@ In Claude Code the `score-generate` skill does exactly that, with no MCP server 
 ```
 src/mcp_score/
   __init__.py           Package root
-  app.py                Shared MCPServer instance ("mcp-score")
   cli.py                CLI entry point (serve, run, install, install-skill, install-plugin)
   resources.py          Locate bundled files (skill directory, plugin.qml)
-  server.py             MCP server -- imports tool modules, runs MCPServer
+  server.py             create_server() builds the MCPServer and registers every tool module
   tools/
-    __init__.py         Shared helpers: connected_bridge(), to_json(), etc.
+    __init__.py         Shared tool plumbing: ToolError, score_tool, require_bridge(), navigate()
     connection.py       Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py         read_passage, get_measure_content, get_selection_properties
     generate.py         generate_score, score_generation_guide (+ score-generate prompt)
-    manipulation.py     Live rehearsal marks, chords, barlines, keys, tempo, transpose, undo
+    manipulation.py     Live notes, dynamics, rehearsal marks, chords, barlines, keys, time, tempo, measures, transpose, undo
     render.py           render_score (export through the MuseScore command line)
   bridge/
-    __init__.py         Bridge registry (get_active_bridge, set_active_bridge)
-    base.py             ScoreBridge abstract base class
+    base.py             ScoreBridge abstract interface, CommandResult, NoteDuration
+    websocket.py        WebSocketTransport and WebSocketBridge -- connection lifecycle, reconnect
     remote_control.py   RemoteControlBridge -- Remote Control protocol layer
-    musescore.py        MuseScoreBridge -- WebSocket client for MuseScore plugin
+    musescore.py        MuseScoreBridge -- MuseScore plugin protocol
     dorico.py           DoricoBridge -- thin subclass (Dorico defaults, experimental)
+    registry.py         BridgeRegistry -- the bridges and which one is active
   musescore/
     cli.py              MuseScore executable discovery and headless rendering
     plugin.qml          MuseScore QML plugin (WebSocket server)
@@ -182,10 +182,6 @@ docs/                   Documentation (Diataxis structure)
 
 ## Module responsibilities
 
-### `app.py` -- shared MCPServer instance
-
-Creates the single `MCPServer("mcp-score")` instance that all tool modules import. Avoids circular imports: tool modules import `mcp` from `app`, and `server.py` imports `mcp` from `app` plus triggers tool registration via side-effect imports.
-
 ### `cli.py` -- CLI entry point
 
 Provides subcommands: `serve` (default, runs MCP server), `run` (execute a Python script with music21 available), `install-skill` (copies skill to `~/.claude/skills/`), `install-plugin` (copies QML plugin to MuseScore plugins directory), `install` (both).
@@ -196,7 +192,11 @@ Resolves the skill directory and `plugin.qml` whether the package is installed f
 
 ### `server.py` -- MCP server
 
-Imports the five tool modules (connection, analysis, manipulation, generation, rendering) to register their `@mcp.tool()` decorators, then exposes the `main()` function. Called by `cli.py serve`.
+`create_server()` builds the `MCPServer` and calls `register(server)` on each of the five tool modules (connection, analysis, manipulation, generation, rendering). Nothing registers itself on import, so tests can build a server the same way. `main()` runs it over stdio and is what `cli.py serve` calls.
+
+### `tools/__init__.py` -- shared tool plumbing
+
+A tool is a plain async function that returns a `CommandResult` and raises `ToolError` when it cannot proceed. The `score_tool` decorator turns the error into an `{"error": ...}` result, so every tool has one error path and the MCP server delivers the dict as JSON text and structured content. `require_bridge()`, `require_measure()` and `require_measure_range()` validate the common preconditions; `navigate()` moves the application's cursor and raises when it refuses, so no edit lands at the wrong position.
 
 ### `tools/generate.py` -- generation tools
 
@@ -212,23 +212,27 @@ Locates the MuseScore executable (`MCP_SCORE_MUSESCORE_PATH`, then PATH, then th
 
 ### `bridge/base.py` -- abstract interface
 
-`ScoreBridge` defines the common interface: `connect()`, `disconnect()`, `send_command()`, `ping()`, `get_score()`, `go_to_measure()`, etc. Concrete bridges implement this for each application.
+`ScoreBridge` defines what a tool can ask of any application: connection (`connect()`, `disconnect()`, `ping()`, `is_connected`), reading (`get_score()`, `get_cursor_info()`, `get_properties()`), navigation and selection (`go_to_measure()`, `go_to_staff()`, `select_measure()`, `select_range()`), and every edit (`add_note()`, `add_rehearsal_mark()`, `add_chord_symbol()`, `add_dynamic()`, `set_barline()`, `set_key_signature()`, `set_time_signature()`, `set_tempo()`, `append_measures()`, `transpose()`, `undo()`). Each returns a `CommandResult`; an application that cannot do something answers with `{"error": ...}` rather than raising. `NoteDuration` is the value type for note lengths.
+
+### `bridge/websocket.py` -- transport and connection lifecycle
+
+`WebSocketTransport` wraps one `websockets` connection: open, close, send, and a single request/reply exchange with a receive timeout. `WebSocketBridge(ScoreBridge)` owns a transport and the lifecycle around it: connect and disconnect with protocol hooks, auto-connect on the first command, and one reconnect attempt when the connection is lost. Transport failures come back to the tools as `{"error": ...}` results.
 
 ### `bridge/musescore.py` -- MuseScore bridge
 
-`MuseScoreBridge(ScoreBridge)` connects to the MuseScore QML plugin. Features auto-connect on first command, automatic reconnect on connection loss, and typed convenience methods for all plugin commands.
+`MuseScoreBridge(WebSocketBridge)` frames each command as `{"command": ..., "params": ...}` for the QML plugin and implements the `ScoreBridge` operations as typed calls to the plugin's commands, plus `process_sequence()` for the plugin's batched steps.
 
 ### `bridge/remote_control.py` -- Remote Control protocol
 
-`RemoteControlBridge(ScoreBridge)` implements the Remote Control WebSocket protocol: handshake with session tokens, command formatting, send-with-reconnect, barline mapping, and limitation messages for unsupported operations. It holds no application-specific defaults, so the protocol stays independent of the Dorico bridge that uses it. Uses `self.application_name` in all user-facing messages for proper attribution.
+`RemoteControlBridge(WebSocketBridge)` implements the Remote Control WebSocket protocol: the session-token handshake in the connect hook, command formatting, barline mapping, and limitation messages for operations the protocol cannot perform. It holds no application-specific defaults, so the protocol stays independent of the Dorico bridge that uses it. Uses `self.application_name` in all user-facing messages for proper attribution.
 
 ### `bridge/dorico.py` -- Dorico bridge
 
 `DoricoBridge(RemoteControlBridge)` -- thin subclass that provides Dorico-specific defaults (port 4560, application name "Dorico"). All protocol logic is inherited from `RemoteControlBridge`. Dorico support is experimental (see [Remote Control protocol](#remote-control-protocol-dorico)).
 
-### `bridge/__init__.py` -- bridge registry
+### `bridge/registry.py` -- bridge registry
 
-Manages which bridge is active. `get_active_bridge()` returns the current bridge; `set_active_bridge()` switches it. Connection tools call these to manage the active bridge lifecycle.
+`BridgeRegistry` holds the MuseScore and Dorico bridges and tracks the active one; the connection tools activate and deactivate bridges through it, and every other tool reads the connected bridge from it. See [Bridge registry](#bridge-registry).
 
 ## MCP tools
 
@@ -266,11 +270,15 @@ The same guide is served as the `score-generate` MCP prompt.
 
 | Tool                      | Purpose                |
 | ------------------------- | ---------------------- |
+| `add_live_note`           | Add a note             |
 | `add_live_rehearsal_mark` | Add a rehearsal mark   |
 | `add_live_chord_symbol`   | Add a chord symbol     |
+| `add_live_dynamic`        | Add a dynamic marking  |
 | `set_live_barline`        | Set a barline type     |
 | `set_live_key_signature`  | Set the key signature  |
+| `set_live_time_signature` | Set the time signature |
 | `set_live_tempo`          | Set the tempo          |
+| `append_live_measures`    | Append empty measures  |
 | `transpose_passage`       | Transpose by semitones |
 | `undo_last_action`        | Undo the last action   |
 

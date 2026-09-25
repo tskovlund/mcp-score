@@ -7,15 +7,20 @@ Code (where the bundled ``score-generate`` skill covers the same job).
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from mcp_score.app import mcp
+from mcp_score.bridge import CommandResult
 from mcp_score.resources import SKILL_DIRECTORY, package_path
-from mcp_score.tools import to_json
+from mcp_score.tools import ToolError, score_tool
 
-__all__: list[str] = []
+if TYPE_CHECKING:
+    from mcp.server.mcpserver import MCPServer
+
+__all__ = ["register"]
 
 # ── Constants ─────────────────────────────────────────────────────────
 
@@ -70,13 +75,17 @@ def _default_output_directory() -> Path:
     return Path(tempfile.mkdtemp(prefix=OUTPUT_DIRECTORY_PREFIX, dir=base))
 
 
-def _resolve_output_directory(output_dir: str | None) -> Path | str:
-    """Return the working directory for a run, or an error message."""
+def _resolve_output_directory(output_dir: str | None) -> Path:
+    """The working directory for a run, created if needed.
+
+    Raises:
+        ToolError: When *output_dir* exists but is not a directory.
+    """
     if output_dir is None:
         return _default_output_directory()
     directory = Path(output_dir).expanduser().resolve()
     if directory.exists() and not directory.is_dir():
-        return f"output_dir is not a directory: {directory}"
+        raise ToolError(f"output_dir is not a directory: {directory}")
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 
@@ -114,12 +123,12 @@ def _load_guide() -> str:
 # ── Tools ─────────────────────────────────────────────────────────────
 
 
-@mcp.tool()
+@score_tool
 async def generate_score(
     script: str,
     output_dir: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
-) -> str:
+) -> CommandResult:
     """Run a music21 Python script to generate a score file (MusicXML).
 
     Write a COMPLETE, self-contained music21 script that builds the whole
@@ -148,9 +157,6 @@ async def generate_score(
         failure: ``{"error": ..., "stderr": last lines, "returncode": n}``.
     """
     working_directory = _resolve_output_directory(output_dir)
-    if isinstance(working_directory, str):
-        return to_json({"error": working_directory})
-
     files_before = _list_files(working_directory)
 
     with tempfile.TemporaryDirectory(prefix=OUTPUT_DIRECTORY_PREFIX) as script_dir:
@@ -171,38 +177,30 @@ async def generate_score(
         except TimeoutError:
             process.kill()
             await process.wait()
-            error_message = f"Script timed out after {timeout} seconds and was killed."
-            return to_json(
-                {
-                    "error": error_message,
-                    "stderr": "",
-                    "returncode": process.returncode,
-                }
-            )
+            raise ToolError(
+                f"Script timed out after {timeout} seconds and was killed.",
+                stderr="",
+                returncode=process.returncode,
+            ) from None
 
     stdout = stdout_bytes.decode("utf-8", errors="replace")
     stderr = stderr_bytes.decode("utf-8", errors="replace")
 
     if process.returncode != 0:
-        return to_json(
-            {
-                "error": f"Script exited with code {process.returncode}.",
-                "stderr": _stderr_tail(stderr),
-                "returncode": process.returncode,
-            }
+        raise ToolError(
+            f"Script exited with code {process.returncode}.",
+            stderr=_stderr_tail(stderr),
+            returncode=process.returncode,
         )
 
     new_files = sorted(_list_files(working_directory) - files_before)
-    return to_json(
-        {
-            "success": True,
-            "output_files": [str(path) for path in new_files],
-            "stdout": stdout,
-        }
-    )
+    return {
+        "success": True,
+        "output_files": [str(path) for path in new_files],
+        "stdout": stdout,
+    }
 
 
-@mcp.tool()
 def score_generation_guide() -> str:
     """Return the score generation guide for writing music21 scripts.
 
@@ -218,20 +216,26 @@ def score_generation_guide() -> str:
     try:
         return _load_guide()
     except FileNotFoundError as exception:
-        return to_json({"error": str(exception)})
+        return json.dumps({"error": str(exception)})
 
 
 # ── Prompt ────────────────────────────────────────────────────────────
 
 
-@mcp.prompt(
-    name=PROMPT_NAME,
-    title="Score generation guide",
-    description=(
-        "Load the score-generate instructions (music21 conventions, instrument "
-        "reference and template) before generating a score with generate_score."
-    ),
-)
 def score_generate_prompt() -> str:
     """Serve the generation guide as a prompt for clients that support them."""
     return _load_guide()
+
+
+def register(server: MCPServer) -> None:
+    server.tool()(generate_score)
+    server.tool()(score_generation_guide)
+    server.prompt(
+        name=PROMPT_NAME,
+        title="Score generation guide",
+        description=(
+            "Load the score-generate instructions (music21 conventions, "
+            "instrument reference and template) before generating a score "
+            "with generate_score."
+        ),
+    )(score_generate_prompt)

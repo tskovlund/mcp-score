@@ -86,13 +86,13 @@ Read musical content from the connected score application. All analysis tools re
 
 Read musical content from a range of measures. Returns notes, rests, and musical elements in the specified range.
 
-| Parameter       | Type          | Default    | Description                                       |
-| --------------- | ------------- | ---------- | ------------------------------------------------- |
-| `start_measure` | `int`         | (required) | First measure to read (1-indexed)                 |
-| `end_measure`   | `int`         | (required) | Last measure to read (inclusive, 1-indexed)       |
-| `staff`         | `int \| None` | `None`     | Staff index (0-indexed). Omit to read all staves. |
+| Parameter       | Type          | Default    | Description                                              |
+| --------------- | ------------- | ---------- | -------------------------------------------------------- |
+| `start_measure` | `int`         | (required) | First measure to read (1-indexed)                        |
+| `end_measure`   | `int`         | (required) | Last measure to read (inclusive, 1-indexed)              |
+| `staff`         | `int \| None` | `None`     | Staff index (0-indexed). Omit to read the current staff. |
 
-Works best with MuseScore. When connected to Dorico, the response includes a `warning` field explaining the data limitations.
+Works best with MuseScore. When connected to Dorico, the response includes a `warning` field explaining the data limitations, and giving a `staff` returns an error because Dorico cannot move to a staff.
 
 ### `get_measure_content`
 
@@ -103,7 +103,7 @@ Read the content of a specific measure and staff.
 | `measure` | `int` | (required) | Measure number (1-indexed) |
 | `staff`   | `int` | `0`        | Staff index (0-indexed)    |
 
-Works best with MuseScore. When connected to Dorico, the response includes a `warning` field explaining the data limitations.
+MuseScore only: Dorico cannot move to a staff or select a measure through its API, so the tool returns an error there. Use `get_selection_properties` with Dorico.
 
 ### `get_selection_properties`
 
@@ -118,16 +118,29 @@ No parameters. Requires an active connection.
 
 ## Manipulation tools
 
-Modify the live score in the connected application. All manipulation tools require an active connection and navigate to the specified measure before applying the change.
+Modify the live score in the connected application. All manipulation tools require an active connection and navigate to the specified measure (and staff, where given) before applying the change; if the application cannot get there, the tool returns that error and changes nothing.
 
-**Application-specific limitations:** Several manipulation tools are unavailable when connected to Dorico, because its Remote Control WebSocket API interacts with UI commands rather than the score model directly. Specifically:
+**Application-specific limitations:** Most manipulation tools are unavailable when connected to Dorico, because its Remote Control WebSocket API triggers UI commands rather than editing the score model, and cannot type into popovers or move the selection. Specifically:
 
-- `add_live_chord_symbol` — returns an error for Dorico (chord symbols require popover input that the API cannot provide).
-- `set_live_key_signature` — returns an error for Dorico (key signatures require popover input).
-- `set_live_tempo` — returns an error for Dorico (tempo marks require popover input).
+- `add_live_note`, `add_live_chord_symbol`, `add_live_dynamic`, `set_live_key_signature`, `set_live_time_signature`, `set_live_tempo`, `append_live_measures` and `transpose_passage` — return an error for Dorico.
 - `add_live_rehearsal_mark` — succeeds for Dorico but ignores the `text` parameter; the application uses its own auto-numbering instead.
 - `set_live_barline` — works for Dorico with the four supported barline types.
-- `transpose_passage` and `undo_last_action` — work for both applications.
+- `undo_last_action` — works for both applications.
+- Any tool that takes a `staff` — returns an error for Dorico, which cannot move to a staff.
+
+### `add_live_note`
+
+Add a note at the start of the specified measure. Consecutive calls on the same measure append notes one after another, since the application advances its cursor after each note.
+
+| Parameter     | Type  | Default    | Description                                                       |
+| ------------- | ----- | ---------- | ----------------------------------------------------------------- |
+| `measure`     | `int` | (required) | Measure number (1-indexed)                                        |
+| `pitch`       | `int` | (required) | MIDI pitch, 0–127 (`60` = middle C)                               |
+| `numerator`   | `int` | `1`        | Duration numerator (with the default denominator: a quarter note) |
+| `denominator` | `int` | `4`        | Duration denominator                                              |
+| `staff`       | `int` | `0`        | Staff index (0-indexed)                                           |
+
+Not supported with Dorico — returns an error for that application.
 
 ### `add_live_rehearsal_mark`
 
@@ -148,6 +161,18 @@ Add a chord symbol at the start of the specified measure.
 | --------- | ----- | ---------------------------------------------- |
 | `measure` | `int` | Measure number (1-indexed)                     |
 | `symbol`  | `str` | Chord symbol (e.g. `"Cmaj7"`, `"Dm7"`, `"G7"`) |
+
+Not supported with Dorico — returns an error for that application.
+
+### `add_live_dynamic`
+
+Add a dynamic marking at the start of the specified measure.
+
+| Parameter | Type  | Default    | Description                                                           |
+| --------- | ----- | ---------- | --------------------------------------------------------------------- |
+| `measure` | `int` | (required) | Measure number (1-indexed)                                            |
+| `dynamic` | `str` | (required) | Dynamic such as `"pp"`, `"p"`, `"mp"`, `"mf"`, `"f"`, `"ff"`, `"sfz"` |
+| `staff`   | `int` | `0`        | Staff index (0-indexed)                                               |
 
 Not supported with Dorico — returns an error for that application.
 
@@ -173,6 +198,18 @@ Set the key signature at the specified measure.
 
 Not supported with Dorico — returns an error for that application.
 
+### `set_live_time_signature`
+
+Set the time signature from the specified measure onward.
+
+| Parameter     | Type  | Description                         |
+| ------------- | ----- | ----------------------------------- |
+| `measure`     | `int` | Measure number (1-indexed)          |
+| `numerator`   | `int` | Beats per measure (e.g. `3` in 3/4) |
+| `denominator` | `int` | Beat unit (e.g. `4` in 3/4)         |
+
+Not supported with Dorico — returns an error for that application.
+
 ### `set_live_tempo`
 
 Set the tempo at the specified measure.
@@ -182,6 +219,16 @@ Set the tempo at the specified measure.
 | `measure` | `int`         | (required) | Measure number (1-indexed)                          |
 | `bpm`     | `int`         | (required) | Beats per minute                                    |
 | `text`    | `str \| None` | `None`     | Optional display text (e.g. `"Swing"`, `"Allegro"`) |
+
+Not supported with Dorico — returns an error for that application.
+
+### `append_live_measures`
+
+Append empty measures to the end of the live score.
+
+| Parameter | Type  | Default | Description                 |
+| --------- | ----- | ------- | --------------------------- |
+| `count`   | `int` | `1`     | How many measures to append |
 
 Not supported with Dorico — returns an error for that application.
 
@@ -196,7 +243,7 @@ Transpose the notes of a passage by a number of semitones, with conventional spe
 | `staff`         | `int` | Staff index (0-indexed)                                 |
 | `semitones`     | `int` | Semitones to transpose (positive = up, negative = down) |
 
-Works with both applications.
+Not supported with Dorico — returns an error for that application, which cannot select a range through its API.
 
 ### `undo_last_action`
 

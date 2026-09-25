@@ -7,13 +7,15 @@ at the MuseScore executable and, on Linux, an X display
 
 from __future__ import annotations
 
-import json
 import shutil
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
 from mcp_score.tools.render import render_score
+
+if TYPE_CHECKING:
+    from mcp_score.bridge import CommandResult
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -27,14 +29,13 @@ _MIDI_MAGIC = b"MThd"
 
 async def _render(
     input_path: Path, render_format: str, output_path: Path | None = None
-) -> dict[str, Any]:
-    """Call the tool and decode its JSON response."""
-    response = await render_score(
+) -> CommandResult:
+    """Call the tool with string paths, as an MCP client would."""
+    return await render_score(
         str(input_path),
         format=render_format,
         output_path=None if output_path is None else str(output_path),
     )
-    return json.loads(response)
 
 
 class TestRenderScoreWithMuseScore:

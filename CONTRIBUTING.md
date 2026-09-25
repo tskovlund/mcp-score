@@ -147,20 +147,22 @@ normal review process applies after implementation.
 ```
 src/mcp_score/
   cli.py              CLI entry point (serve, run, install, install-skill, install-plugin)
-  server.py           MCP server setup and tool imports
-  app.py              Shared MCPServer instance
+  server.py           create_server(): builds the MCPServer and registers every tool module
   resources.py        Locate bundled files (skill directory, plugin.qml)
   tools/
+    __init__.py       Shared tool plumbing: ToolError, score_tool, bridge and measure guards
     connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py       Score reading tools (read_passage, get_measure_content, get_selection_properties)
     generate.py       Score generation tools (generate_score, score_generation_guide) and the score-generate prompt
-    manipulation.py   Score modification tools (barlines, chords, keys, tempo, transpose, undo)
+    manipulation.py   Score modification tools (notes, dynamics, barlines, chords, keys, time, tempo, measures, transpose, undo)
     render.py         render_score: export through the MuseScore command line
   bridge/
-    base.py           ScoreBridge abstract base class
+    base.py           ScoreBridge abstract interface, CommandResult, NoteDuration
+    websocket.py      WebSocketTransport and WebSocketBridge (connection lifecycle, reconnect)
     remote_control.py Remote Control protocol layer (used by Dorico)
-    musescore.py      WebSocket client for MuseScore plugin
+    musescore.py      MuseScore plugin protocol (thin subclass of WebSocketBridge)
     dorico.py         Dorico defaults (thin subclass of RemoteControlBridge, experimental)
+    registry.py       BridgeRegistry: the bridges and which one is active
   musescore/
     cli.py            MuseScore executable discovery and headless rendering
     plugin.qml        MuseScore QML plugin (WebSocket server)

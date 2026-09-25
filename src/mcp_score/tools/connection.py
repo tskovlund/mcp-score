@@ -1,170 +1,123 @@
-"""Connection tools — manage bridges to score notation applications."""
+"""Connection tools: which application the server talks to."""
 
-from mcp_score.app import mcp
-from mcp_score.bridge import (
-    get_active_bridge,
-    get_dorico_bridge,
-    get_musescore_bridge,
-    set_active_bridge,
-)
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from mcp_score.bridge import CommandResult, ScoreBridge, WebSocketBridge, registry
 from mcp_score.bridge.dorico import DEFAULT_PORT as DORICO_DEFAULT_PORT
 from mcp_score.bridge.musescore import DEFAULT_PORT as MUSESCORE_DEFAULT_PORT
-from mcp_score.tools import NOT_CONNECTED, connected_bridge, to_json
+from mcp_score.bridge.websocket import DEFAULT_HOST
+from mcp_score.tools import (
+    ToolError,
+    require_bridge,
+    score_tool,
+    succeeded,
+)
 
-__all__: list[str] = []
+if TYPE_CHECKING:
+    from mcp.server.mcpserver import MCPServer
+
+__all__ = ["register"]
+
+MUSESCORE_CONNECT_HINT = (
+    "Is the MCP Score Bridge plugin running with its window open? "
+    "The plugin requires MuseScore Studio 4.4.2 or later."
+)
+DORICO_CONNECT_HINT = "Is Dorico running with Remote Control enabled?"
 
 
-async def _disconnect_active_bridge() -> None:
-    """Disconnect the currently active bridge, if any."""
-    current = get_active_bridge()
-    if current is not None and current.is_connected:
-        await current.disconnect()
-        set_active_bridge(None)
+async def _connect(
+    bridge: WebSocketBridge, host: str, port: int, hint: str
+) -> CommandResult:
+    """Point *bridge* at host and port and make it the active connection."""
+    bridge.host = host
+    bridge.port = port
+    if not await registry.activate(bridge):
+        raise ToolError(
+            f"Could not connect to {bridge.application_name} at ws://{host}:{port}. "
+            f"{hint}"
+        )
+    return succeeded(f"Connected to {bridge.application_name} at ws://{host}:{port}.")
 
 
-# ── MuseScore ────────────────────────────────────────────────────────
+async def _disconnect(bridge: ScoreBridge) -> CommandResult:
+    await registry.deactivate(bridge)
+    return succeeded(f"Disconnected from {bridge.application_name}.")
 
 
-@mcp.tool()
+@score_tool
 async def connect_to_musescore(
-    host: str = "localhost", port: int = MUSESCORE_DEFAULT_PORT
-) -> str:
-    """Connect to a running MuseScore instance.
+    host: str = DEFAULT_HOST, port: int = MUSESCORE_DEFAULT_PORT
+) -> CommandResult:
+    """Connect to a running MuseScore Studio (4.4.2 or later).
 
-    The MuseScore MCP Score Bridge plugin must be running.
+    The MCP Score Bridge plugin must be running in MuseScore with its
+    window open. Connecting disconnects any other application.
 
     Args:
         host: WebSocket host (default: localhost).
         port: WebSocket port (default: 8765).
     """
-    await _disconnect_active_bridge()
-
-    bridge = get_musescore_bridge()
-    bridge.host = host
-    bridge.port = port
-    connected = await bridge.connect()
-    if connected:
-        set_active_bridge(bridge)
-        return to_json(
-            {
-                "success": True,
-                "message": f"Connected to MuseScore at ws://{host}:{port}.",
-            }
-        )
-    return to_json(
-        {
-            "error": f"Could not connect to MuseScore at ws://{host}:{port}. "
-            "Is the MCP Score Bridge plugin running with its window open? "
-            "The plugin requires MuseScore Studio 4.4.2 or later."
-        }
-    )
+    return await _connect(registry.musescore, host, port, MUSESCORE_CONNECT_HINT)
 
 
-@mcp.tool()
-async def disconnect_from_musescore() -> str:
+@score_tool
+async def disconnect_from_musescore() -> CommandResult:
     """Disconnect from MuseScore."""
-    bridge = get_musescore_bridge()
-    await bridge.disconnect()
-    if get_active_bridge() is bridge:
-        set_active_bridge(None)
-    return to_json(
-        {
-            "success": True,
-            "message": "Disconnected from MuseScore.",
-        }
-    )
+    return await _disconnect(registry.musescore)
 
 
-# ── Dorico ───────────────────────────────────────────────────────────
-
-
-@mcp.tool()
+@score_tool
 async def connect_to_dorico(
-    host: str = "localhost", port: int = DORICO_DEFAULT_PORT
-) -> str:
-    """Connect to a running Dorico instance via its Remote Control API.
+    host: str = DEFAULT_HOST, port: int = DORICO_DEFAULT_PORT
+) -> CommandResult:
+    """Connect to a running Dorico via its Remote Control API (experimental).
 
-    Dorico support is experimental: it uses Dorico's undocumented Remote
-    Control WebSocket API, is command-only (cannot read note content),
-    and has not been verified against a running Dorico instance.
-
-    Dorico 4+ has a built-in WebSocket server (no plugin needed).
-    The port is configurable in Dorico's preferences.
+    Dorico support is experimental: the Remote Control API is undocumented,
+    command-only (it cannot read note content), and this bridge has not
+    been verified against a running Dorico. Dorico 4 and later serve the
+    API without a plugin; the port is set in Dorico's preferences.
+    Connecting disconnects any other application.
 
     Args:
         host: WebSocket host (default: localhost).
         port: WebSocket port (default: 4560, Dorico's default).
     """
-    await _disconnect_active_bridge()
-
-    bridge = get_dorico_bridge()
-    bridge.host = host
-    bridge.port = port
-    connected = await bridge.connect()
-    if connected:
-        set_active_bridge(bridge)
-        return to_json(
-            {
-                "success": True,
-                "message": f"Connected to Dorico at ws://{host}:{port}.",
-            }
-        )
-    return to_json(
-        {
-            "error": f"Could not connect to Dorico at ws://{host}:{port}. "
-            "Is Dorico running with Remote Control enabled?"
-        }
-    )
+    return await _connect(registry.dorico, host, port, DORICO_CONNECT_HINT)
 
 
-@mcp.tool()
-async def disconnect_from_dorico() -> str:
+@score_tool
+async def disconnect_from_dorico() -> CommandResult:
     """Disconnect from Dorico."""
-    bridge = get_dorico_bridge()
-    await bridge.disconnect()
-    if get_active_bridge() is bridge:
-        set_active_bridge(None)
-    return to_json(
-        {
-            "success": True,
-            "message": "Disconnected from Dorico.",
-        }
-    )
+    return await _disconnect(registry.dorico)
 
 
-# ── Shared tools (work with any connected application) ──────────────
+@score_tool
+async def get_live_score_info() -> CommandResult:
+    """Get information about the score open in the connected application.
 
-
-@mcp.tool()
-async def get_live_score_info() -> str:
-    """Get information about the currently open score.
-
-    Requires an active connection — use connect_to_musescore or
-    connect_to_dorico first.
+    Requires an active connection (connect_to_musescore or connect_to_dorico).
     """
-    bridge = connected_bridge()
-    if bridge is None:
-        return to_json({"error": NOT_CONNECTED})
-    result = await bridge.get_score()
-    return to_json(result)
+    return await require_bridge().get_score()
 
 
-@mcp.tool()
-async def ping_score_app() -> str:
-    """Check if the connected score application is responsive.
+@score_tool
+async def ping_score_app() -> CommandResult:
+    """Check whether the connected application responds. Does not connect."""
+    bridge = require_bridge()
+    if not await bridge.ping():
+        raise ToolError(f"{bridge.application_name} is not responding.")
+    return succeeded(f"{bridge.application_name} is responsive.")
 
-    Works with any connected application (MuseScore or Dorico).
-    Does NOT auto-connect — returns an error if not already connected.
-    """
-    bridge = connected_bridge()
-    if bridge is None:
-        return to_json({"error": NOT_CONNECTED})
-    alive = await bridge.ping()
-    if alive:
-        return to_json(
-            {
-                "success": True,
-                "message": f"{bridge.application_name} is responsive.",
-            }
-        )
-    return to_json({"error": f"{bridge.application_name} is not responding."})
+
+def register(server: MCPServer) -> None:
+    for tool in (
+        connect_to_musescore,
+        disconnect_from_musescore,
+        connect_to_dorico,
+        disconnect_from_dorico,
+        get_live_score_info,
+        ping_score_app,
+    ):
+        server.tool()(tool)

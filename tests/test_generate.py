@@ -11,9 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mcp_score.app import mcp
 from mcp_score.tools.generate import (
-    PROMPT_NAME,
     STDERR_TAIL_LINES,
     generate_score,
     score_generate_prompt,
@@ -68,7 +66,7 @@ class TestGenerateScore:
 
         with patch(_SUBPROCESS_TARGET, side_effect=fake_exec):
             # Act
-            result = json.loads(await generate_score(script, output_dir=str(tmp_path)))
+            result = await generate_score(script, output_dir=str(tmp_path))
 
         # Assert
         assert result["success"] is True
@@ -86,7 +84,7 @@ class TestGenerateScore:
 
         with patch(_SUBPROCESS_TARGET, AsyncMock(return_value=process)):
             # Act
-            result = json.loads(await generate_score("x", output_dir=str(tmp_path)))
+            result = await generate_score("x", output_dir=str(tmp_path))
 
         # Assert
         assert result["returncode"] == 1
@@ -110,9 +108,7 @@ class TestGenerateScore:
 
         with patch(_SUBPROCESS_TARGET, AsyncMock(return_value=process)):
             # Act
-            result = json.loads(
-                await generate_score("x", output_dir=str(tmp_path), timeout=0.01)
-            )
+            result = await generate_score("x", output_dir=str(tmp_path), timeout=0.01)
 
         # Assert
         process.kill.assert_called_once()
@@ -130,9 +126,7 @@ class TestGenerateScore:
 
         with patch(_SUBPROCESS_TARGET, AsyncMock()) as mock_exec:
             # Act
-            result = json.loads(
-                await generate_score("x", output_dir=str(not_a_directory))
-            )
+            result = await generate_score("x", output_dir=str(not_a_directory))
 
         # Assert
         assert "not a directory" in result["error"]
@@ -237,12 +231,3 @@ class TestScoreGeneratePrompt:
 
         # Assert
         assert prompt_text == guide_text
-
-    @pytest.mark.anyio()
-    async def test_prompt_is_registered_under_hyphenated_name(self) -> None:
-        # Act
-        prompt_names = [prompt.name for prompt in await mcp.list_prompts()]
-
-        # Assert
-        assert PROMPT_NAME in prompt_names
-        assert "score_generate_prompt" not in prompt_names

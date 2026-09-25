@@ -1,237 +1,159 @@
-"""Tests for Dorico connection tools."""
+"""Tests for what the tools do differently when Dorico is connected.
+
+Everything the tools share between applications is tested in
+``test_tools.py``. These tests connect the real ``DoricoBridge`` to a mock
+WebSocket and check that Dorico's defaults and Remote Control limitations
+reach the model through the tools.
+"""
 
 from __future__ import annotations
 
-import json
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from mcp_score.bridge.dorico import DEFAULT_PORT
+from mcp_score.tools.analysis import read_passage
+from mcp_score.tools.connection import connect_to_dorico, disconnect_from_dorico
+from mcp_score.tools.manipulation import add_live_note, set_live_tempo
+from tests.fakes import (
+    REMOTE_CONTROL_HANDSHAKE,
+    WEBSOCKETS_CONNECT,
+    fake_connection,
+    sent_payloads,
+)
+
+if TYPE_CHECKING:
+    from mcp_score.bridge import BridgeRegistry
+
+COMMAND_ACCEPTED: dict[str, Any] = {"message": "response", "code": "kOK"}
+
+
+async def _connect_dorico(*command_replies: dict[str, Any]) -> AsyncMock:
+    """Connect the registry's Dorico bridge to a mock server.
+
+    The mock completes the handshake and then answers each command with
+    the next of *command_replies*.
+    """
+    connection = fake_connection(*REMOTE_CONTROL_HANDSHAKE, *command_replies)
+    with patch(WEBSOCKETS_CONNECT, AsyncMock(return_value=connection)):
+        await connect_to_dorico()
+    return connection
+
 
 class TestConnectToDorico:
     @pytest.mark.anyio()
-    async def test_connect_returns_success(self) -> None:
+    async def test_connect_activates_dorico_on_its_default_port(
+        self, isolated_registry: BridgeRegistry
+    ) -> None:
         # Arrange
-        from mcp_score.tools.connection import connect_to_dorico
+        connection = fake_connection(*REMOTE_CONTROL_HANDSHAKE)
+        connect = AsyncMock(return_value=connection)
 
-        mock_bridge = AsyncMock()
-        mock_bridge.connect = AsyncMock(return_value=True)
-        mock_bridge.is_connected = False
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_dorico_bridge",
-                return_value=mock_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=None,
-            ),
-            patch("mcp_score.tools.connection.set_active_bridge"),
-        ):
+        with patch(WEBSOCKETS_CONNECT, connect):
             # Act
-            result = json.loads(await connect_to_dorico())
+            result = await connect_to_dorico()
 
         # Assert
         assert result["success"] is True
-        assert "Connected to Dorico" in result["message"]
+        assert (
+            f"Connected to Dorico at ws://localhost:{DEFAULT_PORT}"
+            in (result["message"])
+        )
+        assert isolated_registry.active is isolated_registry.dorico
+        connect.assert_awaited_once_with(f"ws://localhost:{DEFAULT_PORT}")
 
     @pytest.mark.anyio()
-    async def test_connect_failure_returns_error(self) -> None:
+    async def test_connect_with_custom_port_uses_it(
+        self, isolated_registry: BridgeRegistry
+    ) -> None:
         # Arrange
-        from mcp_score.tools.connection import connect_to_dorico
+        connect = AsyncMock(return_value=fake_connection(*REMOTE_CONTROL_HANDSHAKE))
 
-        mock_bridge = AsyncMock()
-        mock_bridge.connect = AsyncMock(return_value=False)
-        mock_bridge.is_connected = False
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_dorico_bridge",
-                return_value=mock_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=None,
-            ),
-        ):
+        with patch(WEBSOCKETS_CONNECT, connect):
             # Act
-            result = json.loads(await connect_to_dorico())
+            result = await connect_to_dorico(port=5555)
 
         # Assert
-        assert "error" in result
+        assert "ws://localhost:5555" in result["message"]
+        assert isolated_registry.dorico.port == 5555
+        connect.assert_awaited_once_with("ws://localhost:5555")
+
+    @pytest.mark.anyio()
+    async def test_connect_failure_returns_error_with_remote_control_hint(
+        self, isolated_registry: BridgeRegistry
+    ) -> None:
+        # Arrange
+        with patch(WEBSOCKETS_CONNECT, AsyncMock(side_effect=OSError("refused"))):
+            # Act
+            result = await connect_to_dorico()
+
+        # Assert
         assert "Could not connect to Dorico" in result["error"]
+        assert "Remote Control" in result["error"]
+        assert isolated_registry.active is None
 
     @pytest.mark.anyio()
-    async def test_connect_with_custom_port_sets_port(self) -> None:
+    async def test_disconnect_says_goodbye_and_deactivates(
+        self, isolated_registry: BridgeRegistry
+    ) -> None:
         # Arrange
-        from mcp_score.tools.connection import connect_to_dorico
+        connection = await _connect_dorico()
 
-        mock_bridge = AsyncMock()
-        mock_bridge.connect = AsyncMock(return_value=True)
-        mock_bridge.is_connected = False
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_dorico_bridge",
-                return_value=mock_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=None,
-            ),
-            patch("mcp_score.tools.connection.set_active_bridge"),
-        ):
-            # Act
-            result = json.loads(await connect_to_dorico(port=5555))
-
-        # Assert
-        assert result["success"] is True
-        assert "5555" in result["message"]
-        assert mock_bridge.port == 5555
-
-    @pytest.mark.anyio()
-    async def test_connect_disconnects_existing_bridge_first(self) -> None:
-        # Arrange
-        from mcp_score.tools.connection import connect_to_dorico
-
-        existing_bridge = AsyncMock()
-        existing_bridge.is_connected = True
-
-        new_bridge = AsyncMock()
-        new_bridge.connect = AsyncMock(return_value=True)
-        new_bridge.is_connected = False
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_dorico_bridge",
-                return_value=new_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=existing_bridge,
-            ),
-            patch("mcp_score.tools.connection.set_active_bridge") as mock_set,
-        ):
-            # Act
-            await connect_to_dorico()
-
-        # Assert
-        existing_bridge.disconnect.assert_called_once()
-        # set_active_bridge(None) then set_active_bridge(new_bridge)
-        assert mock_set.call_count == 2
-
-
-class TestDisconnectFromDorico:
-    @pytest.mark.anyio()
-    async def test_disconnect_returns_success(self) -> None:
-        # Arrange
-        from mcp_score.tools.connection import disconnect_from_dorico
-
-        mock_bridge = AsyncMock()
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_dorico_bridge",
-                return_value=mock_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=mock_bridge,
-            ),
-            patch("mcp_score.tools.connection.set_active_bridge"),
-        ):
-            # Act
-            result = json.loads(await disconnect_from_dorico())
+        # Act
+        result = await disconnect_from_dorico()
 
         # Assert
         assert result["success"] is True
         assert "Disconnected from Dorico" in result["message"]
-        mock_bridge.disconnect.assert_called_once()
+        assert sent_payloads(connection)[-1] == {"message": "disconnect"}
+        assert isolated_registry.active is None
 
+
+class TestDoricoLimitationsThroughTools:
     @pytest.mark.anyio()
-    async def test_disconnect_preserves_other_active_bridge(self) -> None:
-        # Arrange — active bridge is MuseScore, not Dorico
-        from mcp_score.tools.connection import disconnect_from_dorico
-
-        dorico_bridge = AsyncMock()
-        other_bridge = AsyncMock()
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_dorico_bridge",
-                return_value=dorico_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=other_bridge,
-            ),
-            patch("mcp_score.tools.connection.set_active_bridge") as mock_set,
-        ):
-            # Act
-            await disconnect_from_dorico()
-
-        # Assert — should NOT clear active bridge since it's not the Dorico one
-        mock_set.assert_not_called()
-
-
-class TestBridgeSwitching:
-    """Verify that connecting to one DAW disconnects the other."""
-
-    @pytest.mark.anyio()
-    async def test_connect_musescore_disconnects_dorico(self) -> None:
+    async def test_read_passage_warns_that_dorico_reports_status_only(self) -> None:
         # Arrange
-        from mcp_score.tools.connection import connect_to_musescore
+        status: dict[str, Any] = {"message": "status", "playbackPosition": "1"}
+        await _connect_dorico(COMMAND_ACCEPTED, status)
 
-        dorico_bridge = AsyncMock()
-        dorico_bridge.is_connected = True
-
-        musescore_bridge = AsyncMock()
-        musescore_bridge.connect = AsyncMock(return_value=True)
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_musescore_bridge",
-                return_value=musescore_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=dorico_bridge,
-            ),
-            patch("mcp_score.tools.connection.set_active_bridge"),
-        ):
-            # Act
-            result = json.loads(await connect_to_musescore())
+        # Act
+        result = await read_passage(1, 1)
 
         # Assert
-        dorico_bridge.disconnect.assert_called_once()
-        assert result["success"] is True
+        assert result["elements"] == [{"measure": 1, "content": status}]
+        assert "Dorico's Remote Control API" in result["warning"]
+        assert "not note content" in result["warning"]
 
     @pytest.mark.anyio()
-    async def test_connect_dorico_disconnects_musescore(self) -> None:
+    async def test_set_tempo_returns_dorico_popover_limitation(self) -> None:
         # Arrange
-        from mcp_score.tools.connection import connect_to_dorico
+        connection = await _connect_dorico(COMMAND_ACCEPTED)
 
-        musescore_bridge = AsyncMock()
-        musescore_bridge.is_connected = True
-
-        dorico_bridge = AsyncMock()
-        dorico_bridge.connect = AsyncMock(return_value=True)
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_dorico_bridge",
-                return_value=dorico_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=musescore_bridge,
-            ),
-            patch("mcp_score.tools.connection.set_active_bridge"),
-        ):
-            # Act
-            result = json.loads(await connect_to_dorico())
+        # Act
+        result = await set_live_tempo(3, 120)
 
         # Assert
-        musescore_bridge.disconnect.assert_called_once()
-        assert result["success"] is True
+        assert result["error"].startswith(
+            "Dorico's Remote Control API cannot set a tempo"
+        )
+        assert sent_payloads(connection)[-1] == {
+            "message": "command",
+            "commandName": "Edit.GoToBar",
+            "parameters": {"barNumber": "3"},
+        }
+
+    @pytest.mark.anyio()
+    async def test_add_note_stops_at_staff_navigation_dorico_cannot_do(
+        self,
+    ) -> None:
+        # Arrange
+        connection = await _connect_dorico(COMMAND_ACCEPTED)
+
+        # Act
+        result = await add_live_note(1, 60, staff=1)
+
+        # Assert
+        assert "cannot move to staff 1" in result["error"]
+        assert sent_payloads(connection)[-1]["commandName"] == "Edit.GoToBar"

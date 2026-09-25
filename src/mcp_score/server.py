@@ -1,22 +1,40 @@
-"""MCP server entry point."""
+"""The MCP server: one place that assembles the tool modules."""
 
-import sys
+from __future__ import annotations
 
-import mcp_score.tools.analysis as _analysis  # noqa: F401
-import mcp_score.tools.connection as _connection  # noqa: F401
-import mcp_score.tools.generate as _generate  # noqa: F401
-import mcp_score.tools.manipulation as _manipulation  # noqa: F401
-import mcp_score.tools.render as _render  # noqa: F401
-from mcp_score.app import mcp
+import logging
 
-# Prevent pyright from complaining about "unused" side-effect imports.
-_TOOL_MODULES = [_analysis, _connection, _generate, _manipulation, _render]
+from mcp.server.mcpserver import MCPServer
 
-__all__ = ["mcp", "main"]
+from mcp_score.tools import ToolModule, analysis, connection, generate, manipulation
+from mcp_score.tools import render as render_tools
+
+__all__ = ["SERVER_NAME", "create_server", "main"]
+
+SERVER_NAME = "mcp-score"
+
+TOOL_MODULES: tuple[ToolModule, ...] = (
+    connection,
+    analysis,
+    manipulation,
+    generate,
+    render_tools,
+)
+"""Every module whose tools the server offers, in the order they register."""
+
+logger = logging.getLogger(__name__)
+
+
+def create_server() -> MCPServer:
+    """Build a server with every tool registered."""
+    server = MCPServer(SERVER_NAME)
+    for module in TOOL_MODULES:
+        module.register(server)
+    return server
 
 
 def main() -> None:
-    """Run the MCP server."""
-    sys.stderr.write("mcp-score server starting...\n")
-    sys.stderr.flush()
-    mcp.run()
+    """Serve over stdio until the client disconnects."""
+    logging.basicConfig(level=logging.INFO)
+    logger.info("%s server starting", SERVER_NAME)
+    create_server().run()
