@@ -177,3 +177,14 @@ Works with both applications.
 ### `undo_last_action`
 
 Undo the last action in the connected score application. No parameters. Works with both applications.
+
+## CLI
+
+```
+mcp-score serve            Run the MCP server (default when no command is given)
+mcp-score run <script>     Run a Python script with music21 available
+mcp-score install          Install the skill and the MuseScore plugin
+mcp-score install-skill    Install the score-generate skill to ~/.claude/skills/
+mcp-score install-plugin   Install the QML plugin to MuseScore's Plugins directory
+mcp-score help             Show help
+```
