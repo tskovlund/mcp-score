@@ -9,11 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 
 - Score generation via Claude Code skill (music21 -> MusicXML)
-- MCP server with 18 tools for live score manipulation (MuseScore, Dorico, Sibelius)
-- Multi-bridge architecture: MuseScore QML plugin, Dorico Remote Control, Sibelius Connect
+- MCP server with 16 tools for live score manipulation (MuseScore, Dorico)
+- Multi-bridge architecture: MuseScore QML plugin, Dorico Remote Control
 - MuseScore 4 QML plugin with WebSocket bridge (19 commands)
 - CLI install commands: `mcp-score install-skill`, `mcp-score install-plugin`
-- Comprehensive test suite (145 tests)
+- Comprehensive test suite (107 tests)
 - Full documentation (architecture, reference, getting-started)
 - GitHub security: CodeQL scanning, branch protection, SECURITY.md
 - Score metadata: subtitle (movementName), arranger (Contributor), copyright support
@@ -27,3 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Skill documents volta brackets (1st/2nd endings) via `spanner.RepeatBracket`
 - Skill documents MuseScore subtitle/arranger display limitation (known issue, data is in MusicXML)
 - Dependabot: bumped setup-uv 7.3.0→7.3.1, upload-artifact 4→7, download-artifact 4→8
+- Dorico support labelled experimental
+
+### Removed
+
+- Sibelius bridge and `connect_to_sibelius` tool (out of scope)

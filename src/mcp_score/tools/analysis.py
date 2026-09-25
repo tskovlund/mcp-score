@@ -12,10 +12,10 @@ from mcp_score.tools import NOT_CONNECTED, check_measure, connected_bridge, to_j
 __all__: list[str] = []
 
 _REMOTE_CONTROL_ANALYSIS_WARNING = (
-    "Dorico and Sibelius provide limited data through the Remote Control "
-    "WebSocket API — you will get application status rather than detailed "
-    "note content. Use get_selection_properties for the best results with "
-    "Dorico/Sibelius."
+    "Dorico provides limited data through the Remote Control WebSocket "
+    "API — you will get application status rather than detailed note "
+    "content. Use get_selection_properties for the best results with "
+    "Dorico."
 )
 
 
@@ -28,8 +28,8 @@ async def read_passage(
     """Read musical content from a range of measures in the live score.
 
     Returns notes, rests, and musical elements in the specified range.
-    Works best with MuseScore; Dorico and Sibelius return limited data
-    through the Remote Control WebSocket API.
+    Works best with MuseScore; Dorico returns limited data through the
+    Remote Control WebSocket API.
 
     Args:
         start_measure: First measure to read (1-indexed).
@@ -77,7 +77,7 @@ async def read_passage(
 async def get_measure_content(measure: int, staff: int = 0) -> str:
     """Read the content of a specific measure and staff from the connected score.
 
-    Works best with MuseScore; Dorico and Sibelius return limited data.
+    Works best with MuseScore; Dorico returns limited data.
 
     Args:
         measure: Measure number (1-indexed).
@@ -116,7 +116,7 @@ async def get_selection_properties() -> str:
     Returns information about whatever is currently selected:
 
     - **MuseScore**: Returns cursor position info (measure, beat, staff).
-    - **Dorico/Sibelius**: Returns properties from the Remote Control
+    - **Dorico**: Returns properties from the Remote Control
       API's ``getproperties`` message — names, types, and values of all
       properties on the selected items. This is the closest the WebSocket
       API gets to "reading" score data.

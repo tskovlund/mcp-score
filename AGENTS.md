@@ -3,7 +3,7 @@
 AI-driven music score generation and manipulation. Two complementary approaches:
 
 - **Score generation** via Claude Code skill (`.claude/skills/score-generate/`) — Claude writes music21 Python scripts that export MusicXML. No MCP needed; runs as a standalone skill.
-- **Live score manipulation** via MCP server — reads from and writes to a running score application (MuseScore, Dorico, or Sibelius) via WebSocket bridge.
+- **Live score manipulation** via MCP server — reads from and writes to a running score application (MuseScore, or experimentally Dorico) via WebSocket bridge.
 
 Follow the code standards in [CONVENTIONS.md](CONVENTIONS.md).
 
@@ -14,15 +14,14 @@ src/mcp_score/
   server.py           MCP server entry point (MCPServer)
   app.py              Shared MCPServer instance
   tools/
-    connection.py     Connect/disconnect MuseScore, Dorico & Sibelius, ping, score info
+    connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py       Read passages and measures from live score
     manipulation.py   Modify live score (barlines, chords, keys, tempo, transpose)
   bridge/
     base.py           ScoreBridge abstract base class
-    remote_control.py Shared Remote Control protocol (Dorico & Sibelius)
+    remote_control.py Remote Control protocol layer (used by Dorico)
     musescore.py      WebSocket client for MuseScore plugin
-    dorico.py         Dorico defaults (thin subclass of RemoteControlBridge)
-    sibelius.py       Sibelius defaults (thin subclass of RemoteControlBridge)
+    dorico.py         Dorico defaults (thin subclass of RemoteControlBridge, experimental)
   musescore/
     plugin.qml        MuseScore QML plugin (WebSocket server, 19 commands)
 
@@ -76,15 +75,15 @@ pyright src/         # type check (strict mode)
 ## Repo-specific conventions
 
 - **Conventional commits** — enforced by `.githooks/commit-msg`
-- **Thin subclasses over monolithic duplicated implementations** — shared logic lives in `RemoteControlBridge`; app-specific bridges (Dorico, Sibelius) only override defaults
+- **Thin subclasses over monolithic duplicated implementations** — protocol logic lives in `RemoteControlBridge`; app-specific bridges (Dorico) only override defaults
 - **Test non-triviality** — no issubclass checks, json.dumps wrappers, or constant assertions. Every test must cover a meaningful code path
 - **Test deduplication** — shared protocol logic is tested once in the base class test file, not repeated per subclass. Per-subclass tests cover only subclass-specific behavior (defaults, overrides)
 
 ## Tool design principles
 
-MCP tools handle live score interaction (MuseScore, Dorico, or Sibelius):
+MCP tools handle live score interaction (MuseScore, or experimentally Dorico):
 
-1. **Connection** — manage WebSocket bridges to MuseScore, Dorico, and Sibelius
+1. **Connection** — manage WebSocket bridges to MuseScore and Dorico
 2. **Analysis** — read and understand musical content from the live score
 3. **Manipulation** — modify the live score (barlines, chords, keys, tempo, transpose, undo)
 
