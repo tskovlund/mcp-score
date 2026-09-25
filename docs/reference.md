@@ -4,7 +4,7 @@
 
 Score generation is handled by the `score-generate` Claude Code skill (not MCP tools). See the [skill documentation](../README.md#score-generation-skill) for usage.
 
-The MCP server provides 16 tools across 3 categories for live score manipulation. All tools work with any connected application — MuseScore or Dorico — though some operations are limited or unavailable depending on what the application's WebSocket API exposes.
+The MCP server provides tools in four categories. Connection, analysis and manipulation tools work with any connected application — MuseScore or Dorico — though some operations are limited or unavailable depending on what the application's WebSocket API exposes. Rendering tools work on score files and need no connection.
 
 Dorico support is experimental: it uses Dorico's undocumented Remote Control WebSocket API, is command-only (it cannot read note content), and has not been verified against a running Dorico instance.
 
@@ -177,6 +177,24 @@ Works with both applications.
 ### `undo_last_action`
 
 Undo the last action in the connected score application. No parameters. Works with both applications.
+
+---
+
+## Rendering tools
+
+Export score files by running the MuseScore Studio 4 command line. MuseScore must be installed but does not need to be running, and no plugin or connection is required.
+
+### `render_score`
+
+Render a score file to PDF, PNG, MIDI, MP3, WAV or MusicXML. The input is typically MusicXML but can be any file MuseScore opens (`.mscz`, `.mid`, ...). MuseScore is located from the `MCP_SCORE_MUSESCORE_PATH` environment variable, then PATH (`mscore`, `musescore`, `mscore4portable`, `MuseScore4`), then the platform default: `/Applications/MuseScore 4.app` on macOS, `%ProgramFiles%\MuseScore 4` on Windows, or the `org.musescore.MuseScore` Flatpak on Linux. If it is not found, set `MCP_SCORE_MUSESCORE_PATH` to the executable in the MCP server's environment. On Linux the export runs headless (`QT_QPA_PLATFORM=offscreen`). Rendering times out after 120 seconds.
+
+| Parameter     | Type          | Default    | Description                                                                                                        |
+| ------------- | ------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| `input_path`  | `str`         | (required) | Path to the score file to render                                                                                   |
+| `format`      | `str`         | `"pdf"`    | One of `"pdf"`, `"png"`, `"midi"`, `"mp3"`, `"wav"`, `"musicxml"`. PNG writes one file per page (`-1`, `-2`, ...)  |
+| `output_path` | `str \| None` | `None`     | Output file. Defaults to the input path with the format's extension. Must match the format; overwritten if present |
+
+Returns `{"success": true, "output_path": ..., "format": ...}` or `{"error": ...}` including the tail of MuseScore's stderr when the export fails.
 
 ## CLI
 
