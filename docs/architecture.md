@@ -281,6 +281,6 @@ The MCP server provides primitives. Claude is the musical intelligence.
 
 | Dependency   | Purpose                                   |
 | ------------ | ----------------------------------------- |
-| `mcp[cli]`   | MCP SDK (MCPServer framework, v2)        |
+| `mcp[cli]`   | MCP SDK (MCPServer framework, v2)         |
 | `music21`    | Music theory library, MusicXML generation |
 | `websockets` | WebSocket client for bridge connections   |
