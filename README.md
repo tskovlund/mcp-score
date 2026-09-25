@@ -12,6 +12,7 @@ Works with any MCP client (Claude Code, Claude Desktop, LM Studio, and others). 
 
 - **Generate scores.** The assistant writes a [music21](https://www.music21.org/) script that exports MusicXML, which opens in MuseScore, Dorico, or any notation app. In Claude Code this is driven by the bundled `score-generate` skill.
 - **Edit live scores.** MCP tools connect to a running MuseScore and read passages, add notes and chord symbols, set barlines, keys, tempo, transpose, and undo.
+- **Render.** Export PDF, MIDI or audio from a score file through the MuseScore command line.
 
 ## Supported applications
 

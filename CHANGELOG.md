@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - GitHub security: CodeQL scanning, branch protection, SECURITY.md
 - Score metadata: subtitle (movementName), arranger (Contributor), copyright support
 - Prompt request PR workflow in CONTRIBUTING.md
+- `render_score` tool: export PDF, PNG, MIDI, MP3, WAV or MusicXML from a score file through the MuseScore command line, located via `MCP_SCORE_MUSESCORE_PATH`, PATH or the platform default install
 
 ### Fixed
 
