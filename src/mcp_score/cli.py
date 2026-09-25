@@ -1,157 +1,132 @@
-"""CLI entry point for mcp-score."""
+"""The ``mcp-score`` command line.
+
+``mcp-score`` with no command runs the MCP server. The other commands
+install the extras (the score-generate skill for Claude Code and the
+MuseScore bridge plugin) and run music21 scripts with the package's own
+interpreter.
+"""
 
 from __future__ import annotations
 
-import platform
+import argparse
 import shutil
+import subprocess
 import sys
 from pathlib import Path
-from typing import NoReturn
 
+from mcp_score.musescore.paths import PLUGIN_FILE_NAME, plugins_directory
 from mcp_score.resources import PLUGIN_FILE, SKILL_DIRECTORY, package_path
 
-__all__ = ["main"]
+__all__ = ["build_parser", "install_plugin", "install_skill", "main", "run_script"]
 
-# ── Paths ─────────────────────────────────────────────────────────────
+SKILL_DESTINATION = Path.home() / ".claude" / "skills" / "score-generate"
+"""Where Claude Code looks for user skills."""
 
-_SKILL_DEST = Path.home() / ".claude" / "skills" / "score-generate"
-
-_PLUGIN_DIRS: dict[str, Path] = {
-    "Darwin": Path.home() / "Documents" / "MuseScore4" / "Plugins",
-    "Linux": Path.home() / "Documents" / "MuseScore4" / "Plugins",
-    "Windows": Path.home() / "Documents" / "MuseScore4" / "Plugins",
-}
+EXIT_SUCCESS = 0
+EXIT_FAILURE = 1
 
 
-# ── Helpers ───────────────────────────────────────────────────────────
+# ── Commands ──────────────────────────────────────────────────────────
 
 
-def _copy_tree(source: Path, destination: Path) -> None:
-    """Copy a directory tree, creating parents as needed."""
+def install_skill(destination: Path = SKILL_DESTINATION) -> Path:
+    """Copy the bundled score-generate skill to *destination*, replacing it.
+
+    Raises:
+        FileNotFoundError: When the skill files are not bundled.
+    """
+    source = package_path(str(SKILL_DIRECTORY))
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         shutil.rmtree(destination)
     shutil.copytree(source, destination)
+    return destination
 
 
-def _copy_file(source: Path, destination: Path) -> None:
-    """Copy a single file, creating parents as needed."""
+def install_plugin(directory: Path | None = None) -> Path:
+    """Copy the bridge plugin into MuseScore's plugins *directory*.
+
+    Raises:
+        FileNotFoundError: When the plugin file is not bundled.
+    """
+    source = package_path(str(PLUGIN_FILE))
+    destination = (directory or plugins_directory()) / PLUGIN_FILE_NAME
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)
+    return destination
 
 
-# ── Install commands ──────────────────────────────────────────────────
+def run_script(script: str, arguments: list[str]) -> int:
+    """Run a Python script with this interpreter, which has music21."""
+    return subprocess.run([sys.executable, script, *arguments], check=False).returncode  # noqa: S603
 
 
-def install_skill() -> bool:
-    """Install the score-generate skill to ~/.claude/skills/."""
-    try:
-        skill_dir = package_path(str(SKILL_DIRECTORY))
-    except FileNotFoundError:
-        sys.stderr.write("Error: skill files not found in package.\n")
-        return False
+def serve() -> int:
+    """Run the MCP server over stdio until the client disconnects."""
+    # Imported here so the install commands do not load the server stack.
+    from mcp_score.server import main as serve_main
 
-    _copy_tree(skill_dir, _SKILL_DEST)
-    print(f"Installed score-generate skill to {_SKILL_DEST}")  # noqa: T201
-    print(f"  SKILL.md:       {_SKILL_DEST / 'SKILL.md'}")  # noqa: T201
-    print(f"  instruments.md: {_SKILL_DEST / 'references' / 'instruments.md'}")  # noqa: T201
-    return True
+    serve_main()
+    return EXIT_SUCCESS
 
 
-def install_plugin() -> bool:
-    """Install the QML plugin to MuseScore's Plugins directory."""
-    system = platform.system()
-    plugin_dir = _PLUGIN_DIRS.get(system)
+# ── Argument parsing ──────────────────────────────────────────────────
 
-    if plugin_dir is None:
-        sys.stderr.write(f"Error: unsupported platform '{system}'.\n")
-        sys.stderr.write("Supported: macOS (Darwin), Linux, Windows.\n")
-        sys.stderr.write(
-            "Manual install: copy src/mcp_score/musescore/plugin.qml"
-            " to your MuseScore Plugins directory.\n"
-        )
-        return False
 
-    try:
-        source = package_path(str(PLUGIN_FILE))
-    except FileNotFoundError:
-        sys.stderr.write("Error: plugin.qml not found in package.\n")
-        return False
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="mcp-score",
+        description="MCP server for music notation; runs the server by default.",
+    )
+    commands = parser.add_subparsers(dest="command", metavar="<command>")
+    commands.add_parser("serve", help="run the MCP server (the default)")
+    run = commands.add_parser("run", help="run a Python script with music21 available")
+    run.add_argument("script", help="the script to run")
+    run.add_argument(
+        "arguments", nargs=argparse.REMAINDER, help="arguments for the script"
+    )
+    commands.add_parser("install", help="install the skill and the MuseScore plugin")
+    commands.add_parser(
+        "install-skill", help="install the score-generate skill for Claude Code"
+    )
+    commands.add_parser(
+        "install-plugin", help="install the bridge plugin into MuseScore"
+    )
+    return parser
 
-    destination = plugin_dir / "mcp-score-bridge.qml"
-    _copy_file(source, destination)
-    print(f"Installed MuseScore plugin to {destination}")  # noqa: T201
-    print("Enable it in MuseScore: Plugins > Manage plugins > MCP Score Bridge")  # noqa: T201
+
+def _report_skill(destination: Path) -> None:
+    print(f"Installed the score-generate skill to {destination}")  # noqa: T201
+
+
+def _report_plugin(destination: Path) -> None:
+    print(f"Installed the MuseScore plugin to {destination}")  # noqa: T201
+    print("Enable it in MuseScore: Plugins > Manage plugins > MCP Score Bridge.")  # noqa: T201
     print("Requires MuseScore Studio 4.4.2 or later.")  # noqa: T201
-    return True
 
 
-def install_all() -> bool:
-    """Install both the skill and the plugin."""
-    skill_ok = install_skill()
-    plugin_ok = install_plugin()
-    return skill_ok and plugin_ok
+def _install(skill: bool, plugin: bool) -> int:
+    """Run the requested installs, reporting each; missing files fail the command."""
+    try:
+        if skill:
+            _report_skill(install_skill())
+        if plugin:
+            _report_plugin(install_plugin())
+    except FileNotFoundError as error:
+        sys.stderr.write(f"Error: {error}\n")
+        return EXIT_FAILURE
+    return EXIT_SUCCESS
 
 
-# ── CLI entry point ───────────────────────────────────────────────────
-
-
-def run_script(script_args: list[str]) -> NoReturn:
-    """Run a Python script with the package's interpreter (has music21)."""
-    import subprocess
-
-    if not script_args:
-        print("Usage: mcp-score run <script.py> [args...]")  # noqa: T201
-        sys.exit(1)
-
-    result = subprocess.run([sys.executable, *script_args])
-    sys.exit(result.returncode)
-
-
-_USAGE = """\
-Usage: mcp-score <command>
-
-Commands:
-  serve            Run the MCP server (default)
-  run <script>     Run a Python script with music21 available
-  install          Install skill and MuseScore plugin
-  install-skill    Install the score-generate skill to ~/.claude/skills/
-  install-plugin   Install the QML plugin to MuseScore's Plugins directory
-  help             Show this help message
-"""
-
-
-def main() -> NoReturn:
-    """CLI entry point for mcp-score."""
-    args = sys.argv[1:]
-    command = args[0] if args else "serve"
-
-    if command in ("serve", "--stdio"):
-        # Import here to avoid loading heavy dependencies for install commands.
-        from mcp_score.server import main as serve_main
-
-        serve_main()
-        sys.exit(0)
-
+def main(argv: list[str] | None = None) -> int:
+    """Entry point: returns the process exit code."""
+    args = build_parser().parse_args(argv)
+    command: str | None = args.command
+    if command is None or command == "serve":
+        return serve()
     if command == "run":
-        run_script(args[1:])
-
-    if command == "install":
-        ok = install_all()
-        sys.exit(0 if ok else 1)
-
-    if command == "install-skill":
-        ok = install_skill()
-        sys.exit(0 if ok else 1)
-
-    if command == "install-plugin":
-        ok = install_plugin()
-        sys.exit(0 if ok else 1)
-
-    if command in ("help", "--help", "-h"):
-        print(_USAGE)  # noqa: T201
-        sys.exit(0)
-
-    sys.stderr.write(f"Unknown command: {command}\n")
-    sys.stderr.write(_USAGE)
-    sys.exit(1)
+        return run_script(args.script, args.arguments)
+    return _install(
+        skill=command in ("install", "install-skill"),
+        plugin=command in ("install", "install-plugin"),
+    )

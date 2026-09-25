@@ -1,239 +1,178 @@
-"""Tests for the CLI entry point."""
+"""Tests for the mcp-score command line."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from mcp_score import cli
+from mcp_score.cli import install_plugin, install_skill, main
+from mcp_score.musescore.paths import PLUGIN_FILE_NAME, plugins_directory
+
 if TYPE_CHECKING:
     from pathlib import Path
 
-import pytest
+_PACKAGE_PATH = "mcp_score.cli.package_path"
 
-from mcp_score.cli import (
-    install_plugin,
-    install_skill,
-    main,
-    run_script,
-)
+
+@pytest.fixture
+def skill_source(tmp_path: Path) -> Path:
+    """A skill directory with the files the install copies."""
+    source = tmp_path / "source" / "score-generate"
+    (source / "references").mkdir(parents=True)
+    (source / "SKILL.md").write_text("# Test skill")
+    (source / "references" / "instruments.md").write_text("# Instruments")
+    return source
+
+
+@pytest.fixture
+def plugin_source(tmp_path: Path) -> Path:
+    source = tmp_path / "source" / "plugin.qml"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("// fake plugin")
+    return source
 
 
 class TestInstallSkill:
-    def test_install_skill_copies_files_to_destination(self, tmp_path: Path) -> None:
+    def test_copies_the_skill_tree_to_destination(
+        self, skill_source: Path, tmp_path: Path
+    ) -> None:
         # Arrange
-        skill_dest = tmp_path / "skills" / "score-generate"
+        destination = tmp_path / "skills" / "score-generate"
 
-        # Create a fake source skill directory.
-        fake_skill = tmp_path / "source" / ".claude" / "skills" / "score-generate"
-        fake_skill.mkdir(parents=True)
-        (fake_skill / "SKILL.md").write_text("# Test skill")
-        refs = fake_skill / "references"
-        refs.mkdir()
-        (refs / "instruments.md").write_text("# Instruments")
-
-        with (
-            patch("mcp_score.cli._SKILL_DEST", skill_dest),
-            patch("mcp_score.cli.package_path", return_value=fake_skill),
-        ):
+        with patch(_PACKAGE_PATH, return_value=skill_source):
             # Act
-            result = install_skill()
+            installed = install_skill(destination)
 
         # Assert
-        assert result is True
-        assert (skill_dest / "SKILL.md").exists()
-        assert (skill_dest / "references" / "instruments.md").exists()
+        assert installed == destination
+        assert (destination / "SKILL.md").read_text() == "# Test skill"
+        assert (destination / "references" / "instruments.md").exists()
 
-    def test_install_skill_without_files_returns_false(self) -> None:
-        # Arrange
-        with patch(
-            "mcp_score.cli.package_path",
-            side_effect=FileNotFoundError("not found"),
-        ):
+    def test_replaces_an_earlier_install(
+        self, skill_source: Path, tmp_path: Path
+    ) -> None:
+        # Arrange: a stale file from an older skill version
+        destination = tmp_path / "skills" / "score-generate"
+        destination.mkdir(parents=True)
+        (destination / "old.md").write_text("stale")
+
+        with patch(_PACKAGE_PATH, return_value=skill_source):
             # Act
-            result = install_skill()
+            install_skill(destination)
 
         # Assert
-        assert result is False
+        assert not (destination / "old.md").exists()
+        assert (destination / "SKILL.md").exists()
 
 
 class TestInstallPlugin:
-    def test_install_plugin_copies_qml_to_destination(self, tmp_path: Path) -> None:
+    def test_copies_the_plugin_under_its_musescore_name(
+        self, plugin_source: Path, tmp_path: Path
+    ) -> None:
         # Arrange
-        plugin_dir = tmp_path / "Plugins"
-        plugin_dir.mkdir()
+        directory = tmp_path / "nested" / "Plugins"
 
-        fake_qml = tmp_path / "source" / "plugin.qml"
-        fake_qml.parent.mkdir(parents=True)
-        fake_qml.write_text("// fake plugin")
+        with patch(_PACKAGE_PATH, return_value=plugin_source):
+            # Act
+            installed = install_plugin(directory)
 
+        # Assert: parent directories created, file named as MuseScore expects
+        assert installed == directory / PLUGIN_FILE_NAME
+        assert installed.read_text() == "// fake plugin"
+
+    def test_defaults_to_musescores_plugins_directory(
+        self, plugin_source: Path, tmp_path: Path
+    ) -> None:
+        # Arrange
         with (
-            patch.dict("mcp_score.cli._PLUGIN_DIRS", {"Darwin": plugin_dir}),
-            patch("mcp_score.cli.platform.system", return_value="Darwin"),
-            patch("mcp_score.cli.package_path", return_value=fake_qml),
+            patch(_PACKAGE_PATH, return_value=plugin_source),
+            patch("mcp_score.musescore.paths.Path.home", return_value=tmp_path),
         ):
             # Act
-            result = install_plugin()
+            installed = install_plugin()
 
         # Assert
-        assert result is True
-        assert (plugin_dir / "mcp-score-bridge.qml").exists()
-        assert (plugin_dir / "mcp-score-bridge.qml").read_text() == "// fake plugin"
+        assert installed == plugins_directory(tmp_path) / PLUGIN_FILE_NAME
+        assert installed.exists()
 
-    def test_install_plugin_creates_missing_parent_dirs(self, tmp_path: Path) -> None:
+
+class TestMain:
+    def test_without_command_runs_the_server(self) -> None:
         # Arrange
-        plugin_dir = tmp_path / "nested" / "path" / "Plugins"
+        serve = MagicMock()
 
-        fake_qml = tmp_path / "source" / "plugin.qml"
-        fake_qml.parent.mkdir(parents=True)
-        fake_qml.write_text("// fake plugin")
-
-        with (
-            patch.dict("mcp_score.cli._PLUGIN_DIRS", {"Linux": plugin_dir}),
-            patch("mcp_score.cli.platform.system", return_value="Linux"),
-            patch("mcp_score.cli.package_path", return_value=fake_qml),
-        ):
+        with patch("mcp_score.server.main", serve):
             # Act
-            result = install_plugin()
+            code = main([])
 
         # Assert
-        assert result is True
-        assert (plugin_dir / "mcp-score-bridge.qml").exists()
+        assert code == cli.EXIT_SUCCESS
+        serve.assert_called_once()
 
-    def test_install_plugin_on_unsupported_platform_returns_false(self) -> None:
+    def test_unknown_command_exits_with_usage_error(self) -> None:
+        # Arrange / Act / Assert: argparse reports unknown commands with code 2
+        with pytest.raises(SystemExit, match="2"):
+            main(["nonsense"])
+
+    def test_run_passes_script_and_arguments_to_this_interpreter(
+        self, tmp_path: Path
+    ) -> None:
         # Arrange
-        with patch("mcp_score.cli.platform.system", return_value="FreeBSD"):
-            # Act
-            result = install_plugin()
-
-        # Assert
-        assert result is False
-
-    def test_install_plugin_without_file_returns_false(self) -> None:
-        # Arrange
-        with (
-            patch("mcp_score.cli.platform.system", return_value="Darwin"),
-            patch(
-                "mcp_score.cli.package_path",
-                side_effect=FileNotFoundError("not found"),
-            ),
-        ):
-            # Act
-            result = install_plugin()
-
-        # Assert
-        assert result is False
-
-
-class TestMainCli:
-    def test_main_without_args_runs_serve(self) -> None:
-        # Arrange
-        mock_serve = MagicMock()
-
-        with (
-            patch("sys.argv", ["mcp-score"]),
-            patch("mcp_score.server.main", mock_serve),
-            pytest.raises(SystemExit, match="0"),
-        ):
-            # Act
-            main()
-
-        # Assert
-        mock_serve.assert_called_once()
-
-    def test_help_command_exits_zero(self) -> None:
-        # Arrange / Act / Assert
-        with (
-            patch("sys.argv", ["mcp-score", "help"]),
-            pytest.raises(SystemExit, match="0"),
-        ):
-            main()
-
-    def test_unknown_command_exits_with_error(self) -> None:
-        # Arrange / Act / Assert
-        with (
-            patch("sys.argv", ["mcp-score", "nonsense"]),
-            pytest.raises(SystemExit, match="1"),
-        ):
-            main()
-
-    def test_install_skill_command_exits_zero(self) -> None:
-        # Arrange
-        with (
-            patch("sys.argv", ["mcp-score", "install-skill"]),
-            patch("mcp_score.cli.install_skill", return_value=True),
-            pytest.raises(SystemExit, match="0"),
-        ):
-            # Act / Assert
-            main()
-
-    def test_install_plugin_command_exits_zero(self) -> None:
-        # Arrange
-        with (
-            patch("sys.argv", ["mcp-score", "install-plugin"]),
-            patch("mcp_score.cli.install_plugin", return_value=True),
-            pytest.raises(SystemExit, match="0"),
-        ):
-            # Act / Assert
-            main()
-
-    def test_install_command_exits_zero(self) -> None:
-        # Arrange
-        with (
-            patch("sys.argv", ["mcp-score", "install"]),
-            patch("mcp_score.cli.install_all", return_value=True),
-            pytest.raises(SystemExit, match="0"),
-        ):
-            # Act / Assert
-            main()
-
-    def test_install_failure_exits_with_error(self) -> None:
-        # Arrange
-        with (
-            patch("sys.argv", ["mcp-score", "install"]),
-            patch("mcp_score.cli.install_all", return_value=False),
-            pytest.raises(SystemExit, match="1"),
-        ):
-            # Act / Assert
-            main()
-
-
-class TestRunScript:
-    def test_run_script_without_args_exits_with_error(self) -> None:
-        # Arrange / Act / Assert
-        with pytest.raises(SystemExit, match="1"):
-            run_script([])
-
-    def test_run_script_executes_python_script(self, tmp_path: Path) -> None:
-        # Arrange
-        script = tmp_path / "test_script.py"
+        script = tmp_path / "script.py"
         script.write_text("print('hello')")
+        completed = MagicMock(returncode=3)
 
-        mock_result = MagicMock()
-        mock_result.returncode = 0
+        with patch.object(cli.subprocess, "run", return_value=completed) as run:
+            # Act
+            code = main(["run", str(script), "--flag", "value"])
+
+        # Assert: the script's exit code is the command's exit code
+        assert code == 3
+        assert run.call_args.args[0] == [
+            cli.sys.executable,
+            str(script),
+            "--flag",
+            "value",
+        ]
+
+    @pytest.mark.parametrize(
+        ("command", "skill", "plugin"),
+        [
+            ("install", True, True),
+            ("install-skill", True, False),
+            ("install-plugin", False, True),
+        ],
+    )
+    def test_install_commands_install_what_they_name(
+        self, command: str, skill: bool, plugin: bool, tmp_path: Path
+    ) -> None:
+        # Arrange
+        install_skill_mock = MagicMock(return_value=tmp_path / "skill")
+        install_plugin_mock = MagicMock(return_value=tmp_path / "plugin.qml")
 
         with (
-            patch("subprocess.run", return_value=mock_result) as mock_run,
-            pytest.raises(SystemExit, match="0"),
+            patch.object(cli, "install_skill", install_skill_mock),
+            patch.object(cli, "install_plugin", install_plugin_mock),
         ):
             # Act
-            run_script([str(script)])
+            code = main([command])
 
         # Assert
-        mock_run.assert_called_once()
-        assert str(script) in mock_run.call_args.args[0]
+        assert code == cli.EXIT_SUCCESS
+        assert install_skill_mock.called is skill
+        assert install_plugin_mock.called is plugin
 
-    def test_run_command_via_main_executes_script(self, tmp_path: Path) -> None:
+    def test_install_with_missing_files_fails_with_message(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         # Arrange
-        script = tmp_path / "test_script.py"
-        script.write_text("print('hello')")
-
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-
-        with (
-            patch("sys.argv", ["mcp-score", "run", str(script)]),
-            patch("subprocess.run", return_value=mock_result),
-            pytest.raises(SystemExit, match="0"),
-        ):
+        with patch(_PACKAGE_PATH, side_effect=FileNotFoundError("no plugin.qml")):
             # Act
-            main()
+            code = main(["install-plugin"])
+
+        # Assert
+        assert code == cli.EXIT_FAILURE
+        assert "no plugin.qml" in capsys.readouterr().err

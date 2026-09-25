@@ -164,7 +164,8 @@ src/mcp_score/
     dorico.py         Dorico defaults (thin subclass of RemoteControlBridge, experimental)
     registry.py       BridgeRegistry: the bridges and which one is active
   musescore/
-    cli.py            MuseScore executable discovery and headless rendering
+    paths.py          Where MuseScore keeps user files (plugins directory)
+    headless.py       MuseScore executable discovery and headless rendering
     plugin.qml        MuseScore QML plugin (WebSocket server)
 
 .claude/skills/

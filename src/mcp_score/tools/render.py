@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from mcp_score.bridge import CommandResult
-from mcp_score.musescore.cli import (
+from mcp_score.musescore.headless import (
     MUSESCORE_PATH_ENV_VAR,
     MuseScoreNotFoundError,
     RenderError,
