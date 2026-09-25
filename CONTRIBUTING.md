@@ -125,6 +125,20 @@ Releases follow [semver](https://semver.org/); versions stay 0.x until the
 tool set is stable, so minor releases may still change tool names and
 parameters.
 
+### Cutting a release
+
+1. Open a release PR: bump `version` in `pyproject.toml`, move the
+   `Unreleased` entries in `CHANGELOG.md` under the new version with the date,
+   and update anything else that names the version. Merge it.
+2. Tag the merge commit and push the tag: `git tag -a vX.Y.Z -m "mcp-score-server X.Y.Z"`
+   then `git push origin vX.Y.Z`. Tags are signed and protected.
+3. The `Release` workflow builds the package, publishes it to PyPI through the
+   `pypi` environment (approve the deployment when asked) and creates a
+   **draft** GitHub release with generated notes and the build artifacts.
+4. Edit the draft into authored release notes (the changelog section is the
+   source) and publish it. Published releases are immutable, so review before
+   publishing.
+
 ### Prompt request PRs
 
 We welcome **prompt request PRs** — pull requests that contain a well-described
