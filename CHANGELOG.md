@@ -19,10 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - GitHub security: CodeQL scanning, branch protection, SECURITY.md
 - Score metadata: subtitle (movementName), arranger (Contributor), copyright support
 - Prompt request PR workflow in CONTRIBUTING.md
-- `render_score` tool: export PDF, PNG, MIDI, MP3, WAV or MusicXML from a score file through the MuseScore command line, located via `MCP_SCORE_MUSESCORE_PATH`, PATH or the platform default install
+- `render_score` tool: export PDF, PNG, MIDI, MP3, WAV or MusicXML from a score file through the MuseScore command line, located via `MCP_SCORE_MUSESCORE_PATH`, PATH or the platform default install. Success is judged by the files MuseScore wrote (`output_files`), so a crash on shutdown after a finished export (MuseScore Studio 4.7 on macOS 26) yields a warning, not a failure
+- Integration tests against real MuseScore Studio installs (headless `render_score` export and the live plugin bridge) on Linux (4.4, 4.6, 4.7), Windows and macOS, run by the `Integration` workflow and locally via `scripts/musescore_harness.py`
 
 ### Fixed
 
+- MuseScore plugin: `addChordSymbol` and `setBarline` no longer crash MuseScore Studio 4 (chord symbols get their text after insertion; bar lines change the measure's end bar line or repeat flags instead of being inserted through the cursor)
+- MuseScore plugin: `undo` now works on every supported version (4.7 renamed the action to `action://notation/undo`) and `transpose` no longer depends on the removed `Score.transpose` API
+- MuseScore plugin: a failed `processSequence` rolls back the score and cursor instead of leaving the completed steps behind
 - MuseScore plugin now loads on MuseScore Studio 4.4.2+ (Qt 6). It uses MuseScore's built-in `api.websocketserver` instead of the `QtWebSockets` QML module, which MuseScore stopped shipping in 4.4. Runs as a dialog plugin with a status window (dock plugins are unsupported in MuseScore 4). Fixes #78
 
 ### Changed

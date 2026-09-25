@@ -1,0 +1,6 @@
+{
+  "$comment": "MuseScore Studio releases the integration tests run against. Renovate bumps `latest`; `oldest` is the first line with the plugin WebSocket API (4.4.2+) and `middle` a release in between, both chosen by hand.",
+  "oldest": "4.4.4",
+  "middle": "4.6.2",
+  "latest": "4.7.5"
+}

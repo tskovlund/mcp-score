@@ -4,24 +4,35 @@ MuseScore Studio 4 can convert any file it opens to PDF, PNG, MIDI, audio or
 MusicXML from the command line (``mscore -o out.pdf in.musicxml``). This
 module locates the executable and runs it as a subprocess; no plugin or
 WebSocket connection is involved.
+
+Success is judged by the files MuseScore writes, not by its exit status
+alone: MuseScore Studio 4.7 on macOS 26 completes a PDF export and then
+aborts while shutting down, and a rendering that produced its output is
+a rendering that worked.
 """
 
 from __future__ import annotations
 
 import asyncio
+import glob
+import logging
 import os
 import platform
 import shutil
 from pathlib import Path
+from typing import NamedTuple
 
 __all__ = [
     "MUSESCORE_PATH_ENV_VAR",
     "RENDER_TIMEOUT_SECONDS",
     "MuseScoreNotFoundError",
     "RenderError",
+    "RenderResult",
     "find_musescore_command",
     "render",
 ]
+
+logger = logging.getLogger(__name__)
 
 MUSESCORE_PATH_ENV_VAR = "MCP_SCORE_MUSESCORE_PATH"
 RENDER_TIMEOUT_SECONDS = 120.0
@@ -61,6 +72,16 @@ class MuseScoreNotFoundError(RuntimeError):
 
 class RenderError(RuntimeError):
     """Raised when MuseScore fails to render a file."""
+
+
+class RenderResult(NamedTuple):
+    """What a rendering produced."""
+
+    output_files: tuple[Path, ...]
+    """The files MuseScore wrote: one, or one per page for PNG (``name-1.png``)."""
+
+    warning: str | None
+    """Set when MuseScore wrote the output but did not exit cleanly afterwards."""
 
 
 # ── Discovery ─────────────────────────────────────────────────────────
@@ -164,18 +185,62 @@ def _stderr_tail(stderr: bytes) -> str:
     return "\n".join(lines[-_STDERR_TAIL_LINES:])
 
 
-async def render(input_path: Path, output_path: Path) -> None:
+def _with_stderr_tail(message: str, stderr: bytes) -> str:
+    stderr_tail = _stderr_tail(stderr)
+    return f"{message}\n{stderr_tail}" if stderr_tail else message
+
+
+# A file's modification time and size, or ``None`` while it does not exist.
+type _FileState = tuple[int, int] | None
+
+
+def _output_candidates(output_path: Path) -> set[Path]:
+    """*output_path* and the numbered series MuseScore writes for multi-page formats."""
+    series = f"{glob.escape(output_path.stem)}-[0-9]*{glob.escape(output_path.suffix)}"
+    return {output_path, *output_path.parent.glob(series)}
+
+
+def _file_states(files: set[Path]) -> dict[Path, _FileState]:
+    states: dict[Path, _FileState] = {}
+    for file in files:
+        try:
+            stat = file.stat()
+        except FileNotFoundError:
+            states[file] = None
+        else:
+            states[file] = (stat.st_mtime_ns, stat.st_size)
+    return states
+
+
+def _written_outputs(
+    output_path: Path, before: dict[Path, _FileState]
+) -> tuple[Path, ...]:
+    """The output files that exist now and were created or changed since *before*."""
+    after = _file_states(_output_candidates(output_path))
+    return tuple(
+        sorted(
+            file
+            for file, state in after.items()
+            if state is not None and state != before.get(file)
+        )
+    )
+
+
+async def render(input_path: Path, output_path: Path) -> RenderResult:
     """Convert *input_path* to *output_path* with the MuseScore command line.
 
     MuseScore infers the output format from the extension of *output_path*.
-    An existing output file is overwritten.
+    An existing output file is overwritten. The rendering succeeded when
+    MuseScore wrote the output; an unclean exit after that is reported as
+    a warning on the result rather than as a failure.
 
     Raises:
         MuseScoreNotFoundError: If no executable can be found.
-        RenderError: If MuseScore exits with an error or exceeds the timeout.
+        RenderError: If MuseScore wrote no output or exceeds the timeout.
     """
     command = find_musescore_command()
     arguments = [*command, "-f", "-o", str(output_path), str(input_path)]
+    before = _file_states(_output_candidates(output_path))
     process = await asyncio.create_subprocess_exec(
         *arguments,
         stdin=asyncio.subprocess.DEVNULL,
@@ -195,9 +260,20 @@ async def render(input_path: Path, output_path: Path) -> None:
         )
         raise RenderError(error_message) from None
 
+    output_files = _written_outputs(output_path, before)
+    if not output_files:
+        outcome = (
+            "exited normally but wrote no output file"
+            if process.returncode == 0
+            else f"exited with code {process.returncode}"
+        )
+        raise RenderError(_with_stderr_tail(f"MuseScore {outcome}.", stderr))
+
+    warning = None
     if process.returncode != 0:
-        error_message = f"MuseScore exited with code {process.returncode}."
-        stderr_tail = _stderr_tail(stderr)
-        if stderr_tail:
-            error_message = f"{error_message}\n{stderr_tail}"
-        raise RenderError(error_message)
+        warning = (
+            "MuseScore wrote the output but then exited with code "
+            f"{process.returncode}."
+        )
+        logger.warning("%s", _with_stderr_tail(warning, stderr))
+    return RenderResult(output_files, warning)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from mcp_score.app import mcp
 from mcp_score.musescore.cli import (
@@ -87,7 +88,7 @@ async def render_score(
         )
 
     try:
-        await render(input_file, output_file)
+        rendered = await render(input_file, output_file)
     except MuseScoreNotFoundError as exception:
         return to_json(
             {
@@ -99,4 +100,12 @@ async def render_score(
     except RenderError as exception:
         return to_json({"error": f"Rendering failed: {exception}"})
 
-    return to_json({"success": True, "output_path": str(output_file), "format": format})
+    result: dict[str, Any] = {
+        "success": True,
+        "output_path": str(output_file),
+        "output_files": [str(file) for file in rendered.output_files],
+        "format": format,
+    }
+    if rendered.warning is not None:
+        result["warning"] = rendered.warning
+    return to_json(result)

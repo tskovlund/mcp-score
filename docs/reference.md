@@ -155,10 +155,10 @@ Not supported with Dorico — returns an error for that application.
 
 Set a barline type at the end of the specified measure.
 
-| Parameter      | Type  | Description                                                  |
-| -------------- | ----- | ------------------------------------------------------------ |
-| `measure`      | `int` | Measure number (1-indexed)                                   |
-| `barline_type` | `str` | One of `"double"`, `"final"`, `"startRepeat"`, `"endRepeat"` |
+| Parameter      | Type  | Description                                                                                                                                                                                                                                         |
+| -------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `measure`      | `int` | Measure number (1-indexed)                                                                                                                                                                                                                          |
+| `barline_type` | `str` | One of `"normal"`, `"double"`, `"final"`, `"dashed"`, `"dotted"`, `"tick"`, `"short"`, `"startRepeat"`, `"endRepeat"`, `"endStartRepeat"`. Repeat types set the measure's repeat flags; `"endStartRepeat"` also starts a repeat in the next measure |
 
 Works with both applications.
 
@@ -187,7 +187,7 @@ Not supported with Dorico — returns an error for that application.
 
 ### `transpose_passage`
 
-Transpose a passage by a number of semitones.
+Transpose the notes of a passage by a number of semitones, with conventional spelling (a minor second up turns C into Db). Key signatures and chord symbols in the passage are left unchanged.
 
 | Parameter       | Type  | Description                                             |
 | --------------- | ----- | ------------------------------------------------------- |
@@ -218,7 +218,7 @@ Render a score file to PDF, PNG, MIDI, MP3, WAV or MusicXML. The input is typica
 | `format`      | `str`         | `"pdf"`    | One of `"pdf"`, `"png"`, `"midi"`, `"mp3"`, `"wav"`, `"musicxml"`. PNG writes one file per page (`-1`, `-2`, ...)  |
 | `output_path` | `str \| None` | `None`     | Output file. Defaults to the input path with the format's extension. Must match the format; overwritten if present |
 
-Returns `{"success": true, "output_path": ..., "format": ...}` or `{"error": ...}` including the tail of MuseScore's stderr when the export fails.
+Returns `{"success": true, "output_path": ..., "output_files": [...], "format": ...}`, where `output_files` lists the files MuseScore actually wrote (one per page for PNG), or `{"error": ...}` including the tail of MuseScore's stderr when no output was written. A rendering counts as successful when its output exists; if MuseScore crashes while shutting down afterwards (seen with MuseScore Studio 4.7 on macOS 26 after PDF export), the result carries a `warning` instead of failing.
 
 ## CLI
 

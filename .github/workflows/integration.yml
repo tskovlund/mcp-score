@@ -1,0 +1,197 @@
+name: Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MCP_SCORE_INTEGRATION: "1"
+
+jobs:
+  versions:
+    # The MuseScore releases under test live in one file that the harness
+    # reads too and that Renovate keeps current; see the file's comment.
+    name: MuseScore versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      linux: ${{ steps.read.outputs.linux }}
+      latest: ${{ steps.read.outputs.latest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - id: read
+        run: |
+          file=tests/integration/musescore-versions.json
+          echo "linux=$(jq -c '[.oldest, .middle, .latest]' "$file")" >> "$GITHUB_OUTPUT"
+          echo "latest=$(jq -r '.latest' "$file")" >> "$GITHUB_OUTPUT"
+
+  linux:
+    name: Linux, MuseScore ${{ matrix.version }}
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJSON(needs.versions.outputs.linux) }}
+    env:
+      MUSESCORE_VERSION: ${{ matrix.version }}
+      MUSESCORE_CACHE_DIR: ${{ github.workspace }}/.musescore
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+      - run: uv sync
+
+      - name: Install MuseScore runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xdotool libegl1 libgl1 libopengl0 libxkbcommon0 libnss3 libpulse0 libasound2t64
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.MUSESCORE_CACHE_DIR }}
+          key: musescore-${{ runner.os }}-${{ env.MUSESCORE_VERSION }}
+
+      - name: Install MuseScore
+        id: musescore
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "executable=$(uv run scripts/musescore_harness.py install)" >> "$GITHUB_OUTPUT"
+
+      - name: Render tests (headless export)
+        env:
+          MCP_SCORE_MUSESCORE_PATH: ${{ steps.musescore.outputs.executable }}
+        # MuseScore needs an X display even for export.
+        run: xvfb-run -a uv run pytest tests/integration/test_musescore_render.py -v
+
+      - name: Start MuseScore with the bridge plugin
+        run: uv run scripts/musescore_harness.py start tests/integration/fixtures/fixture.musicxml
+
+      - name: Bridge tests (live plugin)
+        run: uv run pytest tests/integration/test_musescore_bridge.py -v
+
+      - name: Stop MuseScore and collect logs
+        if: always()
+        run: |
+          uv run scripts/musescore_harness.py stop
+          mkdir -p musescore-logs
+          cp ~/.local/share/MuseScore/MuseScore4/logs/*.log musescore-logs/ 2>/dev/null || true
+          cp "${TMPDIR:-/tmp}/mcp-score-musescore.log" musescore-logs/ 2>/dev/null || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: musescore-logs-linux-${{ matrix.version }}
+          path: musescore-logs/
+          if-no-files-found: ignore
+
+  windows:
+    name: Windows, MuseScore ${{ needs.versions.outputs.latest }}
+    needs: versions
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      MUSESCORE_VERSION: ${{ needs.versions.outputs.latest }}
+      MUSESCORE_CACHE_DIR: ${{ github.workspace }}\.musescore
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+      - run: uv sync
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.MUSESCORE_CACHE_DIR }}
+          key: musescore-${{ runner.os }}-${{ env.MUSESCORE_VERSION }}
+
+      - name: Install MuseScore
+        id: musescore
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: echo "executable=$(uv run scripts/musescore_harness.py install)" >> "$GITHUB_OUTPUT"
+
+      - name: Render tests (headless export)
+        env:
+          MCP_SCORE_MUSESCORE_PATH: ${{ steps.musescore.outputs.executable }}
+        run: uv run pytest tests/integration/test_musescore_render.py -v
+
+      - name: Start MuseScore with the bridge plugin
+        run: uv run scripts/musescore_harness.py start tests/integration/fixtures/fixture.musicxml
+
+      - name: Bridge tests (live plugin)
+        run: uv run pytest tests/integration/test_musescore_bridge.py -v
+
+      - name: Stop MuseScore and collect logs
+        if: always()
+        shell: bash
+        run: |
+          uv run scripts/musescore_harness.py stop
+          mkdir -p musescore-logs
+          cp "$LOCALAPPDATA"/MuseScore/MuseScore4/logs/*.log musescore-logs/ 2>/dev/null || true
+          cp "$TEMP"/mcp-score-musescore.log musescore-logs/ 2>/dev/null || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: musescore-logs-windows
+          path: musescore-logs/
+          if-no-files-found: ignore
+
+  macos:
+    name: macOS, MuseScore ${{ needs.versions.outputs.latest }}
+    needs: versions
+    runs-on: macos-latest
+    timeout-minutes: 25
+    env:
+      MUSESCORE_VERSION: ${{ needs.versions.outputs.latest }}
+      MUSESCORE_CACHE_DIR: ${{ github.workspace }}/.musescore
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+      - run: uv sync
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.MUSESCORE_CACHE_DIR }}
+          key: musescore-${{ runner.os }}-${{ env.MUSESCORE_VERSION }}
+
+      - name: Install MuseScore
+        id: musescore
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "executable=$(uv run scripts/musescore_harness.py install)" >> "$GITHUB_OUTPUT"
+
+      - name: Render tests (headless export)
+        env:
+          MCP_SCORE_MUSESCORE_PATH: ${{ steps.musescore.outputs.executable }}
+        run: uv run pytest tests/integration/test_musescore_render.py -v
+
+      - name: Start MuseScore with the bridge plugin
+        run: uv run scripts/musescore_harness.py start tests/integration/fixtures/fixture.musicxml
+
+      - name: Bridge tests (live plugin)
+        run: uv run pytest tests/integration/test_musescore_bridge.py -v
+
+      - name: Stop MuseScore and collect logs
+        if: always()
+        run: |
+          uv run scripts/musescore_harness.py stop
+          mkdir -p musescore-logs
+          cp ~/Library/Application\ Support/MuseScore/MuseScore4/logs/*.log musescore-logs/ 2>/dev/null || true
+          cp "${TMPDIR:-/tmp}/mcp-score-musescore.log" musescore-logs/ 2>/dev/null || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: musescore-logs-macos
+          path: musescore-logs/
+          if-no-files-found: ignore

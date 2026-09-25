@@ -47,11 +47,14 @@ async def add_live_chord_symbol(measure: int, symbol: str) -> str:
 
 @mcp.tool()
 async def set_live_barline(measure: int, barline_type: str) -> str:
-    """Set a barline type in the live score.
+    """Set the bar line at the end of a measure in the live score.
 
     Args:
         measure: Measure number (1-indexed).
-        barline_type: One of "double", "final", "startRepeat", "endRepeat".
+        barline_type: One of "normal", "double", "final", "dashed", "dotted",
+            "tick", "short", "startRepeat", "endRepeat" or "endStartRepeat".
+            "startRepeat" marks the start of this measure; "endStartRepeat"
+            ends a repeat here and starts one in the next measure.
     """
     bridge = connected_bridge()
     if bridge is None:
@@ -111,7 +114,11 @@ async def transpose_passage(
     staff: int,
     semitones: int,
 ) -> str:
-    """Transpose a passage by a number of semitones in the live score.
+    """Transpose the notes of a passage by a number of semitones in the live score.
+
+    Notes are moved with conventional spelling (a minor second up turns C
+    into Db). Key signatures and chord symbols in the passage are left
+    unchanged.
 
     Args:
         start_measure: First measure (1-indexed).
