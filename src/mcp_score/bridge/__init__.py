@@ -1,6 +1,6 @@
 """Bridge registry -- manages connections to score notation applications.
 
-Only one bridge (MuseScore, Dorico, Sibelius, etc.) is active at a time.
+Only one bridge (MuseScore or Dorico) is active at a time.
 Tools use ``get_active_bridge()`` to get the currently connected bridge.
 Connection tools call ``set_active_bridge()`` to switch.
 """
@@ -9,7 +9,6 @@ from mcp_score.bridge.base import ScoreBridge
 from mcp_score.bridge.dorico import DoricoBridge
 from mcp_score.bridge.musescore import MuseScoreBridge
 from mcp_score.bridge.remote_control import HandshakeError, RemoteControlBridge
-from mcp_score.bridge.sibelius import SibeliusBridge
 
 __all__ = [
     "DoricoBridge",
@@ -17,11 +16,9 @@ __all__ = [
     "MuseScoreBridge",
     "RemoteControlBridge",
     "ScoreBridge",
-    "SibeliusBridge",
     "get_active_bridge",
     "get_dorico_bridge",
     "get_musescore_bridge",
-    "get_sibelius_bridge",
     "set_active_bridge",
 ]
 
@@ -30,7 +27,6 @@ _active_bridge: ScoreBridge | None = None
 # Singletons -- one instance per DAW type, created on first use.
 _musescore_bridge: MuseScoreBridge | None = None
 _dorico_bridge: DoricoBridge | None = None
-_sibelius_bridge: SibeliusBridge | None = None
 
 
 def get_musescore_bridge() -> MuseScoreBridge:
@@ -47,14 +43,6 @@ def get_dorico_bridge() -> DoricoBridge:
     if _dorico_bridge is None:
         _dorico_bridge = DoricoBridge()
     return _dorico_bridge
-
-
-def get_sibelius_bridge() -> SibeliusBridge:
-    """Get the shared Sibelius bridge instance, creating one if needed."""
-    global _sibelius_bridge  # noqa: PLW0603
-    if _sibelius_bridge is None:
-        _sibelius_bridge = SibeliusBridge()
-    return _sibelius_bridge
 
 
 def get_active_bridge() -> ScoreBridge | None:

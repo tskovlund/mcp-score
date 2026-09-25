@@ -1,7 +1,7 @@
-"""Shared WebSocket protocol for Steinberg/Avid Remote Control bridges.
+"""WebSocket protocol layer for Remote Control bridges.
 
-Dorico (4+) and Sibelius (2024.3+) both expose a WebSocket server with
-the same handshake protocol:
+Dorico (4+) exposes a WebSocket server with the following handshake
+protocol:
 
 1. Client sends connect message with clientName and handshakeVersion
 2. Server responds with a sessionToken message
@@ -11,8 +11,9 @@ the same handshake protocol:
 If a valid session token from a previous connection is provided in step 1,
 the server skips the user prompt and responds directly with ``kConnected``.
 
-This module contains the shared protocol implementation. Dorico and Sibelius
-bridges are thin subclasses that provide application-specific defaults.
+This module contains the protocol implementation, independent of any
+application-specific defaults. ``DoricoBridge`` is a thin subclass that
+provides Dorico's defaults (port, application name).
 """
 
 from __future__ import annotations
@@ -56,7 +57,7 @@ RESPONSE_ERROR = "kError"
 #: Message type for a session token response from the application.
 MESSAGE_SESSION_TOKEN = "sessiontoken"
 
-#: Barline type to command name mapping (shared by Dorico and Sibelius).
+#: Barline type to Remote Control command name mapping.
 BARLINE_COMMANDS: dict[str, str] = {
     "double": "AddBarlineDouble",
     "final": "AddBarlineFinal",
@@ -66,11 +67,11 @@ BARLINE_COMMANDS: dict[str, str] = {
 
 
 class RemoteControlBridge(ScoreBridge):
-    """WebSocket client for the shared Remote Control protocol.
+    """WebSocket client for the Remote Control protocol.
 
-    Both Dorico and Sibelius expose a WebSocket server with the same
-    protocol. This class implements all the shared logic. Subclasses
-    provide ``application_name`` and ``DEFAULT_PORT``.
+    This class implements all protocol logic (handshake, commands,
+    reconnection). Subclasses provide ``application_name`` and
+    ``DEFAULT_PORT``.
     """
 
     #: Timeout in seconds for receiving a response.
@@ -312,9 +313,8 @@ class RemoteControlBridge(ScoreBridge):
     async def get_flows(self) -> dict[str, Any]:
         """Request the list of flows in the current document.
 
-        Flows are a Dorico concept — each flow is an independent piece
-        of music within the same project. Sibelius may return limited
-        or empty data for this message type.
+        Each flow is an independent piece of music within the same
+        project.
         """
         return await self._send_message("getflows")
 
@@ -322,8 +322,6 @@ class RemoteControlBridge(ScoreBridge):
         """Request the list of layouts in the current document.
 
         Layouts control how music is presented (full score, parts, etc.).
-        This is primarily a Dorico concept; Sibelius may return limited
-        or empty data.
         """
         return await self._send_message("getlayouts")
 

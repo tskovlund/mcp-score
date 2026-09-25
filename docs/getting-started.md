@@ -95,6 +95,10 @@ For reading and modifying a score that's already open in MuseScore:
 
 All modifications happen immediately in MuseScore.
 
+## Live Dorico manipulation (experimental)
+
+Dorico support is experimental: it uses Dorico's undocumented Remote Control WebSocket API, is command-only (it cannot read note content), and has not been verified against a running Dorico instance. To try it, enable Remote Control in Dorico's preferences and ask Claude to "Connect to Dorico."
+
 ## Next steps
 
 - [Architecture](architecture.md) -- understand how mcp-score is structured

@@ -104,15 +104,14 @@ src/mcp_score/
   server.py           MCP server setup and tool imports
   app.py              Shared MCPServer instance
   tools/
-    connection.py     Connect/disconnect MuseScore, Dorico & Sibelius, ping, score info
+    connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py       Score reading tools (read_passage, get_measure_content, get_selection_properties)
     manipulation.py   Score modification tools (barlines, chords, keys, tempo, transpose, undo)
   bridge/
     base.py           ScoreBridge abstract base class
-    remote_control.py Shared Remote Control protocol (Dorico & Sibelius)
+    remote_control.py Remote Control protocol layer (used by Dorico)
     musescore.py      WebSocket client for MuseScore plugin
-    dorico.py         Dorico defaults (thin subclass of RemoteControlBridge)
-    sibelius.py       Sibelius defaults (thin subclass of RemoteControlBridge)
+    dorico.py         Dorico defaults (thin subclass of RemoteControlBridge, experimental)
   musescore/
     plugin.qml        MuseScore 4 QML plugin (WebSocket server)
 
