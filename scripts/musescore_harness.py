@@ -31,10 +31,13 @@ import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import websockets
 from websockets.exceptions import WebSocketException
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 logger = logging.getLogger("musescore-harness")
 
@@ -92,13 +95,77 @@ class HarnessError(Exception):
 
 # ── Platform layout ───────────────────────────────────────────────────
 
+# Preferences that keep MuseScore from opening dialogs over the score
+# window: the first-launch wizard and the "What's new" welcome dialog.
+# MuseScore forces the welcome dialog back on whenever the last version it
+# was shown for is older than the running one, so that version is set far
+# into the future. Keys are Qt settings paths.
+STARTUP_PREFERENCES: dict[str, bool | str] = {
+    "application/hasCompletedFirstLaunchSetup": True,
+    "application/welcomeDialogShowOnStartup": False,
+    "application/welcomeDialogLastShownVersion": "99.0.0",
+}
+MACOS_PREFERENCES_DOMAIN = "org.musescore.MuseScore4"
+
+
+class PreferencesStore(Protocol):
+    """Where MuseScore's main preferences live on a platform."""
+
+    def write(self, preferences: Mapping[str, bool | str]) -> None:
+        """Store *preferences* (Qt settings paths to values) for MuseScore."""
+
+
+@dataclass(frozen=True)
+class IniPreferences:
+    """A Qt ini file, as MuseScore uses on Linux and Windows."""
+
+    file: Path
+
+    def write(self, preferences: Mapping[str, bool | str]) -> None:
+        sections: dict[str, list[str]] = {}
+        for path, value in preferences.items():
+            section, _, key = path.rpartition("/")
+            sections.setdefault(section, []).append(f"{key}={_ini_value(value)}")
+        text = "".join(
+            f"[{section}]\n" + "".join(f"{line}\n" for line in lines)
+            for section, lines in sections.items()
+        )
+        self.file.parent.mkdir(parents=True, exist_ok=True)
+        self.file.write_text(text)
+
+
+def _ini_value(value: bool | str) -> str:
+    return str(value).lower() if isinstance(value, bool) else value
+
+
+@dataclass(frozen=True)
+class MacOSPreferences:
+    """The native preferences domain Qt uses on macOS.
+
+    macOS caches preferences in cfprefsd, so the plist under
+    ~/Library/Preferences is written through ``defaults`` rather than
+    directly. Qt stores a settings path ``a/b`` under the key ``a.b``.
+    """
+
+    domain: str
+
+    def write(self, preferences: Mapping[str, bool | str]) -> None:
+        for path, value in preferences.items():
+            key = path.replace("/", ".")
+            typed = (
+                ["-bool", str(value).lower()]
+                if isinstance(value, bool)
+                else ["-string", value]
+            )
+            run(["defaults", "write", self.domain, key, *typed])
+
 
 @dataclass(frozen=True)
 class Layout:
     """Where MuseScore keeps things on this platform, and how to get it."""
 
     system: str
-    settings_file: Path
+    preferences: PreferencesStore
     data_dir: Path
     plugins_dir: Path
     stdout_log: Path
@@ -109,30 +176,29 @@ class Layout:
 
 
 def layout_for(system: str, home: Path) -> Layout:
-    """MuseScore's settings, data and plugin locations for *system*.
+    """MuseScore's preferences, data and plugin locations for *system*.
 
-    MuseScore stores settings as a Qt ini file and its data under Qt's
-    app-local data location. For ini files Qt uses ``~/.config`` on macOS
-    as well as Linux; only Windows keeps them under the roaming profile.
+    MuseScore keeps its main preferences in a Qt ini file on Linux and
+    Windows and in the native preferences domain on macOS; its data lives
+    under Qt's app-local data location on every platform.
     """
     documents = home / "Documents" / "MuseScore4" / "Plugins"
     temp = Path(tempfile.gettempdir()) / "mcp-score-musescore.log"
-    ini = home / ".config" / "MuseScore" / "MuseScore4.ini"
     if system == "Windows":
         appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
         local = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
+        preferences = IniPreferences(appdata / "MuseScore" / "MuseScore4.ini")
         return Layout(
-            system,
-            appdata / "MuseScore" / "MuseScore4.ini",
-            local / "MuseScore" / "MuseScore4",
-            documents,
-            temp,
+            system, preferences, local / "MuseScore" / "MuseScore4", documents, temp
         )
     if system == "Darwin":
         data = home / "Library" / "Application Support" / "MuseScore" / "MuseScore4"
-        return Layout(system, ini, data, documents, temp)
+        return Layout(
+            system, MacOSPreferences(MACOS_PREFERENCES_DOMAIN), data, documents, temp
+        )
+    preferences = IniPreferences(home / ".config" / "MuseScore" / "MuseScore4.ini")
     data = home / ".local" / "share" / "MuseScore" / "MuseScore4"
-    return Layout(system, ini, data, documents, temp)
+    return Layout(system, preferences, data, documents, temp)
 
 
 def default_download_url(system: str, version: str, build: str) -> str:
@@ -266,17 +332,7 @@ def seed_configuration(layout: Layout) -> None:
     layout.plugins_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(PLUGIN_SOURCE, layout.plugins_dir / PLUGIN_FILE)
 
-    # Skip the first-launch wizard and the "What's new" welcome dialog; both
-    # steal focus from the score window. MuseScore forces the welcome dialog
-    # back on whenever the last version it was shown for is older than the
-    # running one, so the recorded version is set far into the future.
-    layout.settings_file.parent.mkdir(parents=True, exist_ok=True)
-    layout.settings_file.write_text(
-        "[application]\n"
-        "hasCompletedFirstLaunchSetup=true\n"
-        "welcomeDialogShowOnStartup=false\n"
-        "welcomeDialogLastShownVersion=99.0.0\n"
-    )
+    layout.preferences.write(STARTUP_PREFERENCES)
 
     extensions_dir = layout.data_dir / "extensions"
     extensions_dir.mkdir(parents=True, exist_ok=True)

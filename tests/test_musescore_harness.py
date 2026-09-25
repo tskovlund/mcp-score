@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -35,19 +36,23 @@ class TestLayoutFor:
         layout = harness.layout_for("Linux", tmp_path)
 
         # Assert
-        assert layout.settings_file == tmp_path / ".config/MuseScore/MuseScore4.ini"
+        assert layout.preferences == harness.IniPreferences(
+            tmp_path / ".config/MuseScore/MuseScore4.ini"
+        )
         assert layout.data_dir == tmp_path / ".local/share/MuseScore/MuseScore4"
         assert layout.plugins_dir == tmp_path / "Documents/MuseScore4/Plugins"
         assert layout.log_dir == layout.data_dir / "logs"
 
-    def test_macos_keeps_ini_under_config_and_data_under_library(
+    def test_macos_uses_native_preferences_and_library_data(
         self, tmp_path: Path
     ) -> None:
         # Act
         layout = harness.layout_for("Darwin", tmp_path)
 
         # Assert
-        assert layout.settings_file == tmp_path / ".config/MuseScore/MuseScore4.ini"
+        assert layout.preferences == harness.MacOSPreferences(
+            "org.musescore.MuseScore4"
+        )
         assert (
             layout.data_dir
             == tmp_path / "Library/Application Support/MuseScore/MuseScore4"
@@ -65,7 +70,9 @@ class TestLayoutFor:
         layout = harness.layout_for("Windows", tmp_path)
 
         # Assert
-        assert layout.settings_file == tmp_path / "Roaming/MuseScore/MuseScore4.ini"
+        assert layout.preferences == harness.IniPreferences(
+            tmp_path / "Roaming/MuseScore/MuseScore4.ini"
+        )
         assert layout.data_dir == tmp_path / "Local/MuseScore/MuseScore4"
 
 
@@ -137,11 +144,52 @@ class TestSeedConfiguration:
         harness.seed_configuration(layout)
 
         # Assert
-        settings = layout.settings_file.read_text()
-        assert "hasCompletedFirstLaunchSetup=true" in settings
-        assert "welcomeDialogShowOnStartup=false" in settings
-        assert "welcomeDialogLastShownVersion=99.0.0" in settings
+        settings = (tmp_path / ".config/MuseScore/MuseScore4.ini").read_text()
+        assert settings == (
+            "[application]\n"
+            "hasCompletedFirstLaunchSetup=true\n"
+            "welcomeDialogShowOnStartup=false\n"
+            "welcomeDialogLastShownVersion=99.0.0\n"
+        )
         assert not stale_session.exists()
+
+    def test_macos_writes_preferences_through_defaults(self, tmp_path: Path) -> None:
+        # Arrange
+        layout = harness.layout_for("Darwin", tmp_path)
+        run = MagicMock()
+
+        with patch.object(harness, "run", run):
+            # Act
+            harness.seed_configuration(layout)
+
+        # Assert: Qt maps the settings path a/b to the key a.b, typed values
+        commands = [call.args[0] for call in run.call_args_list]
+        assert commands == [
+            [
+                "defaults",
+                "write",
+                "org.musescore.MuseScore4",
+                "application.hasCompletedFirstLaunchSetup",
+                "-bool",
+                "true",
+            ],
+            [
+                "defaults",
+                "write",
+                "org.musescore.MuseScore4",
+                "application.welcomeDialogShowOnStartup",
+                "-bool",
+                "false",
+            ],
+            [
+                "defaults",
+                "write",
+                "org.musescore.MuseScore4",
+                "application.welcomeDialogLastShownVersion",
+                "-string",
+                "99.0.0",
+            ],
+        ]
 
 
 class TestMuseScoreProcessPattern:
