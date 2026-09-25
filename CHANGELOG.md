@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Score metadata: subtitle (movementName), arranger (Contributor), copyright support
 - Prompt request PR workflow in CONTRIBUTING.md
 
+### Fixed
+
+- MuseScore plugin now loads on MuseScore Studio 4.4.2+ (Qt 6). It uses MuseScore's built-in `api.websocketserver` instead of the `QtWebSockets` QML module, which MuseScore stopped shipping in 4.4. Runs as a dialog plugin with a status window (dock plugins are unsupported in MuseScore 4). Fixes #78
+
 ### Changed
 
 - Migrated from the `mcp` Python SDK v1 to v2 (`FastMCP` renamed to `MCPServer`, `mcp.server.fastmcp` import path replaced by `mcp.server.mcpserver`)

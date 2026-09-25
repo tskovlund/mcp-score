@@ -4,14 +4,15 @@
 
 ## Overview
 
-The MuseScore plugin runs inside MuseScore 4 and opens a WebSocket server on `localhost:8765`. The mcp-score Python server connects to this WebSocket to read from and write to the active score.
+The MuseScore plugin runs inside MuseScore Studio 4 and opens a WebSocket server on `localhost:8765` using MuseScore's built-in plugin API (`api.websocketserver`). The mcp-score Python server connects to this WebSocket to read from and write to the active score.
 
 The plugin is only needed for **manipulation** and **analysis** tools (reading passages, arranging, transposing, etc.). **Generation** tools work without it -- they produce MusicXML files that MuseScore can open directly.
 
 ## Prerequisites
 
-- MuseScore 4 (4.0 or later)
-- QtWebSockets support (included in standard MuseScore 4 builds)
+- MuseScore Studio **4.4.2 or later** (4.4.2 added the plugin WebSocket API the bridge uses)
+
+Earlier versions are not supported: MuseScore 4.4 moved to Qt 6 and stopped shipping the `QtWebSockets` QML module, and versions before 4.4.2 have no replacement API. The plugin fails to load on those versions with `module "QtWebSockets" is not installed` (older plugin builds) or reports the missing API in its window (current build).
 
 ## Installation
 
@@ -30,19 +31,25 @@ The plugin is only needed for **manipulation** and **analysis** tools (reading p
    cp src/mcp_score/musescore/plugin.qml ~/.local/share/MuseScore4/Plugins/mcp-score-bridge.qml
    ```
 
-3. In MuseScore, go to **Plugins > Plugin Manager** and enable "MCP Score Bridge"
+3. Restart MuseScore, then go to **Plugins > Manage plugins** and enable "MCP Score Bridge"
 
 4. Run the plugin: **Plugins > MCP Score Bridge**
 
-The plugin starts a WebSocket server on port 8765. It runs as a dock plugin (invisible) so it stays active as long as MuseScore is open. The mcp-score Python server connects automatically when you use manipulation or analysis tools.
+The plugin opens a small status window and starts a WebSocket server on port 8765. **Keep the window open** -- closing it stops the plugin and the server with it (MuseScore 4 has no persistent dock plugins). The mcp-score Python server connects automatically when you use manipulation or analysis tools.
 
 ## Verifying the connection
 
-After enabling the plugin, you can verify it is running by checking the MuseScore console (View > Console in some builds) for the message:
+The plugin window shows `Bridge running on ws://localhost:8765` when the server is up. MuseScore's log file also records:
 
 ```
 [mcp-score] Bridge plugin started -- WebSocket server on port 8765
 ```
+
+Log locations:
+
+- **macOS:** `~/Library/Application Support/MuseScore/MuseScore4/logs/`
+- **Linux:** `~/.local/share/MuseScore/MuseScore4/logs/`
+- **Windows:** `%LOCALAPPDATA%\MuseScore\MuseScore4\logs\`
 
 You can also test the connection with any WebSocket client:
 
@@ -218,17 +225,23 @@ This example uses `processSequence` to write a four-note melody in the first mea
 
 ## Troubleshooting
 
-### Plugin doesn't appear in Plugin Manager
+### Plugin doesn't appear in Manage plugins
 
 - Verify the `.qml` file is in the correct directory
 - Restart MuseScore after adding the plugin
 - Check that the file is named with a `.qml` extension
+- Check your MuseScore version: **Help > About**. The bridge requires 4.4.2 or later
+- MuseScore hides plugins that fail to compile. Look in the log file (paths above) for `ExtensionBuilder::load | Failed to load QML file` and the line after it, which names the cause. `module "QtWebSockets" is not installed` means an old copy of the plugin: re-run `mcp-score install-plugin`
+
+### Plugin window shows an error
+
+- `this MuseScore build has no plugin WebSocket API` -- your MuseScore is older than 4.4.2. Upgrade MuseScore
 
 ### WebSocket connection fails
 
-- Ensure the plugin is running (look for the `[mcp-score]` log messages in MuseScore's console)
-- Verify no other application is using port 8765: `lsof -i :8765`
-- Check MuseScore's console for error messages
+- Ensure the plugin window is open and shows `Bridge running`
+- Verify no other application is using port 8765: `lsof -i :8765` (macOS/Linux) or `netstat -ano | findstr 8765` (Windows)
+- Check MuseScore's log file for `[mcp-score]` error messages
 
 ### "No score is currently open" errors
 

@@ -60,7 +60,7 @@ A Claude Code [skill](https://docs.anthropic.com/en/docs/claude-code/skills) tha
 
 ### MuseScore plugin
 
-A QML plugin that runs a WebSocket server inside MuseScore 4, enabling the MCP server to read from and write to the active score in real time. Supports 19 commands including navigation, note input, chord symbols, rehearsal marks, barlines, key/time signatures, tempo, transposition, and undo.
+A QML plugin that runs a WebSocket server inside MuseScore Studio 4 (4.4.2 or later), enabling the MCP server to read from and write to the active score in real time. Supports 19 commands including navigation, note input, chord symbols, rehearsal marks, barlines, key/time signatures, tempo, transposition, and undo.
 
 ## Configuration
 
