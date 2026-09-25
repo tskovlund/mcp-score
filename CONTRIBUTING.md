@@ -69,34 +69,34 @@ pytest -k "test_install"  # run tests matching pattern
 
 ### Integration tests
 
-`tests/integration/` runs the real thing against MuseScore Studio 4.7.5: the
+`tests/integration/` runs the real thing against MuseScore Studio: the
 headless `render_score` export and the live plugin bridge. The tests are
 marked `integration` and skip unless `MCP_SCORE_INTEGRATION=1` is set, so the
 plain `pytest` run stays fast and offline. CI runs them in the `Integration`
-workflow on every pull request.
+workflow on Linux (MuseScore 4.4, 4.6 and 4.7), Windows and macOS.
 
-To run them locally on Linux (needs `xvfb`, `xdotool` and the Qt runtime
-libraries listed in `.github/workflows/integration.yml`):
+`scripts/musescore_harness.py` installs MuseScore and drives it on all three
+platforms (Linux needs `xvfb`, `xdotool` and the Qt runtime libraries listed
+in `.github/workflows/integration.yml`):
 
 ```bash
-# 1. Download and extract the MuseScore AppImage (cached, prints the launcher path)
-export MCP_SCORE_MUSESCORE_PATH="$(scripts/musescore-headless.sh install)"
+# 1. Download MuseScore into the cache (prints the executable)
+export MCP_SCORE_MUSESCORE_PATH="$(uv run scripts/musescore_harness.py install)"
 
-# 2. Headless export tests (MuseScore needs an X display even for export)
+# 2. Headless export tests (on Linux, MuseScore needs an X display even for export)
 MCP_SCORE_INTEGRATION=1 xvfb-run -a pytest tests/integration/test_musescore_render.py
 
-# 3. Live bridge tests: start MuseScore under Xvfb with the plugin listening on :8765
-scripts/musescore-headless.sh start tests/integration/fixtures/fixture.musicxml
+# 3. Live bridge tests: start MuseScore with the plugin listening on :8765
+uv run scripts/musescore_harness.py start tests/integration/fixtures/fixture.musicxml
 MCP_SCORE_INTEGRATION=1 pytest tests/integration/test_musescore_bridge.py
-scripts/musescore-headless.sh stop
+uv run scripts/musescore_harness.py stop
 ```
 
 `start` overwrites MuseScore's user configuration (plugin, shortcut,
-first-launch flags) under `~/.config/MuseScore` and `~/.local/share/MuseScore`,
-so use a throwaway `HOME` on a machine where you use MuseScore yourself. The
-script honours `MUSESCORE_VERSION`, `MUSESCORE_APPIMAGE_URL`,
-`MUSESCORE_CACHE_DIR` and `PYTHON` (an interpreter with `websockets`, used to
-poll the bridge); the defaults match the workflow.
+first-launch flags), so use a throwaway `HOME` on a machine where you use
+MuseScore yourself. The harness honours `MUSESCORE_VERSION`, `MUSESCORE_BUILD`
+(the release's build number, part of the asset name), `MUSESCORE_DOWNLOAD_URL`
+and `MUSESCORE_CACHE_DIR`; the defaults match the workflow.
 
 ## PR process
 
