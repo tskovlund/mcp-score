@@ -6,6 +6,10 @@
 // MCP server to read from and write to the active score by sending JSON
 // commands and receiving JSON responses.
 //
+// Requires MuseScore Studio 4.4.2 or later. The server uses MuseScore's
+// built-in plugin API (api.websocketserver), which replaced the QtWebSockets
+// QML module that MuseScore stopped shipping in 4.4 (Qt 6).
+//
 // Protocol: each WebSocket message is a JSON object with a "command" field
 // and optionally a "params" field. The response is always a JSON object with
 // either a "result" field (on success) or an "error" field (on failure).
@@ -17,21 +21,21 @@
 //   selectCurrentMeasure, selectCustomRange, transpose, undo,
 //   processSequence
 
-import QtQuick 2.9
+import QtQuick 2.15
 import MuseScore 3.0
-import QtWebSockets 1.0
 
 MuseScore {
     id: root
-    menuPath: "Plugins.MCP Score Bridge"
+    title: "MCP Score Bridge"
+    categoryCode: "composing-arranging-tools"
     description: "WebSocket bridge for mcp-score MCP server"
-    version: "0.1.0"
+    version: "0.2.0"
 
-    // Keep the plugin running after onRun (required for persistent server).
-    pluginType: "dock"
-    dockArea: "bottom"
-    implicitWidth: 0
-    implicitHeight: 0
+    // A dialog keeps the plugin instance (and its server) alive for as long
+    // as the window is open. MuseScore 4 does not support dock plugins.
+    pluginType: "dialog"
+    width: 360
+    height: 120
 
     // ===================================================================
     // Constants
@@ -83,29 +87,36 @@ MuseScore {
     // WebSocket server
     // ===================================================================
 
-    WebSocketServer {
-        id: server
-        port: serverPort
-        host: serverHost
-        listen: true
-        name: "mcp-score-bridge"
+    // Human-readable server state, shown in the plugin window.
+    property string statusText: "Starting..."
 
-        onClientConnected: function(webSocket) {
-            console.log(logPrefix, "Client connected");
-            webSocket.onTextMessageReceived.connect(function(message) {
+    /// True when this MuseScore build exposes the plugin WebSocket API.
+    function hasWebSocketApi() {
+        return typeof api !== "undefined"
+            && api.websocketserver !== undefined
+            && api.websocketserver !== null;
+    }
+
+    /// Start the WebSocket server via MuseScore's built-in plugin API.
+    function startServer() {
+        if (!hasWebSocketApi()) {
+            statusText = "Error: this MuseScore build has no plugin WebSocket API.\n"
+                + "MuseScore Studio 4.4.2 or later is required.";
+            console.log(logPrefix, statusText);
+            return;
+        }
+
+        api.websocketserver.listen(serverPort, function(clientId) {
+            console.log(logPrefix, "Client connected:", clientId);
+            api.websocketserver.onMessage(clientId, function(message) {
                 var response = handleMessage(message);
-                webSocket.sendTextMessage(JSON.stringify(response));
+                api.websocketserver.send(clientId, JSON.stringify(response));
             });
-            webSocket.onStatusChanged.connect(function(status) {
-                if (status === WebSocket.Closed) {
-                    console.log(logPrefix, "Client disconnected");
-                }
-            });
-        }
+        });
 
-        onErrorStringChanged: {
-            console.log(logPrefix, "Server error:", errorString);
-        }
+        statusText = "Bridge running on ws://" + serverHost + ":" + serverPort + "\n"
+            + "Keep this window open while using mcp-score.";
+        console.log(logPrefix, "Bridge plugin started -- WebSocket server on port", serverPort);
     }
 
     // ===================================================================
@@ -1149,13 +1160,20 @@ MuseScore {
     // ===================================================================
 
     onRun: {
-        console.log(logPrefix, "Bridge plugin started -- WebSocket server on port", serverPort);
+        startServer();
     }
 
-    // Minimal invisible UI (required for dock plugin type to keep running).
+    // Status window. Closing it stops the plugin and the server with it.
     Rectangle {
-        visible: false
-        width: 0
-        height: 0
+        anchors.fill: parent
+        color: "#ffffff"
+
+        Text {
+            anchors.fill: parent
+            anchors.margins: 12
+            text: root.statusText
+            wrapMode: Text.WordWrap
+            verticalAlignment: Text.AlignVCenter
+        }
     }
 }

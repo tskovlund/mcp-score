@@ -6,7 +6,7 @@
 
 - Python 3.14+
 - An MCP-compatible client (Claude Desktop, Claude Code, etc.)
-- [MuseScore 4](https://musescore.org/en/download) (optional -- needed for live manipulation features)
+- [MuseScore Studio 4.4.2+](https://musescore.org/en/download) (optional -- needed for live manipulation features)
 
 ## Installation
 
@@ -34,7 +34,7 @@ This copies the `score-generate` skill to `~/.claude/skills/score-generate/`.
 mcp-score install-plugin
 ```
 
-This copies the WebSocket bridge plugin to your MuseScore 4 plugins directory. Then enable it in MuseScore: Plugins > Plugin Manager > MCP Score Bridge.
+This copies the WebSocket bridge plugin to your MuseScore 4 plugins directory. Restart MuseScore, then enable it: Plugins > Manage plugins > MCP Score Bridge. Running the plugin opens a status window; keep it open while you work.
 
 ## Configure your MCP client
 

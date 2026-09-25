@@ -54,7 +54,8 @@ async def connect_to_musescore(
     return to_json(
         {
             "error": f"Could not connect to MuseScore at ws://{host}:{port}. "
-            "Is the MCP Score Bridge plugin running?"
+            "Is the MCP Score Bridge plugin running with its window open? "
+            "The plugin requires MuseScore Studio 4.4.2 or later."
         }
     )
 
