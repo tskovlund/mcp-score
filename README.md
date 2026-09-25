@@ -1,4 +1,5 @@
 [![CI](https://github.com/tskovlund/mcp-score/actions/workflows/ci.yml/badge.svg)](https://github.com/tskovlund/mcp-score/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/mcp-score-server.svg)](https://pypi.org/project/mcp-score-server/)
 [![Integration](https://github.com/tskovlund/mcp-score/actions/workflows/integration.yml/badge.svg)](https://github.com/tskovlund/mcp-score/actions/workflows/integration.yml)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -37,12 +38,12 @@ The assistant reads the live score, applies musical judgement, and writes the ar
 
 ## Install
 
-Not on PyPI yet. Install from GitHub with Python 3.14 or later:
+Requires Python 3.14 or later.
 
 ```bash
-pip install git+https://github.com/tskovlund/mcp-score
+pip install mcp-score-server
 # or
-uv tool install git+https://github.com/tskovlund/mcp-score
+uv tool install mcp-score-server
 ```
 
 Then:

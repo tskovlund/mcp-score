@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-25
+
+First release on PyPI as `mcp-score-server`.
+
 ### Added
 
 - Score generation via Claude Code skill (music21 -> MusicXML)
@@ -21,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Prompt request PR workflow in CONTRIBUTING.md
 - `render_score` tool: export PDF, PNG, MIDI, MP3, WAV or MusicXML from a score file through the MuseScore command line, located via `MCP_SCORE_MUSESCORE_PATH`, PATH or the platform default install. Success is judged by the files MuseScore wrote (`output_files`), so a crash on shutdown after a finished export (MuseScore Studio 4.7 on macOS 26) yields a warning, not a failure
 - Integration tests against real MuseScore Studio installs (headless `render_score` export and the live plugin bridge) on Linux (4.4, 4.6, 4.7), Windows and macOS, run by the `Integration` workflow and locally via `scripts/musescore_harness.py`
+- Live tools `add_live_note`, `add_live_dynamic`, `set_live_time_signature` and `append_live_measures`
 
 ### Fixed
 
@@ -39,7 +44,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Dependabot: bumped setup-uv 7.3.0→7.3.1, upload-artifact 4→7, download-artifact 4→8
 - Dorico support labelled experimental
 - Distribution name on PyPI is `mcp-score-server`; the import package and CLI stay `mcp_score` / `mcp-score`
+- Core reshaped for one job per module: a WebSocket transport and connection lifecycle shared by the MuseScore and Dorico bridges, a bridge registry instead of module globals, one error path for tools (`ToolError`), `create_server()` instead of a shared `app` instance, and an argparse command line. Tool results reach MCP clients as structured content as well as JSON text
+- Manipulation tools stop when the application cannot navigate to the requested measure instead of applying the change at the current position
 
 ### Removed
 
 - Sibelius bridge and `connect_to_sibelius` tool (out of scope)
+
+[Unreleased]: https://github.com/tskovlund/mcp-score/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/tskovlund/mcp-score/releases/tag/v0.1.0

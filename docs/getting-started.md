@@ -10,16 +10,14 @@
 
 ## Installation
 
-mcp-score is not on PyPI yet. Install from GitHub:
-
 ```bash
-pip install git+https://github.com/tskovlund/mcp-score
+pip install mcp-score-server
 ```
 
 Or with uv:
 
 ```bash
-uv tool install git+https://github.com/tskovlund/mcp-score
+uv tool install mcp-score-server
 ```
 
 ### Install the score generation skill
