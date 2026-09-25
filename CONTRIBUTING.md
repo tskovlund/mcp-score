@@ -94,9 +94,12 @@ uv run scripts/musescore_harness.py stop
 
 `start` overwrites MuseScore's user configuration (plugin, shortcut,
 first-launch flags), so use a throwaway `HOME` on a machine where you use
-MuseScore yourself. The harness honours `MUSESCORE_VERSION`, `MUSESCORE_BUILD`
-(the release's build number, part of the asset name), `MUSESCORE_DOWNLOAD_URL`
-and `MUSESCORE_CACHE_DIR`; the defaults match the workflow.
+MuseScore yourself. The version defaults to the newest one in
+`tests/integration/musescore-versions.json`, the file the workflow matrix reads
+and Renovate keeps current; `MUSESCORE_VERSION` picks another. The harness
+looks the release asset up through the GitHub releases API (set
+`GITHUB_TOKEN` to raise the rate limit) unless `MUSESCORE_DOWNLOAD_URL` names
+it, and keeps downloads in `MUSESCORE_CACHE_DIR`.
 
 ## PR process
 

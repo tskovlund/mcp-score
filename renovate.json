@@ -1,4 +1,17 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>tskovlund/.github"]
+  "extends": ["github>tskovlund/.github"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Newest MuseScore Studio release the integration tests run against",
+      "managerFilePatterns": [
+        "/^tests/integration/musescore-versions\\.json$/"
+      ],
+      "matchStrings": ["\"latest\": \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
+      "depNameTemplate": "musescore/MuseScore",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    }
+  ]
 }

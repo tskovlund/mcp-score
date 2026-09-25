@@ -76,26 +76,103 @@ class TestLayoutFor:
         assert layout.data_dir == tmp_path / "Local/MuseScore/MuseScore4"
 
 
-class TestDefaultDownloadUrl:
+class TestReleaseAssetUrl:
+    _RELEASE = {
+        "assets": [
+            {
+                "name": "MuseScore-Studio-4.7.5.260831071-aarch64.AppImage",
+                "browser_download_url": "https://example.test/aarch64.AppImage",
+            },
+            {
+                "name": "MuseScore-Studio-4.7.5.260831071-x86_64.AppImage",
+                "browser_download_url": "https://example.test/x86_64.AppImage",
+            },
+            {
+                "name": "MuseScore-Studio-4.7.5.260831071-x86_64.msi",
+                "browser_download_url": "https://example.test/x86_64.msi",
+            },
+            {
+                "name": "MuseScore-Studio-4.7.5.260831071.dmg",
+                "browser_download_url": "https://example.test/universal.dmg",
+            },
+        ]
+    }
+
     @pytest.mark.parametrize(
-        ("system", "suffix"),
+        ("system", "expected"),
         [
-            ("Linux", "-x86_64.AppImage"),
-            ("Windows", "-x86_64.msi"),
-            ("Darwin", ".dmg"),
+            ("Linux", "https://example.test/x86_64.AppImage"),
+            ("Windows", "https://example.test/x86_64.msi"),
+            ("Darwin", "https://example.test/universal.dmg"),
         ],
     )
-    def test_points_at_release_asset_for_platform(
-        self, system: str, suffix: str
+    def test_picks_the_platform_asset_of_the_release(
+        self, system: str, expected: str
     ) -> None:
-        # Act
-        url = harness.default_download_url(system, "4.7.5", "260831071")
+        # Arrange
+        fetch = MagicMock(return_value=self._RELEASE)
+
+        with patch.object(harness, "fetch_json", fetch):
+            # Act
+            url = harness.release_asset_url(system, "4.7.5")
 
         # Assert
-        assert url == (
-            "https://github.com/musescore/MuseScore/releases/download/v4.7.5/"
-            f"MuseScore-Studio-4.7.5.260831071{suffix}"
-        )
+        assert url == expected
+        fetch.assert_called_once_with(f"{harness.RELEASES_API_URL}/v4.7.5")
+
+    def test_without_matching_asset_raises(self) -> None:
+        # Arrange
+        with (
+            patch.object(harness, "fetch_json", return_value={"assets": []}),
+            pytest.raises(harness.HarnessError, match=r"no asset ending in \.dmg"),
+        ):
+            # Act / Assert
+            harness.release_asset_url("Darwin", "4.7.5")
+
+
+class TestSettings:
+    def test_version_defaults_to_the_latest_listed(self, tmp_path: Path) -> None:
+        # Arrange
+        versions = tmp_path / "versions.json"
+        versions.write_text('{"oldest": "4.4.4", "latest": "4.9.1"}')
+
+        with (
+            patch.dict(
+                "os.environ", {"MUSESCORE_CACHE_DIR": str(tmp_path)}, clear=True
+            ),
+            patch.object(harness, "VERSIONS_FILE", versions),
+        ):
+            # Act
+            settings = harness.Settings.from_environment()
+
+        # Assert
+        assert settings.version == "4.9.1"
+        assert settings.download_url is None
+
+    def test_explicit_download_url_skips_the_release_lookup(self) -> None:
+        # Arrange
+        environment = {
+            "MUSESCORE_VERSION": "4.7.5",
+            "MUSESCORE_DOWNLOAD_URL": "https://example.test/musescore.dmg",
+        }
+        lookup = MagicMock()
+
+        with (
+            patch.dict("os.environ", environment, clear=True),
+            patch.object(harness, "release_asset_url", lookup),
+        ):
+            # Act
+            url = harness.Settings.from_environment().resolve_download_url()
+
+        # Assert
+        assert url == "https://example.test/musescore.dmg"
+        lookup.assert_not_called()
+
+    def test_versions_file_lists_the_workflow_matrix(self) -> None:
+        # The workflow reads oldest, middle and latest from the same file.
+        versions = json.loads(harness.VERSIONS_FILE.read_text())
+        assert set(versions) >= {"oldest", "middle", "latest"}
+        assert versions["oldest"] < versions["middle"] < versions["latest"]
 
 
 class TestSeedConfiguration:

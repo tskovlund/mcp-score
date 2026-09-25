@@ -7,8 +7,11 @@ Subcommands:
     stop            Kill MuseScore (and the virtual display on Linux)
 
 Works on Linux (AppImage under Xvfb), Windows (MSI) and macOS (DMG). The
-version, download URL and cache directory come from ``MUSESCORE_VERSION``,
-``MUSESCORE_DOWNLOAD_URL`` and ``MUSESCORE_CACHE_DIR``.
+version defaults to the newest one in ``tests/integration/musescore-versions.json``
+and can be set with ``MUSESCORE_VERSION``; its release asset is looked up
+through the GitHub releases API (``GITHUB_TOKEN`` raises the rate limit)
+unless ``MUSESCORE_DOWNLOAD_URL`` names it directly. ``MUSESCORE_CACHE_DIR``
+is where downloads and the unpacked application live.
 
 ``start`` rewrites MuseScore's user configuration (plugin, shortcut,
 first-launch flags), so use a throwaway home directory on a machine where
@@ -43,9 +46,15 @@ logger = logging.getLogger("musescore-harness")
 
 # ── Defaults ──────────────────────────────────────────────────────────
 
-DEFAULT_VERSION = "4.7.5"
-DEFAULT_BUILD = "260831071"
-RELEASE_BASE_URL = "https://github.com/musescore/MuseScore/releases/download"
+REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
+VERSIONS_FILE = REPOSITORY_ROOT / "tests" / "integration" / "musescore-versions.json"
+RELEASES_API_URL = "https://api.github.com/repos/musescore/MuseScore/releases/tags"
+# The release asset for each platform, by how its file name ends.
+RELEASE_ASSET_SUFFIXES: dict[str, str] = {
+    "Linux": "-x86_64.AppImage",
+    "Windows": "-x86_64.msi",
+    "Darwin": ".dmg",
+}
 
 BRIDGE_PORT = 8765
 BRIDGE_TIMEOUT_SECONDS = 60.0
@@ -56,9 +65,7 @@ DIALOG_DISMISS_SECONDS = 2.0
 LOG_TAIL_LINES = 40
 
 PLUGIN_FILE = "mcp-score-bridge.qml"
-PLUGIN_SOURCE = Path(__file__).resolve().parent.parent / (
-    "src/mcp_score/musescore/plugin.qml"
-)
+PLUGIN_SOURCE = REPOSITORY_ROOT / "src" / "mcp_score" / "musescore" / "plugin.qml"
 # Bound to every action-code form MuseScore 4 has used for a plugin:
 # muse://...?action=main in 4.4, action://...?action=main from 4.5.
 PLUGIN_ACTION_CODES = (
@@ -201,14 +208,36 @@ def layout_for(system: str, home: Path) -> Layout:
     return Layout(system, preferences, data, documents, temp)
 
 
-def default_download_url(system: str, version: str, build: str) -> str:
-    """The GitHub release asset for *version* on *system*."""
-    base = f"{RELEASE_BASE_URL}/v{version}/MuseScore-Studio-{version}.{build}"
-    if system == "Windows":
-        return f"{base}-x86_64.msi"
-    if system == "Darwin":
-        return f"{base}.dmg"
-    return f"{base}-x86_64.AppImage"
+def latest_version(versions_file: Path) -> str:
+    """The newest MuseScore version listed in *versions_file*."""
+    versions: dict[str, str] = json.loads(versions_file.read_text())
+    return versions["latest"]
+
+
+def fetch_json(url: str) -> Any:
+    """GET *url* and decode the JSON body, sending the GitHub token if set."""
+    request = urllib.request.Request(url, headers={"Accept": "application/json"})  # noqa: S310
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    with urllib.request.urlopen(request) as response:  # noqa: S310
+        return json.load(response)
+
+
+def release_asset_url(system: str, version: str) -> str:
+    """The download URL of the *version* release asset for *system*.
+
+    Asset names carry a build number (``MuseScore-Studio-4.7.5.260831071.dmg``)
+    that only the release itself knows, so the release is looked up through
+    the GitHub API and the asset chosen by its platform suffix.
+    """
+    suffix = RELEASE_ASSET_SUFFIXES[system]
+    release = fetch_json(f"{RELEASES_API_URL}/v{version}")
+    assets: list[dict[str, Any]] = release.get("assets", [])
+    for asset in assets:
+        if str(asset["name"]).endswith(suffix):
+            return str(asset["browser_download_url"])
+    raise HarnessError(f"release v{version} has no asset ending in {suffix}")
 
 
 @dataclass(frozen=True)
@@ -217,25 +246,27 @@ class Settings:
 
     system: str
     version: str
-    download_url: str
     cache_dir: Path
     layout: Layout
+    download_url: str | None = None
+    """An explicit asset URL; otherwise the release is looked up on demand."""
 
     @classmethod
     def from_environment(cls) -> Settings:
         system = platform.system()
-        version = os.environ.get("MUSESCORE_VERSION", DEFAULT_VERSION)
-        build = os.environ.get("MUSESCORE_BUILD", DEFAULT_BUILD)
-        url = os.environ.get("MUSESCORE_DOWNLOAD_URL") or default_download_url(
-            system, version, build
-        )
+        version = os.environ.get("MUSESCORE_VERSION") or latest_version(VERSIONS_FILE)
         cache_dir = Path(
             os.environ.get(
                 "MUSESCORE_CACHE_DIR",
                 Path.home() / ".cache" / "mcp-score" / f"musescore-{version}",
             )
         )
-        return cls(system, version, url, cache_dir, layout_for(system, Path.home()))
+        layout = layout_for(system, Path.home())
+        url = os.environ.get("MUSESCORE_DOWNLOAD_URL") or None
+        return cls(system, version, cache_dir, layout, url)
+
+    def resolve_download_url(self) -> str:
+        return self.download_url or release_asset_url(self.system, self.version)
 
     @property
     def executable(self) -> Path:
@@ -269,13 +300,13 @@ def install(settings: Settings) -> Path:
     if settings.system == "Windows":
         installer = settings.cache_dir / "MuseScore.msi"
         if not installer.exists():
-            download(settings.download_url, installer)
+            download(settings.resolve_download_url(), installer)
         logger.info("installing %s silently", installer.name)
         run(["msiexec", "/i", str(installer), "/qn", "ALLUSERS=1"])
     elif settings.system == "Darwin":
         image = settings.cache_dir / "MuseScore.dmg"
         if not image.exists():
-            download(settings.download_url, image)
+            download(settings.resolve_download_url(), image)
         mount_point = settings.cache_dir / "mnt"
         logger.info("mounting %s", image.name)
         run(
@@ -307,7 +338,7 @@ def install(settings: Settings) -> Path:
         )
     else:
         appimage = settings.cache_dir / "MuseScore.AppImage"
-        download(settings.download_url, appimage)
+        download(settings.resolve_download_url(), appimage)
         appimage.chmod(0o755)
         # Extracting avoids needing FUSE, which CI runners and containers lack.
         logger.info("extracting AppImage")
