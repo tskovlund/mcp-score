@@ -106,6 +106,7 @@ src/mcp_score/
   tools/
     connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py       Score reading tools (read_passage, get_measure_content, get_selection_properties)
+    generate.py       Score generation tools (generate_score, score_generation_guide) and the score-generate prompt
     manipulation.py   Score modification tools (barlines, chords, keys, tempo, transpose, undo)
   bridge/
     base.py           ScoreBridge abstract base class

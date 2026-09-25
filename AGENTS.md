@@ -16,6 +16,7 @@ src/mcp_score/
   tools/
     connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py       Read passages and measures from live score
+    generate.py       Run music21 scripts and serve the score-generate guide (any MCP client)
     manipulation.py   Modify live score (barlines, chords, keys, tempo, transpose)
   bridge/
     base.py           ScoreBridge abstract base class
