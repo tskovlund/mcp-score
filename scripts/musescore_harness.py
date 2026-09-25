@@ -111,11 +111,13 @@ class Layout:
 def layout_for(system: str, home: Path) -> Layout:
     """MuseScore's settings, data and plugin locations for *system*.
 
-    MuseScore stores settings as an ini file under Qt's config location and
-    its data under the app-local data location on every platform.
+    MuseScore stores settings as a Qt ini file and its data under Qt's
+    app-local data location. For ini files Qt uses ``~/.config`` on macOS
+    as well as Linux; only Windows keeps them under the roaming profile.
     """
     documents = home / "Documents" / "MuseScore4" / "Plugins"
     temp = Path(tempfile.gettempdir()) / "mcp-score-musescore.log"
+    ini = home / ".config" / "MuseScore" / "MuseScore4.ini"
     if system == "Windows":
         appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
         local = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
@@ -127,21 +129,10 @@ def layout_for(system: str, home: Path) -> Layout:
             temp,
         )
     if system == "Darwin":
-        library = home / "Library"
-        return Layout(
-            system,
-            library / "Preferences" / "MuseScore" / "MuseScore4.ini",
-            library / "Application Support" / "MuseScore" / "MuseScore4",
-            documents,
-            temp,
-        )
-    return Layout(
-        system,
-        home / ".config" / "MuseScore" / "MuseScore4.ini",
-        home / ".local" / "share" / "MuseScore" / "MuseScore4",
-        documents,
-        temp,
-    )
+        data = home / "Library" / "Application Support" / "MuseScore" / "MuseScore4"
+        return Layout(system, ini, data, documents, temp)
+    data = home / ".local" / "share" / "MuseScore" / "MuseScore4"
+    return Layout(system, ini, data, documents, temp)
 
 
 def default_download_url(system: str, version: str, build: str) -> str:

@@ -40,15 +40,14 @@ class TestLayoutFor:
         assert layout.plugins_dir == tmp_path / "Documents/MuseScore4/Plugins"
         assert layout.log_dir == layout.data_dir / "logs"
 
-    def test_macos_uses_library_directories(self, tmp_path: Path) -> None:
+    def test_macos_keeps_ini_under_config_and_data_under_library(
+        self, tmp_path: Path
+    ) -> None:
         # Act
         layout = harness.layout_for("Darwin", tmp_path)
 
         # Assert
-        assert (
-            layout.settings_file
-            == tmp_path / "Library/Preferences/MuseScore/MuseScore4.ini"
-        )
+        assert layout.settings_file == tmp_path / ".config/MuseScore/MuseScore4.ini"
         assert (
             layout.data_dir
             == tmp_path / "Library/Application Support/MuseScore/MuseScore4"
