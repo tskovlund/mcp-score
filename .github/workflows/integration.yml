@@ -66,7 +66,7 @@ jobs:
 
       - name: Bridge tests (live plugin)
         env:
-          DISPLAY: ":99"
+          DISPLAY: ":87"
         run: uv run pytest tests/integration/test_musescore_bridge.py -v
 
       - name: Stop MuseScore and collect logs

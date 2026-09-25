@@ -46,7 +46,9 @@ MUSESCORE_SETTINGS_FILE="$HOME/.config/MuseScore/MuseScore4.ini"
 MUSESCORE_DATA_DIR="$HOME/.local/share/MuseScore/MuseScore4"
 MUSESCORE_LOG_DIR="$MUSESCORE_DATA_DIR/logs"
 
-DISPLAY_NUMBER=99
+# Not :99, which is the first display xvfb-run picks: the render tests run
+# under xvfb-run in the same job and must not collide with this server.
+DISPLAY_NUMBER="${MUSESCORE_DISPLAY_NUMBER:-87}"
 XVFB_DISPLAY=":$DISPLAY_NUMBER"
 XVFB_SCREEN="1600x1000x24"
 XVFB_SOCKET="/tmp/.X11-unix/X$DISPLAY_NUMBER"
@@ -181,9 +183,11 @@ EOF
 start_xvfb() {
     # MuseScore needs a real X display even for headless work (it initialises
     # GTK, which QT_QPA_PLATFORM=offscreen does not satisfy), so run it under Xvfb.
-    if pgrep -f "^Xvfb $XVFB_DISPLAY " >/dev/null; then
+    if pgrep -f "^Xvfb $XVFB_DISPLAY " >/dev/null && [ -S "$XVFB_SOCKET" ]; then
         log "Xvfb already running on $XVFB_DISPLAY"
     else
+        # A server without its socket is one that is still shutting down.
+        pkill -f "^Xvfb $XVFB_DISPLAY " 2>/dev/null || true
         # A killed Xvfb can leave its socket behind, which would make the new
         # server refuse the display.
         rm -f "$XVFB_SOCKET"
