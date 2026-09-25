@@ -11,8 +11,8 @@ Follow the code standards in [CONVENTIONS.md](CONVENTIONS.md).
 
 ```
 src/mcp_score/
-  server.py           MCP server entry point (FastMCP)
-  app.py              Shared FastMCP instance
+  server.py           MCP server entry point (MCPServer)
+  app.py              Shared MCPServer instance
   tools/
     connection.py     Connect/disconnect MuseScore, Dorico & Sibelius, ping, score info
     analysis.py       Read passages and measures from live score

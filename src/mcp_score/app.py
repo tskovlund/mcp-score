@@ -1,7 +1,7 @@
-"""FastMCP application instance — shared by all tool modules."""
+"""MCPServer application instance — shared by all tool modules."""
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 __all__ = ["mcp"]
 
-mcp = FastMCP("mcp-score")
+mcp = MCPServer("mcp-score")

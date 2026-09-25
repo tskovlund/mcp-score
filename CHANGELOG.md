@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- Migrated from the `mcp` Python SDK v1 to v2 (`FastMCP` renamed to `MCPServer`, `mcp.server.fastmcp` import path replaced by `mcp.server.mcpserver`)
 - Skill now asks user for missing metadata (title, composer, arranger, subtitle, copyright) instead of silently using defaults
 - Chord repetition intervals are context-aware: divides phrase length evenly instead of fixed "every 4 bars"
 - Skill documents volta brackets (1st/2nd endings) via `spanner.RepeatBracket`
