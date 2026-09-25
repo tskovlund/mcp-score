@@ -73,3 +73,6 @@ reportUnknownArgumentType = "warning"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: needs a real MuseScore Studio install; skipped unless MCP_SCORE_INTEGRATION=1",
+]

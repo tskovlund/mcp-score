@@ -1,0 +1,72 @@
+name: Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned MuseScore Studio release; scripts/musescore-headless.sh has the same defaults.
+  MUSESCORE_VERSION: "4.7.5"
+  MUSESCORE_APPIMAGE_URL: https://github.com/musescore/MuseScore/releases/download/v4.7.5/MuseScore-Studio-4.7.5.260831071-x86_64.AppImage
+  MCP_SCORE_INTEGRATION: "1"
+  # Interpreter with the websockets package, used by the script to poll the bridge.
+  PYTHON: ${{ github.workspace }}/.venv/bin/python
+
+jobs:
+  musescore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+      - run: uv sync
+
+      - name: Install MuseScore runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xdotool libegl1 libgl1 libopengl0 libxkbcommon0 libnss3 libpulse0 libasound2t64
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/mcp-score/musescore-${{ env.MUSESCORE_VERSION }}
+          key: musescore-${{ env.MUSESCORE_VERSION }}-${{ runner.os }}
+
+      - name: Install MuseScore
+        id: musescore
+        run: echo "app_run=$(scripts/musescore-headless.sh install)" >> "$GITHUB_OUTPUT"
+
+      - name: Render tests (headless export)
+        env:
+          MCP_SCORE_MUSESCORE_PATH: ${{ steps.musescore.outputs.app_run }}
+        run: xvfb-run -a uv run pytest tests/integration/test_musescore_render.py -v
+
+      - name: Start MuseScore with the bridge plugin
+        run: scripts/musescore-headless.sh start tests/integration/fixtures/fixture.musicxml
+
+      - name: Bridge tests (live plugin)
+        env:
+          DISPLAY: ":99"
+        run: uv run pytest tests/integration/test_musescore_bridge.py -v
+
+      - name: Stop MuseScore and collect logs
+        if: always()
+        run: |
+          scripts/musescore-headless.sh stop
+          mkdir -p musescore-logs
+          newest_log="$(find ~/.local/share/MuseScore/MuseScore4/logs -maxdepth 1 -name '*.log' -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)"
+          if [ -n "$newest_log" ]; then cp "$newest_log" musescore-logs/; fi
+          if [ -f /tmp/mcp-score-musescore.log ]; then cp /tmp/mcp-score-musescore.log musescore-logs/; fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: musescore-logs
+          path: musescore-logs/
+          if-no-files-found: ignore

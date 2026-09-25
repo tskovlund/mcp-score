@@ -67,6 +67,37 @@ pytest tests/test_cli.py  # run specific test file
 pytest -k "test_install"  # run tests matching pattern
 ```
 
+### Integration tests
+
+`tests/integration/` runs the real thing against MuseScore Studio 4.7.5: the
+headless `render_score` export and the live plugin bridge. The tests are
+marked `integration` and skip unless `MCP_SCORE_INTEGRATION=1` is set, so the
+plain `pytest` run stays fast and offline. CI runs them in the `Integration`
+workflow on every pull request.
+
+To run them locally on Linux (needs `xvfb`, `xdotool` and the Qt runtime
+libraries listed in `.github/workflows/integration.yml`):
+
+```bash
+# 1. Download and extract the MuseScore AppImage (cached, prints the launcher path)
+export MCP_SCORE_MUSESCORE_PATH="$(scripts/musescore-headless.sh install)"
+
+# 2. Headless export tests (MuseScore needs an X display even for export)
+MCP_SCORE_INTEGRATION=1 xvfb-run -a pytest tests/integration/test_musescore_render.py
+
+# 3. Live bridge tests: start MuseScore under Xvfb with the plugin listening on :8765
+scripts/musescore-headless.sh start tests/integration/fixtures/fixture.musicxml
+MCP_SCORE_INTEGRATION=1 pytest tests/integration/test_musescore_bridge.py
+scripts/musescore-headless.sh stop
+```
+
+`start` overwrites MuseScore's user configuration (plugin, shortcut,
+first-launch flags) under `~/.config/MuseScore` and `~/.local/share/MuseScore`,
+so use a throwaway `HOME` on a machine where you use MuseScore yourself. The
+script honours `MUSESCORE_VERSION`, `MUSESCORE_APPIMAGE_URL`,
+`MUSESCORE_CACHE_DIR` and `PYTHON` (an interpreter with `websockets`, used to
+poll the bridge); the defaults match the workflow.
+
 ## PR process
 
 All contributions go through pull requests — **do not push directly to `main`**.
