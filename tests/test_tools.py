@@ -1,818 +1,753 @@
-"""Tests for MCP tool modules — validation, helpers, and tool behavior."""
+"""Tests for the MCP tools: the JSON wrapper, connection, analysis, manipulation.
+
+Behaviour shared by every application (validation, the not-connected
+error, navigation, what the bridge is asked to do) is tested here once,
+against a ``FakeBridge``. Dorico-specific behaviour lives in
+``test_dorico_tools.py``.
+"""
 
 from __future__ import annotations
 
-import json
+import inspect
+from functools import partial
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mcp_score.bridge.musescore import MuseScoreBridge
-from mcp_score.tools import (
-    NOT_CONNECTED,
-    check_measure,
-    connected_bridge,
+from mcp_score.bridge import CommandResult, NoteDuration
+from mcp_score.tools import NOT_CONNECTED, ToolError, score_tool
+from mcp_score.tools.analysis import (
+    get_measure_content,
+    get_selection_properties,
+    read_passage,
 )
+from mcp_score.tools.connection import (
+    connect_to_musescore,
+    disconnect_from_musescore,
+    get_live_score_info,
+    ping_score_app,
+)
+from mcp_score.tools.manipulation import (
+    add_live_chord_symbol,
+    add_live_dynamic,
+    add_live_note,
+    add_live_rehearsal_mark,
+    append_live_measures,
+    set_live_barline,
+    set_live_key_signature,
+    set_live_tempo,
+    set_live_time_signature,
+    transpose_passage,
+    undo_last_action,
+)
+from tests.fakes import WEBSOCKETS_CONNECT, BridgeCall, FakeBridge, fake_connection
 
-# ── Helper tests ─────────────────────────────────────────────────────
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from mcp_score.bridge import BridgeRegistry
+
+type ToolCall = Callable[[], Awaitable[str]]
+"""A tool with its arguments bound, ready to run."""
+
+NAVIGATION_ERROR = "Measure 99 is beyond the end of the score"
 
 
-class TestCheckMeasure:
-    def test_valid_measure_returns_none(self) -> None:
-        assert check_measure(1) is None
-
-    def test_invalid_measure_returns_error(self) -> None:
-        result = check_measure(0)
-        assert result is not None
-        assert "must be >= 1" in result
+# ── score_tool ────────────────────────────────────────────────────────
 
 
-class TestConnectedBridge:
-    def test_get_connected_bridge_returns_bridge(self) -> None:
+class TestScoreTool:
+    @pytest.mark.anyio()
+    async def test_tool_error_with_details_becomes_error_result(self) -> None:
         # Arrange
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
+        @score_tool
+        async def failing(returncode: int) -> CommandResult:
+            raise ToolError("Script failed.", returncode=returncode, stderr="boom")
 
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = connected_bridge()
+        # Act
+        result = await failing(3)
 
         # Assert
-        assert result is mock_bridge
+        assert result == {"error": "Script failed.", "returncode": 3, "stderr": "boom"}
 
-    def test_get_disconnected_bridge_returns_none(self) -> None:
+    @pytest.mark.anyio()
+    async def test_result_passes_through(self) -> None:
         # Arrange
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = False
+        @score_tool
+        async def succeeding(value: str) -> CommandResult:
+            return {"success": True, "value": value}
 
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = connected_bridge()
-
-        # Assert
-        assert result is None
-
-    def test_get_bridge_without_active_returns_none(self) -> None:
-        # Arrange / Act
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            result = connected_bridge()
+        # Act
+        result = await succeeding("x")
 
         # Assert
-        assert result is None
+        assert result == {"success": True, "value": "x"}
+
+    def test_wrapper_keeps_parameters(self) -> None:
+        # Arrange
+        async def original(measure: int, text: str = "A") -> CommandResult:
+            return {}
+
+        # Act
+        wrapped = score_tool(original)
+
+        # Assert
+        assert (
+            inspect.signature(wrapped).parameters
+            == inspect.signature(original).parameters
+        )
+        assert wrapped.__name__ == "original"
 
 
-# ── Connection tool tests ────────────────────────────────────────────
+# ── Not connected ────────────────────────────────────────────────────
+
+
+class TestToolsWithoutConnection:
+    @pytest.mark.anyio()
+    @pytest.mark.parametrize(
+        "call",
+        [
+            pytest.param(get_live_score_info, id="get_live_score_info"),
+            pytest.param(ping_score_app, id="ping_score_app"),
+            pytest.param(partial(read_passage, 1, 4), id="read_passage"),
+            pytest.param(partial(get_measure_content, 1), id="get_measure_content"),
+            pytest.param(get_selection_properties, id="get_selection_properties"),
+            pytest.param(partial(add_live_note, 1, 60), id="add_live_note"),
+            pytest.param(
+                partial(add_live_rehearsal_mark, 1, "A"), id="add_live_rehearsal_mark"
+            ),
+            pytest.param(
+                partial(add_live_chord_symbol, 1, "Cmaj7"), id="add_live_chord_symbol"
+            ),
+            pytest.param(partial(add_live_dynamic, 1, "mf"), id="add_live_dynamic"),
+            pytest.param(partial(set_live_barline, 1, "double"), id="set_live_barline"),
+            pytest.param(
+                partial(set_live_key_signature, 1, 2), id="set_live_key_signature"
+            ),
+            pytest.param(
+                partial(set_live_time_signature, 1, 3, 4), id="set_live_time_signature"
+            ),
+            pytest.param(partial(set_live_tempo, 1, 120), id="set_live_tempo"),
+            pytest.param(partial(append_live_measures, 2), id="append_live_measures"),
+            pytest.param(
+                partial(transpose_passage, 1, 4, 0, 2), id="transpose_passage"
+            ),
+            pytest.param(undo_last_action, id="undo_last_action"),
+        ],
+    )
+    async def test_tool_without_connection_returns_not_connected(
+        self, call: ToolCall
+    ) -> None:
+        # Arrange: the autouse fixture leaves nothing active.
+        # Act
+        result = await call()
+
+        # Assert
+        assert result == {"error": NOT_CONNECTED}
+
+    @pytest.mark.anyio()
+    async def test_tool_with_disconnected_active_bridge_returns_not_connected(
+        self, isolated_registry: BridgeRegistry
+    ) -> None:
+        # Arrange
+        isolated_registry.active = FakeBridge(is_connected=False)
+
+        # Act
+        result = await undo_last_action()
+
+        # Assert
+        assert result == {"error": NOT_CONNECTED}
+
+
+# ── Connection tools ─────────────────────────────────────────────────
 
 
 class TestConnectToMusescore:
     @pytest.mark.anyio()
-    async def test_connect_returns_success(self) -> None:
+    async def test_connect_activates_musescore_at_given_address(
+        self, isolated_registry: BridgeRegistry
+    ) -> None:
         # Arrange
-        from mcp_score.tools.connection import connect_to_musescore
+        connect = AsyncMock(return_value=fake_connection())
 
-        mock_bridge = AsyncMock()
-        mock_bridge.connect = AsyncMock(return_value=True)
-        mock_bridge.is_connected = False
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_musescore_bridge",
-                return_value=mock_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=None,
-            ),
-            patch("mcp_score.tools.connection.set_active_bridge"),
-        ):
+        with patch(WEBSOCKETS_CONNECT, connect):
             # Act
-            result = json.loads(await connect_to_musescore())
+            result = await connect_to_musescore(host="10.0.0.5", port=9000)
 
         # Assert
         assert result["success"] is True
-        assert "Connected" in result["message"]
+        assert "ws://10.0.0.5:9000" in result["message"]
+        assert isolated_registry.active is isolated_registry.musescore
+        assert isolated_registry.musescore.is_connected is True
+        connect.assert_awaited_once_with("ws://10.0.0.5:9000")
 
     @pytest.mark.anyio()
-    async def test_connect_failure_returns_error(self) -> None:
+    async def test_connect_failure_returns_error_with_plugin_hint(
+        self, isolated_registry: BridgeRegistry
+    ) -> None:
         # Arrange
-        from mcp_score.tools.connection import connect_to_musescore
-
-        mock_bridge = AsyncMock()
-        mock_bridge.connect = AsyncMock(return_value=False)
-        mock_bridge.is_connected = False
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_musescore_bridge",
-                return_value=mock_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=None,
-            ),
-        ):
+        with patch(WEBSOCKETS_CONNECT, AsyncMock(side_effect=OSError("refused"))):
             # Act
-            result = json.loads(await connect_to_musescore())
+            result = await connect_to_musescore()
 
         # Assert
-        assert "error" in result
-        assert "Could not connect" in result["error"]
+        assert "Could not connect to MuseScore" in result["error"]
+        assert "plugin" in result["error"]
+        assert isolated_registry.active is None
 
-
-class TestDisconnectFromMusescore:
     @pytest.mark.anyio()
-    async def test_disconnect_returns_success(self) -> None:
+    async def test_disconnect_closes_connection_and_deactivates(
+        self, isolated_registry: BridgeRegistry
+    ) -> None:
         # Arrange
-        from mcp_score.tools.connection import disconnect_from_musescore
+        connection = fake_connection()
+        with patch(WEBSOCKETS_CONNECT, AsyncMock(return_value=connection)):
+            await connect_to_musescore()
 
-        mock_bridge = AsyncMock()
-
-        with (
-            patch(
-                "mcp_score.tools.connection.get_musescore_bridge",
-                return_value=mock_bridge,
-            ),
-            patch(
-                "mcp_score.tools.connection.get_active_bridge",
-                return_value=mock_bridge,
-            ),
-            patch("mcp_score.tools.connection.set_active_bridge"),
-        ):
-            # Act
-            result = json.loads(await disconnect_from_musescore())
+        # Act
+        result = await disconnect_from_musescore()
 
         # Assert
         assert result["success"] is True
-        mock_bridge.disconnect.assert_called_once()
+        assert "Disconnected from MuseScore" in result["message"]
+        assert isolated_registry.active is None
+        connection.close.assert_awaited_once()
 
 
 class TestGetLiveScoreInfo:
     @pytest.mark.anyio()
-    async def test_get_info_without_connection_returns_error(self) -> None:
+    async def test_get_info_returns_bridge_score(
+        self, connected_bridge: FakeBridge
+    ) -> None:
         # Arrange
-        from mcp_score.tools.connection import get_live_score_info
+        connected_bridge.reply("get_score", {"result": {"title": "Test Score"}})
 
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            # Act
-            result = json.loads(await get_live_score_info())
+        # Act
+        result = await get_live_score_info()
 
         # Assert
-        assert "error" in result
-        assert NOT_CONNECTED in result["error"]
-
-    @pytest.mark.anyio()
-    async def test_get_info_returns_score_data(self) -> None:
-        # Arrange
-        from mcp_score.tools.connection import get_live_score_info
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.get_score = AsyncMock(
-            return_value={"title": "Test Score", "measures": 32}
-        )
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await get_live_score_info())
-
-        # Assert
-        assert result["title"] == "Test Score"
+        assert result == {"result": {"title": "Test Score"}}
 
 
 class TestPingScoreApp:
     @pytest.mark.anyio()
-    async def test_ping_without_connection_returns_error(self) -> None:
+    async def test_ping_responsive_app_returns_success(
+        self, connected_bridge: FakeBridge
+    ) -> None:
         # Arrange
-        from mcp_score.tools.connection import ping_score_app
+        connected_bridge.ping_succeeds = True
 
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            # Act
-            result = json.loads(await ping_score_app())
-
-        # Assert
-        assert "error" in result
-
-    @pytest.mark.anyio()
-    async def test_ping_responsive_app_returns_success(self) -> None:
-        # Arrange
-        from mcp_score.tools.connection import ping_score_app
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.ping = AsyncMock(return_value=True)
-        mock_bridge.application_name = "MuseScore"
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await ping_score_app())
+        # Act
+        result = await ping_score_app()
 
         # Assert
         assert result["success"] is True
+        assert "FakeApp is responsive" in result["message"]
 
     @pytest.mark.anyio()
-    async def test_ping_unresponsive_app_returns_error(self) -> None:
+    async def test_ping_unresponsive_app_returns_error(
+        self, connected_bridge: FakeBridge
+    ) -> None:
         # Arrange
-        from mcp_score.tools.connection import ping_score_app
+        connected_bridge.ping_succeeds = False
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.ping = AsyncMock(return_value=False)
-        mock_bridge.application_name = "MuseScore"
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await ping_score_app())
+        # Act
+        result = await ping_score_app()
 
         # Assert
-        assert "error" in result
+        assert result == {"error": "FakeApp is not responding."}
 
 
-# ── Analysis tool tests ──────────────────────────────────────────────
+# ── Analysis tools ───────────────────────────────────────────────────
 
 
 class TestReadPassage:
     @pytest.mark.anyio()
-    async def test_read_passage_without_connection_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.analysis import read_passage
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            # Act
-            result = json.loads(await read_passage(1, 4))
-
-        # Assert
-        assert "error" in result
-
-    @pytest.mark.anyio()
-    async def test_read_passage_with_invalid_start_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.analysis import read_passage
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await read_passage(0, 4))
+    @pytest.mark.parametrize(
+        ("start_measure", "end_measure", "expected_error"),
+        [
+            pytest.param(0, 4, "start_measure must be >= 1.", id="start-below-one"),
+            pytest.param(5, 3, "end_measure must be >= start_measure.", id="empty"),
+        ],
+    )
+    async def test_read_passage_with_invalid_range_returns_error(
+        self,
+        connected_bridge: FakeBridge,
+        start_measure: int,
+        end_measure: int,
+        expected_error: str,
+    ) -> None:
+        # Act
+        result = await read_passage(start_measure, end_measure)
 
         # Assert
-        assert "must be >= 1" in result["error"]
+        assert result == {"error": expected_error}
+        assert connected_bridge.calls == []
 
     @pytest.mark.anyio()
-    async def test_read_passage_with_end_before_start_returns_error(self) -> None:
+    async def test_read_passage_reads_cursor_in_every_measure(
+        self, connected_bridge: FakeBridge
+    ) -> None:
         # Arrange
-        from mcp_score.tools.analysis import read_passage
+        connected_bridge.reply("get_cursor_info", {"result": {"beat": 1}})
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await read_passage(5, 3))
-
-        # Assert
-        assert "end_measure" in result["error"]
-
-    @pytest.mark.anyio()
-    async def test_read_passage_returns_elements_for_range(self) -> None:
-        # Arrange
-        from mcp_score.tools.analysis import read_passage
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.get_cursor_info = AsyncMock(return_value={"beat": 1})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await read_passage(1, 3))
+        # Act
+        result = await read_passage(2, 3)
 
         # Assert
         assert result["success"] is True
-        assert len(result["elements"]) == 3
-        assert mock_bridge.go_to_measure.call_count == 3
-
-
-class TestReadPassageWithStaff:
-    @pytest.mark.anyio()
-    async def test_read_passage_with_staff_navigates_to_staff(self) -> None:
-        # Arrange
-        from mcp_score.tools.analysis import read_passage
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.get_cursor_info = AsyncMock(return_value={"beat": 1})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            await read_passage(1, 2, staff=3)
-
-        # Assert
-        assert mock_bridge.go_to_staff.call_count == 2
-        mock_bridge.go_to_staff.assert_called_with(3)
+        assert result["staff"] is None
+        assert result["elements"] == [
+            {"measure": 2, "content": {"result": {"beat": 1}}},
+            {"measure": 3, "content": {"result": {"beat": 1}}},
+        ]
+        assert connected_bridge.calls == [
+            BridgeCall("go_to_measure", (2,)),
+            BridgeCall("get_cursor_info", ()),
+            BridgeCall("go_to_measure", (3,)),
+            BridgeCall("get_cursor_info", ()),
+        ]
 
     @pytest.mark.anyio()
-    async def test_read_passage_without_staff_skips_staff_navigation(self) -> None:
-        # Arrange
-        from mcp_score.tools.analysis import read_passage
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.get_cursor_info = AsyncMock(return_value={"beat": 1})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            await read_passage(1, 2, staff=None)
+    async def test_read_passage_with_staff_moves_to_staff_in_every_measure(
+        self, connected_bridge: FakeBridge
+    ) -> None:
+        # Act
+        await read_passage(1, 2, staff=3)
 
         # Assert
-        mock_bridge.go_to_staff.assert_not_called()
+        assert connected_bridge.calls_to("go_to_staff") == [
+            BridgeCall("go_to_staff", (3,)),
+            BridgeCall("go_to_staff", (3,)),
+        ]
+
+    @pytest.mark.anyio()
+    async def test_read_passage_with_navigation_error_stops_reading(
+        self, connected_bridge: FakeBridge
+    ) -> None:
+        # Arrange
+        connected_bridge.fail("go_to_measure", NAVIGATION_ERROR)
+
+        # Act
+        result = await read_passage(99, 100)
+
+        # Assert
+        assert result == {"error": NAVIGATION_ERROR}
+        assert connected_bridge.calls == [BridgeCall("go_to_measure", (99,))]
+
+    @pytest.mark.anyio()
+    async def test_read_passage_attaches_content_reading_limitation(
+        self, isolated_registry: BridgeRegistry
+    ) -> None:
+        # Arrange
+        isolated_registry.active = FakeBridge(
+            content_reading_limitation="Only status is available."
+        )
+
+        # Act
+        result = await read_passage(1, 1)
+
+        # Assert
+        assert result["warning"] == "Only status is available."
+
+    @pytest.mark.anyio()
+    async def test_read_passage_without_limitation_has_no_warning(
+        self, connected_bridge: FakeBridge
+    ) -> None:
+        # Act
+        result = await read_passage(1, 1)
+
+        # Assert
+        assert "warning" not in result
 
 
 class TestGetMeasureContent:
     @pytest.mark.anyio()
-    async def test_get_measure_without_connection_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.analysis import get_measure_content
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            # Act
-            result = json.loads(await get_measure_content(1))
+    async def test_get_measure_with_invalid_number_returns_error(
+        self, connected_bridge: FakeBridge
+    ) -> None:
+        # Act
+        result = await get_measure_content(0)
 
         # Assert
-        assert "error" in result
+        assert result == {"error": "measure must be >= 1."}
+        assert connected_bridge.calls == []
 
     @pytest.mark.anyio()
-    async def test_get_measure_with_invalid_number_returns_error(self) -> None:
+    async def test_get_measure_navigates_then_selects(
+        self, connected_bridge: FakeBridge
+    ) -> None:
         # Arrange
-        from mcp_score.tools.analysis import get_measure_content
+        connected_bridge.reply("select_measure", {"result": {"notes": ["C4"]}})
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await get_measure_content(0))
+        # Act
+        result = await get_measure_content(3, staff=1)
 
         # Assert
-        assert "must be >= 1" in result["error"]
+        assert result == {"result": {"notes": ["C4"]}}
+        assert connected_bridge.calls == [
+            BridgeCall("go_to_measure", (3,)),
+            BridgeCall("go_to_staff", (1,)),
+            BridgeCall("select_measure", ()),
+        ]
 
     @pytest.mark.anyio()
-    async def test_get_measure_navigates_and_selects(self) -> None:
+    async def test_get_measure_with_staff_error_does_not_select(
+        self, connected_bridge: FakeBridge
+    ) -> None:
         # Arrange
-        from mcp_score.tools.analysis import get_measure_content
+        connected_bridge.fail("go_to_staff", "No staff 7")
 
-        mock_bridge = AsyncMock(spec=MuseScoreBridge)
-        mock_bridge.is_connected = True
-        mock_bridge.go_to_measure = AsyncMock(return_value={"result": "ok"})
-        mock_bridge.go_to_staff = AsyncMock(return_value={"result": "ok"})
-        mock_bridge.send_command = AsyncMock(return_value={"notes": ["C4"]})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await get_measure_content(3, staff=1))
+        # Act
+        result = await get_measure_content(1, staff=7)
 
         # Assert
-        mock_bridge.go_to_measure.assert_called_once_with(3)
-        mock_bridge.go_to_staff.assert_called_once_with(1)
-        mock_bridge.send_command.assert_called_once_with("selectCurrentMeasure")
-        assert result["notes"] == ["C4"]
+        assert result == {"error": "No staff 7"}
+        assert connected_bridge.calls_to("select_measure") == []
+
+    @pytest.mark.anyio()
+    async def test_get_measure_attaches_content_reading_limitation(
+        self, isolated_registry: BridgeRegistry
+    ) -> None:
+        # Arrange
+        isolated_registry.active = FakeBridge(
+            content_reading_limitation="Only status is available."
+        )
+
+        # Act
+        result = await get_measure_content(1)
+
+        # Assert
+        assert result["warning"] == "Only status is available."
 
 
 class TestGetSelectionProperties:
     @pytest.mark.anyio()
-    async def test_get_properties_without_connection_returns_error(self) -> None:
+    async def test_get_properties_returns_bridge_properties(
+        self, connected_bridge: FakeBridge
+    ) -> None:
         # Arrange
-        from mcp_score.tools.analysis import get_selection_properties
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            # Act
-            result = json.loads(await get_selection_properties())
-
-        # Assert
-        assert "error" in result
-        assert NOT_CONNECTED in result["error"]
-
-    @pytest.mark.anyio()
-    async def test_get_properties_returns_selection_data(self) -> None:
-        # Arrange
-        from mcp_score.tools.analysis import get_selection_properties
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.get_properties = AsyncMock(
-            return_value={"Properties": [{"Name": "kNoteHideStem"}]}
+        connected_bridge.reply(
+            "get_properties", {"Properties": [{"Name": "kNoteHideStem"}]}
         )
 
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await get_selection_properties())
-
-        # Assert
-        assert result["Properties"][0]["Name"] == "kNoteHideStem"
-
-
-class TestTransposePassageErrorBranch:
-    @pytest.mark.anyio()
-    async def test_transpose_with_failed_selection_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import transpose_passage
-
-        mock_bridge = AsyncMock(spec=MuseScoreBridge)
-        mock_bridge.is_connected = True
-        mock_bridge.go_to_measure = AsyncMock(return_value={"result": "ok"})
-        mock_bridge.go_to_staff = AsyncMock(return_value={"result": "ok"})
-        mock_bridge.send_command = AsyncMock(return_value={"error": "Invalid range"})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await transpose_passage(1, 4, 0, 5))
-
-        # Assert — should return the error from selectCustomRange, not call transpose
-        assert result["error"] == "Invalid range"
-        assert mock_bridge.send_command.call_count == 1
-
-
-# ── Manipulation tool tests ──────────────────────────────────────────
-
-
-class TestManipulationToolsRequireConnection:
-    """All manipulation tools must return an error when not connected."""
-
-    @pytest.mark.anyio()
-    async def test_add_rehearsal_mark_without_connection_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import add_live_rehearsal_mark
-
         # Act
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            result = json.loads(await add_live_rehearsal_mark(1, "A"))
+        result = await get_selection_properties()
 
         # Assert
-        assert "error" in result
+        assert result == {"Properties": [{"Name": "kNoteHideStem"}]}
 
+
+# ── Manipulation tools ───────────────────────────────────────────────
+
+
+class TestManipulationValidation:
     @pytest.mark.anyio()
-    async def test_add_chord_symbol_without_connection_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import add_live_chord_symbol
-
+    @pytest.mark.parametrize(
+        ("call", "expected_error"),
+        [
+            pytest.param(
+                partial(add_live_note, 0, 60),
+                "measure must be >= 1.",
+                id="note-measure-zero",
+            ),
+            pytest.param(
+                partial(add_live_note, 1, 128),
+                "pitch must be between 0 and 127.",
+                id="note-pitch-too-high",
+            ),
+            pytest.param(
+                partial(add_live_note, 1, -1),
+                "pitch must be between 0 and 127.",
+                id="note-pitch-negative",
+            ),
+            pytest.param(
+                partial(add_live_note, 1, 60, numerator=0),
+                "numerator and denominator must be >= 1.",
+                id="note-zero-numerator",
+            ),
+            pytest.param(
+                partial(add_live_note, 1, 60, denominator=0),
+                "numerator and denominator must be >= 1.",
+                id="note-zero-denominator",
+            ),
+            pytest.param(
+                partial(add_live_rehearsal_mark, 0, "A"),
+                "measure must be >= 1.",
+                id="rehearsal-mark-measure-zero",
+            ),
+            pytest.param(
+                partial(add_live_chord_symbol, -1, "Cmaj7"),
+                "measure must be >= 1.",
+                id="chord-symbol-negative-measure",
+            ),
+            pytest.param(
+                partial(add_live_dynamic, 0, "mf"),
+                "measure must be >= 1.",
+                id="dynamic-measure-zero",
+            ),
+            pytest.param(
+                partial(set_live_barline, 0, "double"),
+                "measure must be >= 1.",
+                id="barline-measure-zero",
+            ),
+            pytest.param(
+                partial(set_live_key_signature, 0, 2),
+                "measure must be >= 1.",
+                id="key-signature-measure-zero",
+            ),
+            pytest.param(
+                partial(set_live_time_signature, 1, 3, 0),
+                "numerator and denominator must be >= 1.",
+                id="time-signature-zero-denominator",
+            ),
+            pytest.param(
+                partial(set_live_tempo, 1, 0),
+                "bpm must be >= 1.",
+                id="tempo-zero-bpm",
+            ),
+            pytest.param(
+                partial(append_live_measures, 0),
+                "count must be >= 1.",
+                id="append-zero-measures",
+            ),
+            pytest.param(
+                partial(transpose_passage, 5, 3, 0, 2),
+                "end_measure must be >= start_measure.",
+                id="transpose-empty-range",
+            ),
+            pytest.param(
+                partial(transpose_passage, 0, 3, 0, 2),
+                "start_measure must be >= 1.",
+                id="transpose-start-zero",
+            ),
+        ],
+    )
+    async def test_tool_with_invalid_argument_returns_error_without_touching_score(
+        self, connected_bridge: FakeBridge, call: ToolCall, expected_error: str
+    ) -> None:
         # Act
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            result = json.loads(await add_live_chord_symbol(1, "Cmaj7"))
+        result = await call()
 
         # Assert
-        assert "error" in result
-
-    @pytest.mark.anyio()
-    async def test_set_barline_without_connection_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import set_live_barline
-
-        # Act
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            result = json.loads(await set_live_barline(1, "double"))
-
-        # Assert
-        assert "error" in result
-
-    @pytest.mark.anyio()
-    async def test_set_tempo_without_connection_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import set_live_tempo
-
-        # Act
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            result = json.loads(await set_live_tempo(1, 120))
-
-        # Assert
-        assert "error" in result
-
-    @pytest.mark.anyio()
-    async def test_transpose_without_connection_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import transpose_passage
-
-        # Act
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            result = json.loads(await transpose_passage(1, 4, 0, 2))
-
-        # Assert
-        assert "error" in result
-
-    @pytest.mark.anyio()
-    async def test_undo_without_connection_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import undo_last_action
-
-        # Act
-        with patch("mcp_score.tools.get_active_bridge", return_value=None):
-            result = json.loads(await undo_last_action())
-
-        # Assert
-        assert "error" in result
-
-
-class TestManipulationMeasureValidation:
-    """Manipulation tools must reject invalid measure numbers."""
-
-    @pytest.mark.anyio()
-    async def test_add_rehearsal_mark_with_zero_measure_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import add_live_rehearsal_mark
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-
-        # Act
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            result = json.loads(await add_live_rehearsal_mark(0, "A"))
-
-        # Assert
-        assert "must be >= 1" in result["error"]
-
-    @pytest.mark.anyio()
-    async def test_add_chord_symbol_with_negative_measure_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import add_live_chord_symbol
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-
-        # Act
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            result = json.loads(await add_live_chord_symbol(-1, "Cmaj7"))
-
-        # Assert
-        assert "must be >= 1" in result["error"]
-
-    @pytest.mark.anyio()
-    async def test_transpose_with_end_before_start_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import transpose_passage
-
-        mock_bridge = AsyncMock(spec=MuseScoreBridge)
-        mock_bridge.is_connected = True
-
-        # Act
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            result = json.loads(await transpose_passage(5, 3, 0, 2))
-
-        # Assert
-        assert "end_measure" in result["error"]
+        assert result == {"error": expected_error}
+        assert connected_bridge.calls == []
 
 
 class TestManipulationHappyPaths:
-    """Verify manipulation tools delegate correctly to the bridge."""
-
     @pytest.mark.anyio()
-    async def test_add_rehearsal_mark_navigates_and_delegates(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import add_live_rehearsal_mark
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.add_rehearsal_mark = AsyncMock(return_value={"result": "ok"})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await add_live_rehearsal_mark(5, "B"))
-
-        # Assert
-        mock_bridge.go_to_measure.assert_called_once_with(5)
-        mock_bridge.add_rehearsal_mark.assert_called_once_with("B")
-        assert result["result"] == "ok"
-
-    @pytest.mark.anyio()
-    async def test_set_tempo_with_text_delegates_correctly(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import set_live_tempo
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.set_tempo = AsyncMock(return_value={"result": "ok"})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await set_live_tempo(1, 66, "Slow Blues"))
-
-        # Assert
-        mock_bridge.set_tempo.assert_called_once_with(66, "Slow Blues")
-        assert result["result"] == "ok"
-
-    @pytest.mark.anyio()
-    async def test_transpose_selects_range_and_transposes(
+    @pytest.mark.parametrize(
+        ("call", "expected_calls"),
+        [
+            pytest.param(
+                partial(add_live_note, 5, 60, 1, 8, staff=1),
+                [
+                    BridgeCall("go_to_measure", (5,)),
+                    BridgeCall("go_to_staff", (1,)),
+                    BridgeCall("add_note", (60, NoteDuration(1, 8), True)),
+                ],
+                id="add_live_note",
+            ),
+            pytest.param(
+                partial(add_live_rehearsal_mark, 5, "B"),
+                [
+                    BridgeCall("go_to_measure", (5,)),
+                    BridgeCall("add_rehearsal_mark", ("B",)),
+                ],
+                id="add_live_rehearsal_mark",
+            ),
+            pytest.param(
+                partial(add_live_chord_symbol, 2, "Dm7"),
+                [
+                    BridgeCall("go_to_measure", (2,)),
+                    BridgeCall("add_chord_symbol", ("Dm7",)),
+                ],
+                id="add_live_chord_symbol",
+            ),
+            pytest.param(
+                partial(add_live_dynamic, 4, "ff", staff=2),
+                [
+                    BridgeCall("go_to_measure", (4,)),
+                    BridgeCall("go_to_staff", (2,)),
+                    BridgeCall("add_dynamic", ("ff",)),
+                ],
+                id="add_live_dynamic",
+            ),
+            pytest.param(
+                partial(set_live_barline, 3, "double"),
+                [
+                    BridgeCall("go_to_measure", (3,)),
+                    BridgeCall("set_barline", ("double",)),
+                ],
+                id="set_live_barline",
+            ),
+            pytest.param(
+                partial(set_live_key_signature, 1, -3),
+                [
+                    BridgeCall("go_to_measure", (1,)),
+                    BridgeCall("set_key_signature", (-3,)),
+                ],
+                id="set_live_key_signature",
+            ),
+            pytest.param(
+                partial(set_live_time_signature, 9, 6, 8),
+                [
+                    BridgeCall("go_to_measure", (9,)),
+                    BridgeCall("set_time_signature", (6, 8)),
+                ],
+                id="set_live_time_signature",
+            ),
+            pytest.param(
+                partial(set_live_tempo, 1, 66, "Slow Blues"),
+                [
+                    BridgeCall("go_to_measure", (1,)),
+                    BridgeCall("set_tempo", (66, "Slow Blues")),
+                ],
+                id="set_live_tempo-with-text",
+            ),
+            pytest.param(
+                partial(set_live_tempo, 1, 120),
+                [
+                    BridgeCall("go_to_measure", (1,)),
+                    BridgeCall("set_tempo", (120, None)),
+                ],
+                id="set_live_tempo-without-text",
+            ),
+            pytest.param(
+                partial(append_live_measures, 4),
+                [BridgeCall("append_measures", (4,))],
+                id="append_live_measures",
+            ),
+            pytest.param(
+                partial(transpose_passage, 1, 8, 2, 5),
+                [
+                    BridgeCall("go_to_measure", (1,)),
+                    BridgeCall("go_to_staff", (2,)),
+                    BridgeCall("select_range", (1, 8, 2, 2)),
+                    BridgeCall("transpose", (5,)),
+                ],
+                id="transpose_passage",
+            ),
+            pytest.param(
+                undo_last_action,
+                [BridgeCall("undo", ())],
+                id="undo_last_action",
+            ),
+        ],
+    )
+    async def test_tool_asks_bridge_in_order_and_returns_its_reply(
         self,
+        connected_bridge: FakeBridge,
+        call: ToolCall,
+        expected_calls: list[BridgeCall],
     ) -> None:
         # Arrange
-        from mcp_score.tools.manipulation import transpose_passage
+        final_method = expected_calls[-1].method
+        connected_bridge.reply(final_method, {"result": {"done": final_method}})
 
-        mock_bridge = AsyncMock(spec=MuseScoreBridge)
-        mock_bridge.is_connected = True
-        mock_bridge.go_to_measure = AsyncMock(return_value={"result": "ok"})
-        mock_bridge.go_to_staff = AsyncMock(return_value={"result": "ok"})
-        mock_bridge.send_command = AsyncMock(return_value={"result": "ok"})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            await transpose_passage(1, 8, 0, 5)
-
-        # Assert — two send_command calls: selectCustomRange + transpose
-        assert mock_bridge.send_command.call_count == 2
-        select_call = mock_bridge.send_command.call_args_list[0]
-        assert select_call.args[0] == "selectCustomRange"
-        assert select_call.args[1]["startStaff"] == 0
-        assert select_call.args[1]["endStaff"] == 0
-        transpose_call = mock_bridge.send_command.call_args_list[1]
-        assert transpose_call.args[0] == "transpose"
-        assert transpose_call.args[1]["semitones"] == 5
-
-    @pytest.mark.anyio()
-    async def test_set_barline_navigates_and_delegates(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import set_live_barline
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.set_barline = AsyncMock(return_value={"result": {"type": "double"}})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await set_live_barline(3, "double"))
+        # Act
+        result = await call()
 
         # Assert
-        mock_bridge.go_to_measure.assert_called_once_with(3)
-        mock_bridge.set_barline.assert_called_once_with("double")
-        assert result["result"]["type"] == "double"
+        assert result == {"result": {"done": final_method}}
+        assert connected_bridge.calls == expected_calls
 
     @pytest.mark.anyio()
-    async def test_set_key_signature_navigates_and_delegates(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import set_live_key_signature
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.set_key_signature = AsyncMock(
-            return_value={"result": {"fifths": -3}}
-        )
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await set_live_key_signature(1, -3))
+    async def test_append_measures_defaults_to_one(
+        self, connected_bridge: FakeBridge
+    ) -> None:
+        # Act
+        await append_live_measures()
 
         # Assert
-        mock_bridge.go_to_measure.assert_called_once_with(1)
-        mock_bridge.set_key_signature.assert_called_once_with(-3)
-        assert result["result"]["fifths"] == -3
+        assert connected_bridge.calls == [BridgeCall("append_measures", (1,))]
+
+
+class TestManipulationNavigationErrors:
+    """A tool that cannot reach its measure must not change anything."""
 
     @pytest.mark.anyio()
-    async def test_add_chord_symbol_navigates_and_delegates(self) -> None:
+    @pytest.mark.parametrize(
+        "call",
+        [
+            pytest.param(partial(add_live_note, 99, 60), id="add_live_note"),
+            pytest.param(
+                partial(add_live_rehearsal_mark, 99, "A"), id="add_live_rehearsal_mark"
+            ),
+            pytest.param(
+                partial(add_live_chord_symbol, 99, "C7"), id="add_live_chord_symbol"
+            ),
+            pytest.param(partial(add_live_dynamic, 99, "p"), id="add_live_dynamic"),
+            pytest.param(partial(set_live_barline, 99, "final"), id="set_live_barline"),
+            pytest.param(
+                partial(set_live_key_signature, 99, 1), id="set_live_key_signature"
+            ),
+            pytest.param(
+                partial(set_live_time_signature, 99, 3, 4),
+                id="set_live_time_signature",
+            ),
+            pytest.param(partial(set_live_tempo, 99, 100), id="set_live_tempo"),
+            pytest.param(
+                partial(transpose_passage, 99, 100, 0, 2), id="transpose_passage"
+            ),
+        ],
+    )
+    async def test_tool_with_measure_error_returns_it_and_writes_nothing(
+        self, connected_bridge: FakeBridge, call: ToolCall
+    ) -> None:
         # Arrange
-        from mcp_score.tools.manipulation import add_live_chord_symbol
+        connected_bridge.fail("go_to_measure", NAVIGATION_ERROR)
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.add_chord_symbol = AsyncMock(
-            return_value={"result": {"text": "Dm7"}}
-        )
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await add_live_chord_symbol(2, "Dm7"))
+        # Act
+        result = await call()
 
         # Assert
-        mock_bridge.go_to_measure.assert_called_once_with(2)
-        mock_bridge.add_chord_symbol.assert_called_once_with("Dm7")
-        assert result["result"]["text"] == "Dm7"
+        assert result == {"error": NAVIGATION_ERROR}
+        assert connected_bridge.calls == [BridgeCall("go_to_measure", (99,))]
 
     @pytest.mark.anyio()
-    async def test_undo_delegates_to_bridge_undo(self) -> None:
+    async def test_tool_with_staff_error_returns_it_and_writes_nothing(
+        self, connected_bridge: FakeBridge
+    ) -> None:
         # Arrange
-        from mcp_score.tools.manipulation import undo_last_action
+        connected_bridge.fail("go_to_staff", "No staff 7")
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.undo = AsyncMock(return_value={"result": "ok"})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await undo_last_action())
+        # Act
+        result = await add_live_dynamic(1, "mf", staff=7)
 
         # Assert
-        mock_bridge.undo.assert_called_once()
-        assert result["result"] == "ok"
+        assert result == {"error": "No staff 7"}
+        assert connected_bridge.calls == [
+            BridgeCall("go_to_measure", (1,)),
+            BridgeCall("go_to_staff", (7,)),
+        ]
 
 
-class TestEdgeCases:
-    """Edge cases that exercise boundary conditions in tool logic."""
+class TestTransposePassage:
+    @pytest.mark.anyio()
+    async def test_transpose_with_failed_selection_returns_error_without_transposing(
+        self, connected_bridge: FakeBridge
+    ) -> None:
+        # Arrange
+        connected_bridge.fail("select_range", "Invalid range")
+
+        # Act
+        result = await transpose_passage(1, 4, 0, 5)
+
+        # Assert
+        assert result == {"error": "Invalid range"}
+        assert connected_bridge.calls_to("transpose") == []
 
     @pytest.mark.anyio()
-    async def test_read_passage_single_measure(self) -> None:
-        """start == end is a valid single-measure read."""
-        from mcp_score.tools.analysis import read_passage
+    async def test_transpose_single_measure_selects_that_measure(
+        self, connected_bridge: FakeBridge
+    ) -> None:
+        # Act
+        result = await transpose_passage(5, 5, 0, 2)
 
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.get_cursor_info = AsyncMock(return_value={"beat": 1})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            result = json.loads(await read_passage(5, 5))
-
-        assert result["success"] is True
-        assert len(result["elements"]) == 1
-
-    @pytest.mark.anyio()
-    async def test_transpose_single_measure(self) -> None:
-        """start == end is a valid single-measure transpose."""
-        from mcp_score.tools.manipulation import transpose_passage
-
-        mock_bridge = AsyncMock(spec=MuseScoreBridge)
-        mock_bridge.is_connected = True
-        mock_bridge.go_to_measure = AsyncMock(return_value={"result": "ok"})
-        mock_bridge.go_to_staff = AsyncMock(return_value={"result": "ok"})
-        mock_bridge.send_command = AsyncMock(return_value={"result": "ok"})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            result = json.loads(await transpose_passage(5, 5, 0, 2))
-
+        # Assert
         assert "error" not in result
-        assert mock_bridge.send_command.call_count == 2
-
-
-class TestBridgeTypeGuards:
-    """Tools that use MuseScore-specific commands must reject other bridges."""
-
-    @pytest.mark.anyio()
-    async def test_transpose_with_non_musescore_bridge_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import transpose_passage
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.application_name = "Dorico"
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await transpose_passage(1, 4, 0, 2))
-
-        # Assert
-        assert "only supported with MuseScore" in result["error"]
-
-    @pytest.mark.anyio()
-    async def test_get_measure_content_with_non_musescore_returns_warning(
-        self,
-    ) -> None:
-        # Arrange
-        from mcp_score.tools.analysis import get_measure_content
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.go_to_measure = AsyncMock(return_value={"result": "ok"})
-        mock_bridge.go_to_staff = AsyncMock(return_value={"result": "ok"})
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await get_measure_content(1, staff=0))
-
-        # Assert
-        assert "warning" in result
-        mock_bridge.send_command.assert_not_called()
-
-
-class TestNavigationErrorHandling:
-    """Tools must propagate navigation errors instead of proceeding."""
-
-    @pytest.mark.anyio()
-    async def test_read_passage_with_navigation_error_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.analysis import read_passage
-
-        mock_bridge = AsyncMock()
-        mock_bridge.is_connected = True
-        mock_bridge.go_to_measure = AsyncMock(
-            return_value={"error": "Measure 99 out of range"}
-        )
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await read_passage(99, 100))
-
-        # Assert
-        assert "error" in result
-        mock_bridge.get_cursor_info.assert_not_called()
-
-    @pytest.mark.anyio()
-    async def test_transpose_with_navigation_error_returns_error(self) -> None:
-        # Arrange
-        from mcp_score.tools.manipulation import transpose_passage
-
-        mock_bridge = AsyncMock(spec=MuseScoreBridge)
-        mock_bridge.is_connected = True
-        mock_bridge.go_to_measure = AsyncMock(
-            return_value={"error": "Measure 99 out of range"}
-        )
-
-        with patch("mcp_score.tools.get_active_bridge", return_value=mock_bridge):
-            # Act
-            result = json.loads(await transpose_passage(99, 100, 0, 2))
-
-        # Assert
-        assert "error" in result
-        mock_bridge.send_command.assert_not_called()
+        assert connected_bridge.calls_to("select_range") == [
+            BridgeCall("select_range", (5, 5, 0, 0))
+        ]

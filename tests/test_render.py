@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -428,7 +427,7 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(await render_score(str(score_file)))
+            result = await render_score(str(score_file))
 
         # Assert
         assert result == {
@@ -448,7 +447,7 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(await render_score(str(score_file), format="midi"))
+            result = await render_score(str(score_file), format="midi")
 
         # Assert
         assert result["output_path"] == str(score_file.with_suffix(".mid"))
@@ -466,7 +465,7 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(await render_score(str(score_file), "png", str(output)))
+            result = await render_score(str(score_file), "png", str(output))
 
         # Assert
         assert result["success"] is True
@@ -483,7 +482,7 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(await render_score(str(score_file)))
+            result = await render_score(str(score_file))
 
         # Assert
         assert result["success"] is True
@@ -498,7 +497,7 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(await render_score(str(tmp_path / "missing.xml")))
+            result = await render_score(str(tmp_path / "missing.xml"))
 
         # Assert
         assert "not found" in result["error"]
@@ -515,7 +514,7 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(await render_score(str(score), format="musicxml"))
+            result = await render_score(str(score), format="musicxml")
 
         # Assert
         assert "overwrite the input" in result["error"]
@@ -530,7 +529,7 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(await render_score(str(score_file), format="svg"))
+            result = await render_score(str(score_file), format="svg")
 
         # Assert
         assert "Unsupported format 'svg'" in result["error"]
@@ -546,8 +545,8 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(
-                await render_score(str(score_file), "pdf", str(tmp_path / "out.png"))
+            result = await render_score(
+                str(score_file), "pdf", str(tmp_path / "out.png")
             )
 
         # Assert
@@ -564,7 +563,7 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(await render_score(str(score_file), "pdf", str(output)))
+            result = await render_score(str(score_file), "pdf", str(output))
 
         # Assert
         assert "Output directory does not exist" in result["error"]
@@ -581,7 +580,7 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(await render_score(str(score_file)))
+            result = await render_score(str(score_file))
 
         # Assert
         assert "MuseScore Studio 4 was not found" in result["error"]
@@ -598,7 +597,7 @@ class TestRenderScore:
 
         with patch("mcp_score.tools.render.render", render_mock):
             # Act
-            result = json.loads(await render_score(str(score_file)))
+            result = await render_score(str(score_file))
 
         # Assert
         assert result["error"] == (
@@ -622,7 +621,7 @@ class TestRenderScore:
             patch.object(cli.asyncio, "create_subprocess_exec", create_subprocess),
         ):
             # Act
-            result = json.loads(await render_score(str(score_file), "wav"))
+            result = await render_score(str(score_file), "wav")
 
         # Assert
         assert result == {

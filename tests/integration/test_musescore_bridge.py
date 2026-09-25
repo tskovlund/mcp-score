@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from mcp_score.bridge import NoteDuration
 from mcp_score.bridge.musescore import MuseScoreBridge
 
 if TYPE_CHECKING:
@@ -30,7 +31,7 @@ _FIXTURE_MEASURE_COUNT = 1
 _FIXTURE_FIRST_PITCH = 60
 _FIXTURE_FIRST_TPC = 14  # C natural
 
-_QUARTER_NOTE: dict[str, int] = {"numerator": 1, "denominator": 4}
+_QUARTER_NOTE = NoteDuration(1, 4)
 _MIDDLE_C = 60
 _TEMPO_BPM = 96
 _CHORD_SYMBOL = "Cmaj7"
@@ -206,20 +207,10 @@ class TestMuseScoreBridgeModifiesScore:
         # Arrange: select the fixture measure on its only staff.
         async with _connected_bridge() as bridge:
             await bridge.go_to_measure(1)
-            selected = await bridge.send_command(
-                "selectCustomRange",
-                {
-                    "startMeasure": 1,
-                    "endMeasure": 1,
-                    "startStaff": _FIRST_STAFF,
-                    "endStaff": _FIRST_STAFF,
-                },
-            )
+            selected = await bridge.select_range(1, 1, _FIRST_STAFF, _FIRST_STAFF)
 
             # Act
-            transposed = await bridge.send_command(
-                "transpose", {"semitones": _MINOR_THIRD_DOWN}
-            )
+            transposed = await bridge.transpose(_MINOR_THIRD_DOWN)
             note_after = await _first_note(bridge)
             await bridge.undo()
             note_restored = await _first_note(bridge)

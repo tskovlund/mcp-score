@@ -58,6 +58,10 @@ line-length = 88
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "TCH", "T20"]
 
+[tool.ruff.lint.flake8-type-checking]
+# The MCP server evaluates tool annotations when it registers a tool.
+runtime-evaluated-decorators = ["mcp_score.tools.score_tool"]
+
 [tool.ruff.format]
 docstring-code-format = true
 

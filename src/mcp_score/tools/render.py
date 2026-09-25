@@ -1,20 +1,23 @@
-"""Rendering tools — export score files through the MuseScore command line."""
+"""Rendering tools: export score files through the MuseScore command line."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
-from mcp_score.app import mcp
+from mcp_score.bridge import CommandResult
 from mcp_score.musescore.cli import (
     MUSESCORE_PATH_ENV_VAR,
     MuseScoreNotFoundError,
     RenderError,
     render,
 )
-from mcp_score.tools import to_json
+from mcp_score.tools import ToolError, score_tool
 
-__all__: list[str] = []
+if TYPE_CHECKING:
+    from mcp.server.mcpserver import MCPServer
+
+__all__ = ["register"]
 
 # Output file extension for each supported format. MuseScore picks the
 # export format from the extension of the output path.
@@ -28,29 +31,44 @@ _FORMAT_EXTENSIONS: dict[str, str] = {
 }
 
 
-def _validate(input_file: Path, format: str, output_file: Path | None) -> str | None:
-    """Return an error message for invalid arguments, else ``None``."""
+def _output_file(input_file: Path, format: str, output_path: str | None) -> Path:
+    """Where the rendered file goes, checked against what MuseScore can do.
+
+    Raises:
+        ToolError: When the input is missing, the format unknown, the
+            output extension wrong for the format, its directory missing,
+            or the output would overwrite the input.
+    """
     if not input_file.is_file():
-        return f"Input file not found: {input_file}"
-    if format not in _FORMAT_EXTENSIONS:
+        raise ToolError(f"Input file not found: {input_file}")
+    extension = _FORMAT_EXTENSIONS.get(format)
+    if extension is None:
         supported = ", ".join(_FORMAT_EXTENSIONS)
-        return f"Unsupported format {format!r}. Supported formats: {supported}."
-    if output_file is not None:
-        expected_extension = _FORMAT_EXTENSIONS[format]
-        if output_file.suffix.lower() != expected_extension:
-            return (
-                f"output_path must end with {expected_extension} "
-                f"for format {format!r}: {output_file}"
+        raise ToolError(
+            f"Unsupported format {format!r}. Supported formats: {supported}."
+        )
+
+    if output_path is None:
+        output_file = input_file.with_suffix(extension)
+    else:
+        output_file = Path(output_path)
+        if output_file.suffix.lower() != extension:
+            raise ToolError(
+                f"output_path must end with {extension} for format {format!r}: "
+                f"{output_file}"
             )
         if not output_file.parent.is_dir():
-            return f"Output directory does not exist: {output_file.parent}"
-    return None
+            raise ToolError(f"Output directory does not exist: {output_file.parent}")
+
+    if output_file.resolve() == input_file.resolve():
+        raise ToolError(f"Output path would overwrite the input file: {input_file}")
+    return output_file
 
 
-@mcp.tool()
+@score_tool
 async def render_score(
     input_path: str, format: str = "pdf", output_path: str | None = None
-) -> str:
+) -> CommandResult:
     """Render a score file to PDF, PNG, MIDI, MP3, WAV or MusicXML.
 
     Runs the MuseScore Studio 4 command line, so MuseScore Studio 4 must be
@@ -76,31 +94,18 @@ async def render_score(
             format. An existing file is overwritten.
     """
     input_file = Path(input_path)
-    output_file = Path(output_path) if output_path is not None else None
-    error = _validate(input_file, format, output_file)
-    if error is not None:
-        return to_json({"error": error})
-    if output_file is None:
-        output_file = input_file.with_suffix(_FORMAT_EXTENSIONS[format])
-    if output_file.resolve() == input_file.resolve():
-        return to_json(
-            {"error": f"Output path would overwrite the input file: {input_file}"}
-        )
-
+    output_file = _output_file(input_file, format, output_path)
     try:
         rendered = await render(input_file, output_file)
     except MuseScoreNotFoundError as exception:
-        return to_json(
-            {
-                "error": f"{exception} Rendering needs MuseScore Studio 4; "
-                f"point {MUSESCORE_PATH_ENV_VAR} at its executable if it is "
-                "installed somewhere unusual."
-            }
-        )
+        raise ToolError(
+            f"{exception} Rendering needs MuseScore Studio 4; point "
+            f"{MUSESCORE_PATH_ENV_VAR} at its executable if it is installed "
+            "somewhere unusual."
+        ) from None
     except RenderError as exception:
-        return to_json({"error": f"Rendering failed: {exception}"})
-
-    result: dict[str, Any] = {
+        raise ToolError(f"Rendering failed: {exception}") from None
+    result: CommandResult = {
         "success": True,
         "output_path": str(output_file),
         "output_files": [str(file) for file in rendered.output_files],
@@ -108,4 +113,8 @@ async def render_score(
     }
     if rendered.warning is not None:
         result["warning"] = rendered.warning
-    return to_json(result)
+    return result
+
+
+def register(server: MCPServer) -> None:
+    server.tool()(render_score)

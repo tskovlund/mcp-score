@@ -24,7 +24,7 @@ The assistant reads the live score, applies musical judgement, and writes the ar
 ## What it does
 
 - **Generate scores.** The assistant writes a [music21](https://www.music21.org/) script that exports MusicXML, which opens in MuseScore, Dorico, or any notation app. In Claude Code this is driven by the bundled `score-generate` skill. In other MCP clients, the `generate_score` tool runs the script and `score_generation_guide` supplies the same instructions.
-- **Edit live scores.** MCP tools connect to a running MuseScore and read passages, add notes and chord symbols, set barlines, keys, tempo, transpose, and undo.
+- **Edit live scores.** MCP tools connect to a running MuseScore and read passages, add notes, dynamics and chord symbols, set barlines, keys, time signatures and tempo, append measures, transpose, and undo.
 - **Render.** The `render_score` tool exports PDF, PNG, MIDI or audio from a score file through the MuseScore command line; MuseScore must be installed but not running.
 
 ## Supported applications

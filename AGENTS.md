@@ -13,20 +13,22 @@ Follow the code standards in [CONVENTIONS.md](CONVENTIONS.md).
 ```
 src/mcp_score/
   cli.py              CLI entry point (serve, run, install, install-skill, install-plugin)
-  server.py           MCP server entry point (imports the tool modules, runs MCPServer)
-  app.py              Shared MCPServer instance
+  server.py           MCP server entry point: create_server() registers every tool module
   resources.py        Locate bundled files (skill directory, plugin.qml)
   tools/
+    __init__.py       Shared tool plumbing: ToolError, score_tool, bridge and measure guards
     connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py       Read passages and measures from live score
-    manipulation.py   Modify live score (barlines, chords, keys, tempo, transpose, undo)
+    manipulation.py   Modify live score (notes, dynamics, barlines, chords, keys, time, tempo, measures, transpose, undo)
     generate.py       Run music21 scripts and serve the score-generate guide (any MCP client)
     render.py         Export score files through the MuseScore command line
   bridge/
-    base.py           ScoreBridge abstract base class
+    base.py           ScoreBridge abstract interface, CommandResult, NoteDuration
+    websocket.py      WebSocketTransport and WebSocketBridge (connection lifecycle, reconnect)
     remote_control.py Remote Control protocol layer (used by Dorico)
-    musescore.py      WebSocket client for MuseScore plugin
+    musescore.py      MuseScore plugin protocol (thin subclass of WebSocketBridge)
     dorico.py         Dorico defaults (thin subclass of RemoteControlBridge, experimental)
+    registry.py       BridgeRegistry: the bridges and which one is active
   musescore/
     cli.py            MuseScore executable discovery and headless rendering
     plugin.qml        MuseScore QML plugin (WebSocket server inside MuseScore)
