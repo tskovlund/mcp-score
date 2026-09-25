@@ -104,7 +104,7 @@ Score generation is handled by the `score-generate` skill — Claude writes musi
 1. Create feature branch
 2. Make changes, test with `pytest` and manual MuseScore testing
 3. Push and create PR
-4. Review loop: wait for CI + Copilot -> address comments -> push -> iterate until clean
+4. Review loop: wait for CI -> address review comments -> push -> iterate until clean
 5. Merge
 
 ### Issue tracking
