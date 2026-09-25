@@ -32,7 +32,7 @@ On success returns `{"success": true, "output_files": [...], "stdout": ...}` wit
 
 ---
 
-## Connection tools (6)
+## Connection tools
 
 Manage WebSocket bridges to live score notation applications. Each application has its own connect and disconnect pair, plus two shared tools that work with whichever application is currently active.
 
@@ -76,7 +76,7 @@ Check if the connected score application is responsive. No parameters. Does not 
 
 ---
 
-## Analysis tools (3)
+## Analysis tools
 
 Read musical content from the connected score application. All analysis tools require an active connection.
 
@@ -116,7 +116,7 @@ No parameters. Requires an active connection.
 
 ---
 
-## Manipulation tools (7)
+## Manipulation tools
 
 Modify the live score in the connected application. All manipulation tools require an active connection and navigate to the specified measure before applying the change.
 

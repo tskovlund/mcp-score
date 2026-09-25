@@ -8,32 +8,26 @@ The MuseScore plugin runs inside MuseScore Studio 4 and opens a WebSocket server
 
 The plugin is only needed for **manipulation** and **analysis** tools (reading passages, arranging, transposing, etc.). **Generation** tools work without it -- they produce MusicXML files that MuseScore can open directly.
 
-## Prerequisites
+## Supported versions
 
-- MuseScore Studio **4.4.2 or later** (4.4.2 added the plugin WebSocket API the bridge uses)
+MuseScore Studio **4.4.2 or later** is supported, and tested in CI against 4.4, 4.6 and 4.7 (Linux) and 4.7 (Windows, macOS).
 
 Earlier versions are not supported: MuseScore 4.4 moved to Qt 6 and stopped shipping the `QtWebSockets` QML module, and versions before 4.4.2 have no replacement API. The plugin fails to load on those versions with `module "QtWebSockets" is not installed` (older plugin builds) or reports the missing API in its window (current build).
 
 ## Installation
 
-1. Locate your MuseScore plugins directory:
-   - **macOS:** `~/Library/Application Support/MuseScore4/Plugins/`
-   - **Linux:** `~/.local/share/MuseScore4/Plugins/`
-   - **Windows:** `%APPDATA%/MuseScore4/Plugins/`
+The easy way:
 
-2. Copy the plugin file:
+```bash
+mcp-score install-plugin
+```
 
-   ```bash
-   # macOS
-   cp src/mcp_score/musescore/plugin.qml ~/Library/Application\ Support/MuseScore4/Plugins/mcp-score-bridge.qml
+Or copy `src/mcp_score/musescore/plugin.qml` by hand to `~/Documents/MuseScore4/Plugins/mcp-score-bridge.qml`. MuseScore uses that directory on macOS, Linux and Windows (`%USERPROFILE%\Documents\MuseScore4\Plugins\` on Windows); if you changed it in MuseScore's preferences (Folders > Plugins), use your own path.
 
-   # Linux
-   cp src/mcp_score/musescore/plugin.qml ~/.local/share/MuseScore4/Plugins/mcp-score-bridge.qml
-   ```
+Then:
 
-3. Restart MuseScore, then go to **Plugins > Manage plugins** and enable "MCP Score Bridge"
-
-4. Run the plugin: **Plugins > MCP Score Bridge**
+1. Restart MuseScore, then go to **Plugins > Manage plugins** and enable "MCP Score Bridge"
+2. Run the plugin: **Plugins > MCP Score Bridge**
 
 The plugin opens a small status window and starts a WebSocket server on port 8765. **Keep the window open** -- closing it stops the plugin and the server with it (MuseScore 4 has no persistent dock plugins). The mcp-score Python server connects automatically when you use manipulation or analysis tools.
 
@@ -259,3 +253,14 @@ This example uses `processSequence` to write a four-note melody in the first mea
 - If any step in the sequence fails, all steps are undone
 - Check the `failedAction` and `failedIndex` fields in the error response to identify which step failed
 - Fix the failing step and retry the entire sequence
+
+## Plugin development notes
+
+Things the MuseScore 4 plugin API does not document, learned by crashing MuseScore. The live bridge integration tests (`tests/integration/test_musescore_bridge.py`) exercise the first five against real MuseScore.
+
+- **Bar lines cannot be added through the cursor.** `cursor.add` crashes MuseScore for `BAR_LINE` elements. Change the existing end bar line instead (`measure.lastSegment.elementAt(staff * 4).barlineType`), or set the measure's `repeatStart` / `repeatEnd` flags for repeats.
+- **Chord symbols get their text after insertion.** A `HARMONY` element must be added with `cursor.add` before its `text` is set; setting `text` first crashes MuseScore.
+- **The undo action was renamed in 4.7.** `cmd("undo")` works on 4.4-4.6; 4.7 registers `cmd("action://notation/undo")` instead. The plugin picks by `mscoreMajorVersion` / `mscoreMinorVersion`.
+- **`Score.transpose` does not exist in MuseScore 4.** The plugin shifts each note's `pitch`, `tpc1` and `tpc2` itself, which is why key signatures and chord symbols in the passage are not transposed.
+- **`curScore.endCmd(true)` rolls back the current undo step.** Every command runs inside `startCmd` / `endCmd`; `processSequence` uses the rollback to restore the score when a step fails.
+- **Plugins cannot be started from the command line.** `--test-case` runs MuseScore in console mode without a GUI, so `scripts/musescore_harness.py` binds the plugin to a keyboard shortcut in `shortcuts.xml` and presses it after launch.

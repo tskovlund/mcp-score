@@ -1,6 +1,6 @@
 // MuseScore QML Plugin -- WebSocket server for mcp-score bridge.
 //
-// Install: copy to MuseScore's Plugins directory, enable via Plugin Manager.
+// Install: copy to MuseScore's Plugins directory, enable via Plugins > Manage plugins.
 //
 // Opens a WebSocket server inside MuseScore, allowing the mcp-score Python
 // MCP server to read from and write to the active score by sending JSON

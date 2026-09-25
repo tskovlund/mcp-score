@@ -4,47 +4,49 @@
 
 ## Overview
 
-mcp-score provides two complementary approaches for AI-driven music notation:
+mcp-score does three things for an AI assistant:
 
-1. **Score generation** via Claude Code skill -- Claude writes music21 Python scripts that export MusicXML, openable in any notation software
-2. **Live manipulation** via MCP server -- read from and write to a running score application (MuseScore, or experimentally Dorico) through a WebSocket bridge
+1. **Score generation** -- the assistant writes a music21 Python script that exports MusicXML, openable in any notation software. In Claude Code the bundled `score-generate` skill drives this. In any other MCP client the `generate_score` tool runs the script and `score_generation_guide` (also served as the `score-generate` MCP prompt) supplies the same instructions
+2. **Live manipulation** via MCP server -- read from and write to a running score application (MuseScore Studio 4.4.2+, or experimentally Dorico) through a WebSocket bridge
+3. **Rendering** -- the `render_score` tool exports PDF, PNG, MIDI, audio or MusicXML from a score file through the MuseScore command line; MuseScore must be installed but not running
 
 ## System diagram
 
 ```
-+---------------------------------------------+
-|  Claude (or any LLM via MCP)                |
-|  "Create a big band score, AABA, Bb..."     |
-+--------+--------------------+---------------+
-         |                    |
-    Skill invocation     MCP protocol (stdio)
-         |                    |
-         v                    v
-+----------------+   +-----------------------------+
-| score-generate |   | Python MCP Server           |
-| Claude Skill   |   | (src/mcp_score/)            |
-|                |   |                             |
-| Writes music21 |   | tools/connection.py (6)     |
-| Python script  |   | tools/analysis.py   (3)     |
-| -> MusicXML    |   | tools/manipulation.py (7)   |
-+----------------+   |                             |
-                     | bridge/                     |
-                     |   base.py (ScoreBridge)     |
-                     |   remote_control.py         |
-                     |   musescore.py              |
-                     |   dorico.py                 |
-                     +------+--------+-------------+
-                            |        |
-                WebSocket   |        | WebSocket
-           (ws://:8765)     |        | (ws://:4560)
-                            |        |
-            +---------------v-+  +---v--------------+
-            | MuseScore QML   |  | Dorico Remote    |
-            | Plugin          |  | Control          |
-            | (plugin.qml)    |  | (built-in,       |
-            +-----------------+  |  experimental)   |
-                                 +------------------+
++------------------------------------------------------------+
+|  AI assistant (Claude Code, or any MCP client)             |
+|  "Create a big band score, AABA, Bb..."                    |
++---------+--------------------------+-----------------------+
+          |                          |
+   Skill invocation           MCP protocol (stdio)
+   (Claude Code only)                |
+          |                          v
+          |         +-------------------------------------+
+          |         | Python MCP Server (src/mcp_score/)  |
+          |         |                                     |
+          |         | tools/generate.py      music21 ---> MusicXML file
+          |         | tools/render.py        mscore CLI -> PDF/MIDI/audio
+          |         | tools/connection.py                 |
+          |         | tools/analysis.py                   |
+          |         | tools/manipulation.py               |
+          |         |                                     |
+          |         | bridge/                             |
+          |         |   base.py (ScoreBridge)             |
+          |         |   musescore.py   remote_control.py  |
+          |         |                  dorico.py          |
+          |         +--------+---------------+------------+
+          v                  |               |
++----------------+  WebSocket|               |WebSocket
+| score-generate |  ws://:8765               |ws://:4560
+| Claude skill   |           |               |
+| writes music21 |  +--------v--------+  +---v---------------+
+| -> MusicXML    |  | MuseScore QML   |  | Dorico Remote     |
++----------------+  | plugin          |  | Control (built-in,|
+                    | (plugin.qml)    |  | experimental)     |
+                    +-----------------+  +-------------------+
 ```
+
+The server registers five tool modules: connection, analysis, manipulation, generation and rendering. Generation and rendering work on files and need no live connection.
 
 ## Multi-bridge design
 
@@ -103,7 +105,7 @@ Dorico's Remote Control WebSocket API is fundamentally a **command execution and
 
 | Capability                                                     |         MuseScore          |  Dorico (experimental)   |
 | -------------------------------------------------------------- | :------------------------: | :----------------------: |
-| Execute commands (undo, navigation, barlines, rehearsal marks) |            Yes             |   Yes (~994 commands)    |
+| Execute commands (undo, navigation, barlines, rehearsal marks) |            Yes             |           Yes            |
 | Get application status                                         |            Yes             |           Yes            |
 | Get selection properties                                       |            Yes             |           Yes            |
 | Get flows and layouts                                          |            N/A             |           Yes            |
@@ -123,7 +125,7 @@ These are **upstream API constraints** in Dorico, not mcp-score limitations:
 
 **Staff navigation** (Dorico) -- The API operates on the current selection. There is no command to programmatically move the selection to a specific staff.
 
-**MusicXML export** -- None of the WebSocket APIs support exporting score content as MusicXML programmatically.
+**MusicXML export** -- Neither WebSocket API exports score content as MusicXML programmatically. For files on disk, `render_score` covers export through the MuseScore command line.
 
 ### The future path
 
@@ -131,11 +133,13 @@ The WebSocket API limitations could be overcome with an **application-native scr
 
 Such a plugin would complement the WebSocket API (not replace it), handling the operations that popovers block today.
 
-## Why two approaches?
+## Why a skill and tools for generation, MCP for manipulation?
 
-**Generation is best as a skill.** Claude writes a complete music21 script in one shot, giving it full access to the entire music21 API. This is faster (one script vs dozens of MCP tool calls) and more flexible (no API surface to limit). A skill that teaches Claude music21 patterns produces better results than a curated set of MCP tools.
+**Generation is best done as one script.** The assistant writes a complete music21 script in one shot, with full access to the entire music21 API. This is faster (one script vs dozens of MCP tool calls) and more flexible (no API surface to limit). Instructions that teach the assistant music21 patterns produce better results than a curated set of note-by-note tools.
 
-**Manipulation is best as MCP.** Reading from and writing to a live score application requires a persistent WebSocket connection and state management. MCP provides the right abstraction for this -- tools that Claude can call to inspect and modify the live score.
+In Claude Code the `score-generate` skill does exactly that, with no MCP server involved. Other MCP clients cannot load skills, so the server offers the same workflow as tools: `score_generation_guide` returns the skill files (instructions, instrument reference, template) and `generate_score` runs the script the assistant writes. The tools read the skill files from the package, so there is one source of truth for the instructions.
+
+**Manipulation is best as MCP.** Reading from and writing to a live score application requires a persistent WebSocket connection and state management. MCP provides the right abstraction for this -- tools the assistant can call to inspect and modify the live score.
 
 ## Package structure
 
@@ -143,16 +147,16 @@ Such a plugin would complement the WebSocket API (not replace it), handling the 
 src/mcp_score/
   __init__.py           Package root
   app.py                Shared MCPServer instance ("mcp-score")
-  cli.py                CLI entry point (serve, run, install-skill, install-plugin)
+  cli.py                CLI entry point (serve, run, install, install-skill, install-plugin)
   resources.py          Locate bundled files (skill directory, plugin.qml)
   server.py             MCP server -- imports tool modules, runs MCPServer
   tools/
     __init__.py         Shared helpers: connected_bridge(), to_json(), etc.
-    connection.py       6 tools: connect/disconnect MuseScore & Dorico, ping, info
-    analysis.py         3 tools: read_passage, get_measure_content, get_selection_properties
-    generate.py         2 tools: generate_score, score_generation_guide (+ score-generate prompt)
-    manipulation.py     7 tools: live rehearsal marks, chords, barlines, keys,
-                                 tempo, transpose, undo
+    connection.py       Connect/disconnect MuseScore & Dorico, ping, score info
+    analysis.py         read_passage, get_measure_content, get_selection_properties
+    generate.py         generate_score, score_generation_guide (+ score-generate prompt)
+    manipulation.py     Live rehearsal marks, chords, barlines, keys, tempo, transpose, undo
+    render.py           render_score (export through the MuseScore command line)
   bridge/
     __init__.py         Bridge registry (get_active_bridge, set_active_bridge)
     base.py             ScoreBridge abstract base class
@@ -160,14 +164,19 @@ src/mcp_score/
     musescore.py        MuseScoreBridge -- WebSocket client for MuseScore plugin
     dorico.py           DoricoBridge -- thin subclass (Dorico defaults, experimental)
   musescore/
+    cli.py              MuseScore executable discovery and headless rendering
     plugin.qml          MuseScore QML plugin (WebSocket server)
 
 .claude/skills/
   score-generate/       Claude Code skill for score generation
     SKILL.md            Skill instructions + music21 patterns
-    references/         Instrument reference, etc.
+    references/         Instrument reference and template script
 
-tests/                  pytest tests
+scripts/
+  musescore_harness.py  Installs and drives a real MuseScore for the integration tests
+
+tests/                  pytest tests (unit; offline)
+tests/integration/      Tests against a real MuseScore (opt-in via MCP_SCORE_INTEGRATION=1)
 docs/                   Documentation (Diataxis structure)
 ```
 
@@ -181,9 +190,25 @@ Creates the single `MCPServer("mcp-score")` instance that all tool modules impor
 
 Provides subcommands: `serve` (default, runs MCP server), `run` (execute a Python script with music21 available), `install-skill` (copies skill to `~/.claude/skills/`), `install-plugin` (copies QML plugin to MuseScore plugins directory), `install` (both).
 
+### `resources.py` -- bundled files
+
+Resolves the skill directory and `plugin.qml` whether the package is installed from a wheel (files bundled under the package) or run from a source checkout. Used by `cli.py` and `tools/generate.py`.
+
 ### `server.py` -- MCP server
 
-Imports the three tool modules (connection, analysis, manipulation) to register their `@mcp.tool()` decorators, then exposes the `main()` function. Called by `cli.py serve`.
+Imports the five tool modules (connection, analysis, manipulation, generation, rendering) to register their `@mcp.tool()` decorators, then exposes the `main()` function. Called by `cli.py serve`.
+
+### `tools/generate.py` -- generation tools
+
+`generate_score` writes the assistant's music21 script to a temp file, runs it in a subprocess with the server's interpreter (so music21 is importable), and reports the files it created. `score_generation_guide` and the `score-generate` prompt return the bundled skill files as one Markdown document. The script runs on the user's machine with the user's privileges, by design.
+
+### `tools/render.py` -- rendering tool
+
+`render_score` validates the request (input exists, format known, output extension matches) and delegates to `musescore/cli.py`.
+
+### `musescore/cli.py` -- MuseScore command line
+
+Locates the MuseScore executable (`MCP_SCORE_MUSESCORE_PATH`, then PATH, then the platform default install: macOS app bundle, Windows Program Files, Linux Flatpak) and runs `mscore -f -o <output> <input>` as a subprocess with a timeout. On Linux it sets `QT_QPA_PLATFORM=offscreen` so export works without a display. No plugin or WebSocket connection is involved.
 
 ### `bridge/base.py` -- abstract interface
 
@@ -205,9 +230,20 @@ Imports the three tool modules (connection, analysis, manipulation) to register 
 
 Manages which bridge is active. `get_active_bridge()` returns the current bridge; `set_active_bridge()` switches it. Connection tools call these to manage the active bridge lifecycle.
 
-## MCP tools (16 total)
+## MCP tools
 
-### Connection (6 tools)
+Parameters and return values are in the [tool reference](reference.md).
+
+### Generation
+
+| Tool                     | Purpose                                                                |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `score_generation_guide` | Return the bundled score-generate instructions, reference and template |
+| `generate_score`         | Run a music21 script and report the files it created                   |
+
+The same guide is served as the `score-generate` MCP prompt.
+
+### Connection
 
 | Tool                        | Purpose                                             |
 | --------------------------- | --------------------------------------------------- |
@@ -218,7 +254,7 @@ Manages which bridge is active. `get_active_bridge()` returns the current bridge
 | `get_live_score_info`       | Get info about the open score (any app)             |
 | `ping_score_app`            | Check if connected app is responsive (any app)      |
 
-### Analysis (3 tools)
+### Analysis
 
 | Tool                       | Purpose                                 |
 | -------------------------- | --------------------------------------- |
@@ -226,7 +262,7 @@ Manages which bridge is active. `get_active_bridge()` returns the current bridge
 | `get_measure_content`      | Read a specific measure and staff       |
 | `get_selection_properties` | Get properties of the current selection |
 
-### Manipulation (7 tools)
+### Manipulation
 
 | Tool                      | Purpose                |
 | ------------------------- | ---------------------- |
@@ -238,6 +274,12 @@ Manages which bridge is active. `get_active_bridge()` returns the current bridge
 | `transpose_passage`       | Transpose by semitones |
 | `undo_last_action`        | Undo the last action   |
 
+### Rendering
+
+| Tool           | Purpose                                                                   |
+| -------------- | ------------------------------------------------------------------------- |
+| `render_score` | Export a score file to PDF, PNG, MIDI, MP3, WAV or MusicXML via MuseScore |
+
 ## Key design decisions
 
 ### Single server, multiple bridges
@@ -246,22 +288,28 @@ One MCP server supports multiple score applications through the bridge abstracti
 
 ### MusicXML as interchange format
 
-MusicXML 4.0 is the standard interchange format, supported by 270+ applications including MuseScore, Dorico, and Sibelius. We do NOT generate `.mscz`/`.mscx` -- undocumented and version-fragile.
+MusicXML is the standard interchange format, supported by MuseScore, Dorico, Sibelius and most other notation software. We do NOT generate `.mscz`/`.mscx` -- undocumented and version-fragile.
 
 ### music21 for score generation
 
-music21 (MIT, Python) handles transposing instruments, voice leading, and MusicXML export. Used by the score-generate skill.
+music21 (MIT, Python) handles transposing instruments, voice leading, and MusicXML export. Used by the score-generate skill and, through `generate_score`, by every other MCP client.
 
 ### WebSocket bridges for live manipulation
 
 Both supported applications use WebSocket for communication, but the protocols differ:
 
-- **MuseScore**: QML plugin runs inside MuseScore, opens a WebSocket server on port 8765. JSON messages with `command` and `params` fields. Custom protocol -- implemented directly in `MuseScoreBridge`.
+- **MuseScore**: QML plugin runs inside MuseScore Studio 4.4.2+ and opens a WebSocket server on port 8765 with MuseScore's built-in `api.websocketserver` (4.4 dropped the `QtWebSockets` QML module; 4.4.2 added the replacement, so older versions are not supported). JSON messages with `command` and `params` fields. Custom protocol -- implemented directly in `MuseScoreBridge`.
 - **Dorico** (experimental): Uses Dorico's "Remote Control" protocol with `message`/`commandName` fields and session token handshake. Protocol logic lives in `RemoteControlBridge`; the thin `DoricoBridge` subclass provides Dorico's defaults (port, name).
+
+Sibelius was removed as out of scope; LilyPond is out of scope for now.
+
+### Verified against real MuseScore in CI
+
+The unit tests mock the WebSocket and the subprocess, so they cannot catch MuseScore API changes (4.7 renamed the undo action, for example). The `Integration` workflow therefore installs real MuseScore Studio releases -- 4.4, 4.6 and 4.7 on Linux, 4.7 on Windows and macOS -- and runs `tests/integration/` against them: headless `render_score` export and the live plugin bridge. `scripts/musescore_harness.py` downloads MuseScore, seeds its configuration with the plugin bound to a keyboard shortcut (plugins cannot be started from the command line), launches it with a fixture score and presses the shortcut. See [CONTRIBUTING.md](../CONTRIBUTING.md#integration-tests) for running it locally.
 
 ### Server does not call LLMs
 
-The MCP server provides primitives. Claude is the musical intelligence.
+The MCP server provides primitives. The assistant is the musical intelligence.
 
 ## Dependencies
 

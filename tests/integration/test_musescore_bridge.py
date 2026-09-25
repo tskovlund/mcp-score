@@ -2,7 +2,7 @@
 
 Requires ``MCP_SCORE_INTEGRATION=1`` and a running MuseScore Studio with
 ``tests/integration/fixtures/fixture.musicxml`` open and the bridge plugin
-started (``scripts/musescore-headless.sh start <fixture>``).
+started (``uv run scripts/musescore_harness.py start <fixture>``).
 
 Every mutating test undoes its change and checks that the score is back
 to what it found, so the tests do not depend on their order. The

@@ -1,5 +1,5 @@
 [project]
-name = "mcp-score"
+name = "mcp-score-server"
 version = "0.1.0"
 description = "MCP server for AI-driven music score generation and manipulation"
 readme = "README.md"

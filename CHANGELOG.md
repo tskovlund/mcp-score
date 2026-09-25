@@ -10,11 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Score generation via Claude Code skill (music21 -> MusicXML)
 - `generate_score` and `score_generation_guide` MCP tools plus a `score-generate` MCP prompt, so score generation works in any MCP client
-- MCP server with 16 tools for live score manipulation (MuseScore, Dorico)
+- MCP server with connection, analysis and manipulation tools for live scores (MuseScore, Dorico)
 - Multi-bridge architecture: MuseScore QML plugin, Dorico Remote Control
-- MuseScore 4 QML plugin with WebSocket bridge (19 commands)
+- MuseScore 4 QML plugin with WebSocket bridge (navigation, notes, markings, selection, transpose, undo, batched sequences)
 - CLI install commands: `mcp-score install-skill`, `mcp-score install-plugin`
-- Comprehensive test suite (107 tests)
+- Unit test suite covering the bridges, tools and CLI
 - Full documentation (architecture, reference, getting-started)
 - GitHub security: CodeQL scanning, branch protection, SECURITY.md
 - Score metadata: subtitle (movementName), arranger (Contributor), copyright support
@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Skill documents MuseScore subtitle/arranger display limitation (known issue, data is in MusicXML)
 - Dependabot: bumped setup-uv 7.3.0→7.3.1, upload-artifact 4→7, download-artifact 4→8
 - Dorico support labelled experimental
+- Distribution name on PyPI is `mcp-score-server`; the import package and CLI stay `mcp_score` / `mcp-score`
 
 ### Removed
 
