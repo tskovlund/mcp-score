@@ -511,6 +511,9 @@ Start-Sleep -Seconds 1
 [System.Windows.Forms.SendKeys]::SendWait("^+{F12}")
 """
 
+# Qt reads "Ctrl" in a shortcut as the Command key on macOS, so the
+# shortcut bound as Ctrl+Shift+F12 is pressed as Command+Shift+F12 there.
+# Key code 53 is Escape, 111 is F12.
 MACOS_TRIGGER_SCRIPT = """
 tell application "MuseScore 4" to activate
 delay 1
@@ -519,7 +522,7 @@ tell application "System Events"
     delay 2
     click at {700, 400}
     delay 1
-    key code 111 using {control down, shift down}
+    key code 111 using {command down, shift down}
 end tell
 """
 
