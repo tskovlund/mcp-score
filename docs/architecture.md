@@ -164,7 +164,8 @@ src/mcp_score/
     dorico.py           DoricoBridge -- thin subclass (Dorico defaults, experimental)
     registry.py         BridgeRegistry -- the bridges and which one is active
   musescore/
-    cli.py              MuseScore executable discovery and headless rendering
+    paths.py            Where MuseScore keeps user files (plugins directory)
+    headless.py         MuseScore executable discovery and headless rendering
     plugin.qml          MuseScore QML plugin (WebSocket server)
 
 .claude/skills/
@@ -184,7 +185,7 @@ docs/                   Documentation (Diataxis structure)
 
 ### `cli.py` -- CLI entry point
 
-Provides subcommands: `serve` (default, runs MCP server), `run` (execute a Python script with music21 available), `install-skill` (copies skill to `~/.claude/skills/`), `install-plugin` (copies QML plugin to MuseScore plugins directory), `install` (both).
+An argparse command line whose `main(argv)` returns the exit code. Subcommands: `serve` (default, runs the MCP server), `run` (execute a Python script with music21 available), `install-skill` (copies the skill to `~/.claude/skills/`), `install-plugin` (copies the plugin to MuseScore's plugins directory, from `musescore/paths.py`), `install` (both).
 
 ### `resources.py` -- bundled files
 
@@ -204,9 +205,9 @@ A tool is a plain async function that returns a `CommandResult` and raises `Tool
 
 ### `tools/render.py` -- rendering tool
 
-`render_score` validates the request (input exists, format known, output extension matches) and delegates to `musescore/cli.py`.
+`render_score` validates the request (input exists, format known, output extension matches) and delegates to `musescore/headless.py`.
 
-### `musescore/cli.py` -- MuseScore command line
+### `musescore/headless.py` -- MuseScore without a GUI
 
 Locates the MuseScore executable (`MCP_SCORE_MUSESCORE_PATH`, then PATH, then the platform default install: macOS app bundle, Windows Program Files, Linux Flatpak) and runs `mscore -f -o <output> <input>` as a subprocess with a timeout. On Linux it sets `QT_QPA_PLATFORM=offscreen` so export works without a display. No plugin or WebSocket connection is involved.
 

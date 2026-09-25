@@ -11,8 +11,8 @@ if TYPE_CHECKING:
 
 import pytest
 
-from mcp_score.musescore import cli
-from mcp_score.musescore.cli import (
+from mcp_score.musescore import headless as cli
+from mcp_score.musescore.headless import (
     MUSESCORE_PATH_ENV_VAR,
     MuseScoreNotFoundError,
     RenderError,
