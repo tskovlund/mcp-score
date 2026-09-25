@@ -81,6 +81,10 @@ async def render_score(
         return to_json({"error": error})
     if output_file is None:
         output_file = input_file.with_suffix(_FORMAT_EXTENSIONS[format])
+    if output_file.resolve() == input_file.resolve():
+        return to_json(
+            {"error": f"Output path would overwrite the input file: {input_file}"}
+        )
 
     try:
         await render(input_file, output_file)

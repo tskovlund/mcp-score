@@ -378,6 +378,23 @@ class TestRenderScore:
         render_mock.assert_not_awaited()
 
     @pytest.mark.anyio()
+    async def test_render_score_refuses_to_overwrite_input(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange
+        score = tmp_path / "score.musicxml"
+        score.write_text("<score-partwise/>")
+        render_mock = AsyncMock()
+
+        with patch("mcp_score.tools.render.render", render_mock):
+            # Act
+            result = json.loads(await render_score(str(score), format="musicxml"))
+
+        # Assert
+        assert "overwrite the input" in result["error"]
+        render_mock.assert_not_awaited()
+
+    @pytest.mark.anyio()
     async def test_render_score_with_bad_format_returns_error(
         self, score_file: Path
     ) -> None:
