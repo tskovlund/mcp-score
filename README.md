@@ -9,6 +9,18 @@ Music notation for AI assistants. Describe a piece in plain language and get a M
 
 Works with any MCP client (Claude Code, Claude Desktop, LM Studio, and others). Status: beta.
 
+## Quick demo
+
+> "Create a big band chart: 32-bar AABA form, key of Bb, slow blues at 66 BPM, with rhythm changes and rehearsal marks at each section."
+
+The assistant writes a complete music21 script, runs it, and hands you a MusicXML file ready to open in MuseScore, Dorico, or any notation app.
+
+With the MuseScore plugin running, you can go further:
+
+> "Read the melody in bars 9-16 and arrange it as a trombone soli following the chord progression."
+
+The assistant reads the live score, applies musical judgement, and writes the arrangement back, all through conversation.
+
 ## What it does
 
 - **Generate scores.** The assistant writes a [music21](https://www.music21.org/) script that exports MusicXML, which opens in MuseScore, Dorico, or any notation app. In Claude Code this is driven by the bundled `score-generate` skill. In other MCP clients, the `generate_score` tool runs the script and `score_generation_guide` supplies the same instructions.
