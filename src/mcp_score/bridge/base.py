@@ -2,9 +2,9 @@
 
 A bridge talks to one running notation application. The MCP tools only
 depend on this interface, so an application is supported by adding a
-bridge, not by touching the tools. Operations an application cannot
-perform return an ``{"error": ...}`` result that explains why; the tools
-pass such results straight back to the model.
+bridge, not by touching the tools. An operation the application cannot
+perform raises :class:`BridgeError` with the application's explanation;
+the tools report it to the model as a tool error.
 """
 
 from __future__ import annotations
@@ -12,15 +12,28 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, NamedTuple
 
-__all__ = ["CommandResult", "NoteDuration", "ScoreBridge"]
+__all__ = ["BridgeError", "CommandResult", "NoteDuration", "ScoreBridge"]
 
 type CommandResult = dict[str, Any]
 """What every score operation returns: the application's decoded JSON reply.
 
-A reply carries either a ``result`` field or an ``error`` field. Bridges
-add a ``warning`` field when the application did something, but not quite
-what was asked.
+A reply carries a ``result`` field. Bridges add a ``warning`` field when
+the application did something, but not quite what was asked.
 """
+
+
+class BridgeError(Exception):
+    """The application could not do what was asked; the message says why.
+
+    Raised for the application's own refusals (``details`` carries any
+    other fields of its reply), for operations its protocol cannot
+    express, and for a connection that could not be made or kept.
+    """
+
+    def __init__(self, message: str, **details: Any) -> None:
+        super().__init__(message)
+        self.message = message
+        self.details = details
 
 
 class NoteDuration(NamedTuple):

@@ -1,9 +1,9 @@
 """Tests for the Remote Control protocol layer shared by Dorico-style bridges.
 
-The handshake, message framing, the operations the protocol cannot
-perform and the barline mapping are tested here once, on a plain
-``RemoteControlBridge``. Subclasses only supply defaults, tested in their
-own files.
+The handshake, message framing, error responses, the operations the
+protocol cannot perform and the barline mapping are tested here once, on
+a plain ``RemoteControlBridge``. Subclasses only supply defaults, tested
+in their own files.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mcp_score.bridge import NoteDuration
+from mcp_score.bridge import BridgeError, NoteDuration
 from mcp_score.bridge.remote_control import (
     BARLINE_COMMANDS,
     HANDSHAKE_VERSION,
@@ -40,6 +40,7 @@ CLIENT_NAME = "test-client"
 PORT = 4560
 CONNECTED: dict[str, Any] = {"message": "response", "code": "kConnected"}
 ACCEPTED: dict[str, Any] = {"message": "response", "code": "kOK"}
+REFUSED: dict[str, Any] = {"message": "response", "code": "kError"}
 
 
 def _bridge() -> RemoteControlBridge:
@@ -299,6 +300,28 @@ class TestRemoteControlMessages:
         assert reply == ACCEPTED
         assert sent_payloads(connection)[-1] == expected_message
 
+    @pytest.mark.anyio()
+    @pytest.mark.parametrize(
+        ("reply", "expected_message"),
+        [
+            pytest.param(
+                {**REFUSED, "detail": "No selection"},
+                "No selection",
+                id="with-detail",
+            ),
+            pytest.param(REFUSED, "the application reported an error", id="bare"),
+        ],
+    )
+    async def test_error_response_raises_with_its_detail(
+        self, reply: dict[str, Any], expected_message: str
+    ) -> None:
+        # Arrange
+        bridge, _ = await _connected_bridge(reply)
+
+        # Act / Assert
+        with pytest.raises(BridgeError, match=expected_message):
+            await bridge.send_command("Edit.Undo")
+
 
 # ── Operations the protocol cannot perform ───────────────────────────
 
@@ -375,7 +398,7 @@ class TestRemoteControlUnsupportedOperations:
             ),
         ],
     )
-    async def test_operation_returns_explanatory_error_without_sending(
+    async def test_operation_raises_explanatory_error_without_sending(
         self, operation: BridgeOperation, expected_fragment: str
     ) -> None:
         # Arrange
@@ -383,11 +406,13 @@ class TestRemoteControlUnsupportedOperations:
         sent_before = len(sent_payloads(connection))
 
         # Act
-        result = await operation(bridge)
+        with pytest.raises(BridgeError) as exc_info:
+            await operation(bridge)
 
         # Assert
-        assert result["error"].startswith(f"{APPLICATION_NAME}'s Remote Control API ")
-        assert expected_fragment in result["error"]
+        message = str(exc_info.value)
+        assert message.startswith(f"{APPLICATION_NAME}'s Remote Control API ")
+        assert expected_fragment in message
         assert len(sent_payloads(connection)) == sent_before
 
     def test_content_reading_limitation_names_application(self) -> None:
@@ -417,17 +442,6 @@ class TestRemoteControlRehearsalMarks:
             "commandName": "AddRehearsalMark",
         }
         assert "'B' was ignored" in result["warning"]
-
-    @pytest.mark.anyio()
-    async def test_add_rehearsal_mark_with_error_reply_adds_no_warning(self) -> None:
-        # Arrange
-        bridge, _ = await _connected_bridge({"error": "no selection"})
-
-        # Act
-        result = await bridge.add_rehearsal_mark("B")
-
-        # Assert
-        assert result == {"error": "no selection"}
 
 
 # ── Barlines ─────────────────────────────────────────────────────────
@@ -466,12 +480,12 @@ class TestRemoteControlBarlines:
         sent_before = len(sent_payloads(connection))
 
         # Act
-        result = await bridge.set_barline("dashed")
+        with pytest.raises(BridgeError, match="Unknown barline type 'dashed'") as exc:
+            await bridge.set_barline("dashed")
 
         # Assert
-        assert "Unknown barline type 'dashed'" in result["error"]
         for supported in BARLINE_COMMANDS:
-            assert supported in result["error"]
+            assert supported in str(exc.value)
         assert len(sent_payloads(connection)) == sent_before
 
 
@@ -495,9 +509,9 @@ class TestRemoteControlPing:
         }
 
     @pytest.mark.anyio()
-    async def test_ping_with_error_reply_returns_false(self) -> None:
+    async def test_ping_with_error_response_returns_false(self) -> None:
         # Arrange
-        bridge, _ = await _connected_bridge({"error": "busy"})
+        bridge, _ = await _connected_bridge({**REFUSED, "detail": "busy"})
 
         # Act / Assert
         assert await bridge.ping() is False

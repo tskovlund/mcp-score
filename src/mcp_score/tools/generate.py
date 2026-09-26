@@ -7,7 +7,6 @@ Code (where the bundled `score-generate` skill covers the same job).
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
 import tempfile
 from pathlib import Path
@@ -111,9 +110,9 @@ async def generate_score(
         timeout: Seconds to wait before killing the script (default: 120).
 
     Returns:
-        JSON. On success: `{"success": true, "output_files": [absolute paths
-        of files created in the working directory], "stdout": ...}`. On
-        failure: `{"error": ..., "stderr": last lines, "returncode": n}`.
+        `{"success": true, "output_files": [absolute paths of files created
+        in the working directory], "stdout": ...}`. A script that fails is
+        a tool error whose message ends with the last lines of its stderr.
     """
     working_directory = _resolve_output_directory(output_dir)
     files_before = _list_files(working_directory)
@@ -137,9 +136,7 @@ async def generate_score(
             process.kill()
             await process.wait()
             raise ToolError(
-                f"Script timed out after {timeout} seconds and was killed.",
-                stderr="",
-                returncode=process.returncode,
+                f"Script timed out after {timeout} seconds and was killed."
             ) from None
 
     stdout = stdout_bytes.decode("utf-8", errors="replace")
@@ -147,9 +144,7 @@ async def generate_score(
 
     if process.returncode != 0:
         raise ToolError(
-            f"Script exited with code {process.returncode}.",
-            stderr=_stderr_tail(stderr),
-            returncode=process.returncode,
+            f"Script exited with code {process.returncode}.\n{_stderr_tail(stderr)}"
         )
 
     new_files = sorted(_list_files(working_directory) - files_before)
@@ -169,13 +164,12 @@ def score_generation_guide() -> str:
     each instrument, with transposition handled by music21), and a complete
     runnable template script. Takes no parameters.
 
-    Returns the guide as Markdown, or `{"error": ...}` JSON if the bundled
-    skill files cannot be found.
+    Returns the guide as Markdown.
     """
     try:
         return load_guide()
     except FileNotFoundError as exception:
-        return json.dumps({"error": str(exception)})
+        raise ToolError(str(exception)) from None
 
 
 # ── Prompt ────────────────────────────────────────────────────────────

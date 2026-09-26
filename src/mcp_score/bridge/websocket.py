@@ -19,7 +19,7 @@ import websockets
 from websockets.exceptions import WebSocketException
 from websockets.protocol import State
 
-from mcp_score.bridge.base import CommandResult, ScoreBridge
+from mcp_score.bridge.base import BridgeError, CommandResult, ScoreBridge
 
 if TYPE_CHECKING:
     from websockets.asyncio.client import ClientConnection
@@ -198,11 +198,16 @@ class WebSocketBridge(ScoreBridge):
         """Send *payload* and return the reply, connecting first if needed.
 
         A connection that breaks during the exchange is reopened once and
-        the payload is sent again. Failures come back as error results,
-        never as exceptions, so tools can pass them on unchanged.
+        the payload is sent again.
+
+        Raises:
+            BridgeError: When the application cannot be reached, or the
+                connection is lost and cannot be reopened.
         """
         if not self.is_connected and not await self.connect():
-            return {"error": f"Cannot connect to {self.application_name} at {self.uri}"}
+            raise BridgeError(
+                f"Cannot connect to {self.application_name} at {self.uri}"
+            )
         transport = self._transport
         assert transport is not None  # noqa: S101 - established by the line above
         try:
@@ -213,13 +218,14 @@ class WebSocketBridge(ScoreBridge):
             )
         await self.disconnect()
         if not await self.connect():
-            return {
-                "error": f"Lost connection to {self.application_name} "
-                "and could not reconnect"
-            }
+            raise BridgeError(
+                f"Lost connection to {self.application_name} and could not reconnect"
+            )
         transport = self._transport
         assert transport is not None  # noqa: S101 - established by connect()
         try:
             return await transport.request(payload)
         except TransportError as exception:
-            return {"error": f"{self.application_name} request failed: {exception}"}
+            raise BridgeError(
+                f"{self.application_name} request failed: {exception}"
+            ) from None

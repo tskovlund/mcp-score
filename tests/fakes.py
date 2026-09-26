@@ -17,7 +17,13 @@ from mcp.server.context import ServerRequestContext
 from mcp.server.mcpserver import Context
 from websockets.protocol import State
 
-from mcp_score.bridge import BridgeRegistry, CommandResult, NoteDuration, ScoreBridge
+from mcp_score.bridge import (
+    BridgeError,
+    BridgeRegistry,
+    CommandResult,
+    NoteDuration,
+    ScoreBridge,
+)
 from mcp_score.context import AppState, ScoreContext
 
 __all__ = [
@@ -62,8 +68,8 @@ class FakeBridge(ScoreBridge):
     """A ``ScoreBridge`` that records calls and returns canned results.
 
     Every operation returns a copy of the result registered with
-    :meth:`reply` (or :meth:`fail`) for its method name, and
-    ``DEFAULT_RESULT`` otherwise.
+    :meth:`reply` for its method name (``DEFAULT_RESULT`` otherwise), or
+    raises the ``BridgeError`` registered with :meth:`fail`.
     """
 
     def __init__(
@@ -80,6 +86,7 @@ class FakeBridge(ScoreBridge):
         self._is_connected = is_connected
         self._content_reading_limitation = content_reading_limitation
         self._results: dict[str, CommandResult] = {}
+        self._failures: dict[str, BridgeError] = {}
 
     # ── Test controls ────────────────────────────────────────────────
 
@@ -101,17 +108,20 @@ class FakeBridge(ScoreBridge):
 
     def reply(self, method: str, result: CommandResult) -> None:
         """Make *method* return *result* from now on."""
+        self._failures.pop(method, None)
         self._results[method] = result
 
     def fail(self, method: str, message: str) -> None:
-        """Make *method* return an ``{"error": message}`` result from now on."""
-        self.reply(method, {"error": message})
+        """Make *method* raise ``BridgeError(message)`` from now on."""
+        self._failures[method] = BridgeError(message)
 
     def calls_to(self, method: str) -> list[BridgeCall]:
         return [call for call in self.calls if call.method == method]
 
     def _record(self, method: str, *arguments: Any) -> CommandResult:
         self.calls.append(BridgeCall(method, arguments))
+        if method in self._failures:
+            raise self._failures[method]
         return dict(self._results.get(method, DEFAULT_RESULT))
 
     # ── ScoreBridge ──────────────────────────────────────────────────

@@ -1,13 +1,13 @@
 """What every tool module shares.
 
-A tool raises :class:`ToolError` when it cannot proceed, and
-:func:`score_tool` turns the error into an ``{"error": ...}`` result, so
-error handling lives here once instead of in every tool and the MCP
-server delivers the dict to the model as JSON text and as structured
-content. Tools that talk to an application take the server's
-:class:`ScoreContext` first, which the MCP SDK injects; the ``require_*``
-guards check the common preconditions and :func:`navigate` moves the
-application's cursor before an edit.
+A tool raises the MCP SDK's :class:`ToolError` when it cannot proceed,
+and the server reports it to the model as a tool error. An application's
+refusal reaches a tool as a :class:`BridgeError`; :func:`score_tool`
+reports it the same way, so no tool handles errors itself. Tools that
+talk to an application take the server's :class:`ScoreContext` first,
+which the MCP SDK injects; the ``require_*`` guards check the common
+preconditions and :func:`navigate` moves the application's cursor before
+an edit.
 """
 
 from __future__ import annotations
@@ -15,6 +15,9 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any, Protocol
 
+from mcp.server.mcpserver.exceptions import ToolError
+
+from mcp_score.bridge import BridgeError
 from mcp_score.context import registry_of
 
 if TYPE_CHECKING:
@@ -44,18 +47,6 @@ NOT_CONNECTED = (
 )
 
 
-class ToolError(Exception):
-    """A tool cannot do what was asked; the message goes to the model."""
-
-    def __init__(self, message: str, **details: Any) -> None:
-        super().__init__(message)
-        self.message = message
-        self.details = details
-
-    def as_result(self) -> CommandResult:
-        return {"error": self.message, **self.details}
-
-
 class ToolModule(Protocol):
     """A module of tools: ``register(server)`` adds them to the server."""
 
@@ -67,7 +58,7 @@ type Tool[**P] = Callable[P, Awaitable[CommandResult]]
 
 
 def score_tool[**P](tool: Tool[P]) -> Tool[P]:
-    """Deliver a tool's :class:`ToolError` as an ``{"error": ...}`` result.
+    """Report an application's refusal (:class:`BridgeError`) as a tool error.
 
     The wrapped function keeps its signature, which is what the MCP server
     reads to describe the tool's parameters and result to the model.
@@ -77,8 +68,8 @@ def score_tool[**P](tool: Tool[P]) -> Tool[P]:
     async def deliver(*args: P.args, **kwargs: P.kwargs) -> CommandResult:
         try:
             return await tool(*args, **kwargs)
-        except ToolError as error:
-            return error.as_result()
+        except BridgeError as error:
+            raise ToolError(error.message) from error
 
     return deliver
 
@@ -125,13 +116,9 @@ async def navigate(bridge: ScoreBridge, measure: int, staff: int | None = None) 
     """Move the application's cursor to *measure* (and *staff*, if given).
 
     Raises:
-        ToolError: With the application's reply when it refuses to move,
-            so a command never runs at the wrong position.
+        BridgeError: When the application refuses to move, so a command
+            never runs at the wrong position.
     """
-    reply = await bridge.go_to_measure(measure)
-    if "error" in reply:
-        raise ToolError(str(reply["error"]))
+    await bridge.go_to_measure(measure)
     if staff is not None:
-        reply = await bridge.go_to_staff(staff)
-        if "error" in reply:
-            raise ToolError(str(reply["error"]))
+        await bridge.go_to_staff(staff)

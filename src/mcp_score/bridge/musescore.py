@@ -11,6 +11,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+from mcp_score.bridge.base import BridgeError
 from mcp_score.bridge.websocket import DEFAULT_HOST, WebSocketBridge
 
 if TYPE_CHECKING:
@@ -60,10 +61,17 @@ class MuseScoreBridge(WebSocketBridge):
         payload: dict[str, Any] = {"command": action}
         if params is not None:
             payload["params"] = params
-        return await self._exchange(payload)
+        reply = await self._exchange(payload)
+        if "error" in reply:
+            details = {key: value for key, value in reply.items() if key != "error"}
+            raise BridgeError(str(reply["error"]), **details)
+        return reply
 
     async def ping(self) -> bool:
-        reply = await self.send_command(MuseScoreCommand.PING)
+        try:
+            reply = await self.send_command(MuseScoreCommand.PING)
+        except BridgeError:
+            return False
         return reply.get("result") == "pong"
 
     # ── Reading ─────────────────────────────────────────────────────

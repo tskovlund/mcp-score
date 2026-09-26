@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from mcp_score.bridge.dorico import DEFAULT_PORT
+from mcp_score.tools import ToolError
 from mcp_score.tools.analysis import read_passage
 from mcp_score.tools.connection import connect_to_dorico, disconnect_from_dorico
 from mcp_score.tools.manipulation import add_live_note, set_live_tempo
@@ -84,17 +85,19 @@ class TestConnectToDorico:
         connect.assert_awaited_once_with("ws://localhost:5555")
 
     @pytest.mark.anyio()
-    async def test_connect_failure_returns_error_with_remote_control_hint(
+    async def test_connect_failure_raises_with_remote_control_hint(
         self, registry: BridgeRegistry, context: ScoreContext
     ) -> None:
         # Arrange
-        with patch(WEBSOCKETS_CONNECT, AsyncMock(side_effect=OSError("refused"))):
+        with (
+            patch(WEBSOCKETS_CONNECT, AsyncMock(side_effect=OSError("refused"))),
+            pytest.raises(ToolError, match="Could not connect to Dorico") as exc_info,
+        ):
             # Act
-            result = await connect_to_dorico(context)
+            await connect_to_dorico(context)
 
         # Assert
-        assert "Could not connect to Dorico" in result["error"]
-        assert "Remote Control" in result["error"]
+        assert "Remote Control" in str(exc_info.value)
         assert registry.active is None
 
     @pytest.mark.anyio()
@@ -132,19 +135,19 @@ class TestDoricoLimitationsThroughTools:
         assert "not note content" in result["warning"]
 
     @pytest.mark.anyio()
-    async def test_set_tempo_returns_dorico_popover_limitation(
+    async def test_set_tempo_raises_dorico_popover_limitation(
         self, context: ScoreContext
     ) -> None:
         # Arrange
         connection = await _connect_dorico(context, COMMAND_ACCEPTED)
 
         # Act
-        result = await set_live_tempo(context, 3, 120)
+        with pytest.raises(
+            ToolError, match="^Dorico's Remote Control API cannot set a tempo"
+        ):
+            await set_live_tempo(context, 3, 120)
 
         # Assert
-        assert result["error"].startswith(
-            "Dorico's Remote Control API cannot set a tempo"
-        )
         assert sent_payloads(connection)[-1] == {
             "message": "command",
             "commandName": "Edit.GoToBar",
@@ -159,8 +162,8 @@ class TestDoricoLimitationsThroughTools:
         connection = await _connect_dorico(context, COMMAND_ACCEPTED)
 
         # Act
-        result = await add_live_note(context, 1, 60, staff=1)
+        with pytest.raises(ToolError, match="cannot move to staff 1"):
+            await add_live_note(context, 1, 60, staff=1)
 
         # Assert
-        assert "cannot move to staff 1" in result["error"]
         assert sent_payloads(connection)[-1]["commandName"] == "Edit.GoToBar"
