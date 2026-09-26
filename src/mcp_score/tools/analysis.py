@@ -1,4 +1,10 @@
-"""Analysis tools: read musical content from the connected application."""
+"""Analysis tools: read from the connected application.
+
+MuseScore reports what sits under its cursor; the tools move the cursor
+measure by measure, so a passage comes back as one entry per measure with
+the element at the start of that measure. Dorico's Remote Control API has
+no cursor: it reports application status and selection properties.
+"""
 
 from __future__ import annotations
 
@@ -30,11 +36,14 @@ def _with_limitation(result: CommandResult, limitation: str | None) -> CommandRe
 async def read_passage(
     start_measure: int, end_measure: int, staff: int | None = None
 ) -> CommandResult:
-    """Read the content of a range of measures in the live score.
+    """Read a range of measures in the live score, one entry per measure.
 
-    Returns what is at the cursor in each measure: notes, rests and other
-    elements. MuseScore gives full note content; Dorico only reports its
-    application status (see the warning in the result).
+    For each measure MuseScore reports the cursor position (measure, staff,
+    voice, beat, tick) and the element at the start of the measure on that
+    staff: its type, and for a note or chord its pitches and duration. It
+    does not list every element in the measure. Dorico only reports its
+    application status (see the warning in the result) and cannot move to
+    a staff.
 
     Args:
         start_measure: First measure to read (1-indexed).
@@ -63,7 +72,12 @@ async def read_passage(
 
 @score_tool
 async def get_measure_content(measure: int, staff: int = 0) -> CommandResult:
-    """Select one measure of one staff in the live score and report it.
+    """Select one measure of one staff in MuseScore and report the selection.
+
+    The selection becomes visible in the score, ready for a manual edit;
+    the result names the selected measure and staff, not its content (use
+    read_passage for that). Not available with Dorico, which cannot move to
+    a staff or select a measure.
 
     Args:
         measure: Measure number (1-indexed).

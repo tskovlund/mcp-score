@@ -91,7 +91,8 @@ async def render_score(
             with a -1, -2, ... suffix before the extension.
         output_path: Where to write the result. Defaults to the input path
             with the format's extension. Its extension must match the
-            format. An existing file is overwritten.
+            format, its directory must exist, and it must not be the input
+            file. An existing file is overwritten.
     """
     input_file = Path(input_path)
     output_file = _output_file(input_file, format, output_path)

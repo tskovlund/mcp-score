@@ -1,7 +1,7 @@
 """Generation tools — run music21 scripts and serve the score-generate guide.
 
 These make score generation available in any MCP client, not only Claude
-Code (where the bundled ``score-generate`` skill covers the same job).
+Code (where the bundled `score-generate` skill covers the same job).
 """
 
 from __future__ import annotations
@@ -133,11 +133,11 @@ async def generate_score(
 
     Write a COMPLETE, self-contained music21 script that builds the whole
     score and ends by exporting it, e.g.
-    ``score.write("musicxml", fp="My Piece.musicxml")``. Use a plain file
+    `score.write("musicxml", fp="My Piece.musicxml")`. Use a plain file
     name (no directory) so the file lands in the working directory and is
-    reported back in ``output_files``. Read the ``score_generation_guide``
+    reported back in `output_files`. Read the `score_generation_guide`
     tool first: it holds the music21 conventions this project relies on
-    (flats are written ``B-`` not ``Bb``, metadata, repeats, volta brackets,
+    (flats are written `B-` not `Bb`, metadata, repeats, volta brackets,
     transposing instruments, and a full template).
 
     The script runs on the user's machine with the user's privileges, in the
@@ -152,9 +152,9 @@ async def generate_score(
         timeout: Seconds to wait before killing the script (default: 120).
 
     Returns:
-        JSON. On success: ``{"success": true, "output_files": [absolute paths
-        of files created in the working directory], "stdout": ...}``. On
-        failure: ``{"error": ..., "stderr": last lines, "returncode": n}``.
+        JSON. On success: `{"success": true, "output_files": [absolute paths
+        of files created in the working directory], "stdout": ...}`. On
+        failure: `{"error": ..., "stderr": last lines, "returncode": n}`.
     """
     working_directory = _resolve_output_directory(output_dir)
     files_before = _list_files(working_directory)
@@ -204,13 +204,13 @@ async def generate_score(
 def score_generation_guide() -> str:
     """Return the score generation guide for writing music21 scripts.
 
-    Read this before calling ``generate_score``. It is the bundled
-    ``score-generate`` skill (instructions, music21 conventions and
+    Read this before calling `generate_score`. It is the bundled
+    `score-generate` skill (instructions, music21 conventions and
     troubleshooting), the instrument class reference (which class to use for
     each instrument, with transposition handled by music21), and a complete
     runnable template script. Takes no parameters.
 
-    Returns the guide as Markdown, or ``{"error": ...}`` JSON if the bundled
+    Returns the guide as Markdown, or `{"error": ...}` JSON if the bundled
     skill files cannot be found.
     """
     try:
