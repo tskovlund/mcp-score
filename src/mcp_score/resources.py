@@ -5,12 +5,12 @@ from __future__ import annotations
 import importlib.resources
 from pathlib import Path
 
-__all__ = ["PLUGIN_FILE", "SKILL_DIRECTORY", "package_path"]
+__all__ = ["PLUGIN_DIRECTORY", "SKILL_DIRECTORY", "package_path"]
 
 # Both paths are relative to the package root when installed from a wheel
 # and to the repository root in a development checkout.
 SKILL_DIRECTORY = Path(".claude") / "skills" / "score-generate"
-PLUGIN_FILE = Path("musescore") / "plugin.qml"
+PLUGIN_DIRECTORY = Path("musescore") / "plugin"
 
 
 def package_path(resource_path: str) -> Path:

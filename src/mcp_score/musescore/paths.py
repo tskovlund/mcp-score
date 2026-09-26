@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-__all__ = ["PLUGIN_FILE_NAME", "plugins_directory"]
+__all__ = ["PLUGIN_DIRECTORY_NAME", "PLUGIN_QML_NAME", "plugins_directory"]
 
-PLUGIN_FILE_NAME = "mcp-score-bridge.qml"
-"""The bridge plugin's file name inside MuseScore's plugins directory."""
+PLUGIN_DIRECTORY_NAME = "mcp-score-bridge"
+"""The bridge plugin's directory inside MuseScore's plugins directory."""
+
+PLUGIN_QML_NAME = "mcp-score-bridge.qml"
+"""The plugin's QML file inside that directory, which names it to MuseScore."""
 
 
 def plugins_directory(home: Path | None = None) -> Path:

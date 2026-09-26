@@ -14,8 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from mcp_score.musescore.paths import PLUGIN_FILE_NAME, plugins_directory
-from mcp_score.resources import PLUGIN_FILE, SKILL_DIRECTORY, package_path
+from mcp_score.musescore.paths import PLUGIN_DIRECTORY_NAME, plugins_directory
+from mcp_score.resources import PLUGIN_DIRECTORY, SKILL_DIRECTORY, package_path
 
 __all__ = ["build_parser", "install_plugin", "install_skill", "main", "run_script"]
 
@@ -29,13 +29,8 @@ EXIT_FAILURE = 1
 # ── Commands ──────────────────────────────────────────────────────────
 
 
-def install_skill(destination: Path = SKILL_DESTINATION) -> Path:
-    """Copy the bundled score-generate skill to *destination*, replacing it.
-
-    Raises:
-        FileNotFoundError: When the skill files are not bundled.
-    """
-    source = package_path(str(SKILL_DIRECTORY))
+def _replace_tree(source: Path, destination: Path) -> Path:
+    """Copy the *source* tree to *destination*, replacing what was there."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         shutil.rmtree(destination)
@@ -43,17 +38,25 @@ def install_skill(destination: Path = SKILL_DESTINATION) -> Path:
     return destination
 
 
-def install_plugin(directory: Path | None = None) -> Path:
-    """Copy the bridge plugin into MuseScore's plugins *directory*.
+def install_skill(destination: Path = SKILL_DESTINATION) -> Path:
+    """Copy the bundled score-generate skill to *destination*, replacing it.
 
     Raises:
-        FileNotFoundError: When the plugin file is not bundled.
+        FileNotFoundError: When the skill files are not bundled.
     """
-    source = package_path(str(PLUGIN_FILE))
-    destination = (directory or plugins_directory()) / PLUGIN_FILE_NAME
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, destination)
-    return destination
+    return _replace_tree(package_path(str(SKILL_DIRECTORY)), destination)
+
+
+def install_plugin(directory: Path | None = None) -> Path:
+    """Copy the bridge plugin into MuseScore's plugins *directory*, replacing it.
+
+    Raises:
+        FileNotFoundError: When the plugin files are not bundled.
+    """
+    source = package_path(str(PLUGIN_DIRECTORY))
+    return _replace_tree(
+        source, (directory or plugins_directory()) / PLUGIN_DIRECTORY_NAME
+    )
 
 
 def run_script(script: str, arguments: list[str]) -> int:

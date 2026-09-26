@@ -1,4 +1,4 @@
-"""Bridge to the MuseScore bridge plugin (``musescore/plugin.qml``).
+"""Bridge to the MuseScore bridge plugin (``musescore/plugin/``).
 
 The plugin runs inside MuseScore Studio and serves a WebSocket. Each
 message is ``{"command": <name>, "params": {...}}`` and each reply carries

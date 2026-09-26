@@ -16,7 +16,7 @@ src/mcp_score/
   server.py           MCP server entry point: create_server() registers every tool module
   context.py          AppState and ScoreContext: what the server hands every tool
   guide.py            The score-generate skill assembled into one document for MCP clients
-  resources.py        Locate bundled files (skill directory, plugin.qml)
+  resources.py        Locate bundled files (skill directory, plugin directory)
   tools/
     base.py           Shared tool plumbing: ToolError, score_tool, bridge and measure guards
     connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
@@ -35,7 +35,7 @@ src/mcp_score/
     paths.py          Where MuseScore keeps user files (plugins directory)
     executable.py     Where MuseScore's executable is (env var, PATH, platform defaults)
     headless.py       Headless rendering through the MuseScore command line
-    plugin.qml        MuseScore QML plugin (WebSocket server inside MuseScore)
+    plugin/           MuseScore plugin: mcp-score-bridge.qml (server, dispatch) and its JS modules
 
 .claude/skills/
   score-generate/     Claude Code skill for score generation via music21

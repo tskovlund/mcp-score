@@ -11,6 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mcp_score.musescore.paths import PLUGIN_DIRECTORY_NAME, PLUGIN_QML_NAME
+
 if TYPE_CHECKING:
     from types import ModuleType
 
@@ -185,9 +187,10 @@ class TestSeedConfiguration:
         # Act
         harness.seed_configuration(layout)
 
-        # Assert: plugin copied, enabled for 4.4 (muse://) and 4.5+ (musescore://)
-        plugin = layout.plugins_dir / harness.PLUGIN_FILE
-        assert plugin.read_text() == harness.PLUGIN_SOURCE.read_text()
+        # Assert: plugin installed, enabled for 4.4 (muse://) and 4.5+ (musescore://)
+        plugin = layout.plugins_dir / PLUGIN_DIRECTORY_NAME
+        assert (plugin / PLUGIN_QML_NAME).is_file()
+        assert (plugin / "score.js").is_file()
         enabled = json.loads((layout.data_dir / "extensions/config.json").read_text())
         assert [entry["uri"] for entry in enabled] == list(harness.PLUGIN_URIS)
         assert all(

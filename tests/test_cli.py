@@ -9,7 +9,7 @@ import pytest
 
 from mcp_score import cli
 from mcp_score.cli import install_plugin, install_skill, main
-from mcp_score.musescore.paths import PLUGIN_FILE_NAME, plugins_directory
+from mcp_score.musescore.paths import PLUGIN_DIRECTORY_NAME, plugins_directory
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,9 +29,11 @@ def skill_source(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def plugin_source(tmp_path: Path) -> Path:
-    source = tmp_path / "source" / "plugin.qml"
-    source.parent.mkdir(parents=True, exist_ok=True)
-    source.write_text("// fake plugin")
+    """A plugin directory with the QML file and a module it imports."""
+    source = tmp_path / "source" / "plugin"
+    source.mkdir(parents=True)
+    (source / "mcp-score-bridge.qml").write_text("// fake plugin")
+    (source / "score.js").write_text("// fake module")
     return source
 
 
@@ -79,9 +81,10 @@ class TestInstallPlugin:
             # Act
             installed = install_plugin(directory)
 
-        # Assert: parent directories created, file named as MuseScore expects
-        assert installed == directory / PLUGIN_FILE_NAME
-        assert installed.read_text() == "// fake plugin"
+        # Assert: parent directories created, directory named as MuseScore expects
+        assert installed == directory / PLUGIN_DIRECTORY_NAME
+        assert (installed / "mcp-score-bridge.qml").read_text() == "// fake plugin"
+        assert (installed / "score.js").read_text() == "// fake module"
 
     def test_defaults_to_musescores_plugins_directory(
         self, plugin_source: Path, tmp_path: Path
@@ -95,8 +98,8 @@ class TestInstallPlugin:
             installed = install_plugin()
 
         # Assert
-        assert installed == plugins_directory(tmp_path) / PLUGIN_FILE_NAME
-        assert installed.exists()
+        assert installed == plugins_directory(tmp_path) / PLUGIN_DIRECTORY_NAME
+        assert installed.is_dir()
 
 
 class TestMain:
@@ -151,7 +154,7 @@ class TestMain:
     ) -> None:
         # Arrange
         install_skill_mock = MagicMock(return_value=tmp_path / "skill")
-        install_plugin_mock = MagicMock(return_value=tmp_path / "plugin.qml")
+        install_plugin_mock = MagicMock(return_value=tmp_path / "plugin")
 
         with (
             patch.object(cli, "install_skill", install_skill_mock),
@@ -169,10 +172,10 @@ class TestMain:
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         # Arrange
-        with patch(_PACKAGE_PATH, side_effect=FileNotFoundError("no plugin.qml")):
+        with patch(_PACKAGE_PATH, side_effect=FileNotFoundError("no plugin files")):
             # Act
             code = main(["install-plugin"])
 
         # Assert
         assert code == cli.EXIT_FAILURE
-        assert "no plugin.qml" in capsys.readouterr().err
+        assert "no plugin files" in capsys.readouterr().err
