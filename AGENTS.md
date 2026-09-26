@@ -19,14 +19,14 @@ src/mcp_score/
     __init__.py       Shared tool plumbing: ToolError, score_tool, bridge and measure guards
     connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py       Read passages and measures from live score
-    manipulation.py   Modify live score (notes, dynamics, barlines, chords, keys, time, tempo, measures, transpose, undo)
+    manipulation.py   Modify live score (notes, rehearsal marks, dynamics, chords, barlines, keys, time, tempo, measures, transpose, undo)
     generate.py       Run music21 scripts and serve the score-generate guide (any MCP client)
     render.py         Export score files through the MuseScore command line
   bridge/
     base.py           ScoreBridge abstract interface, CommandResult, NoteDuration
     websocket.py      WebSocketTransport and WebSocketBridge (connection lifecycle, reconnect)
     remote_control.py Remote Control protocol layer (used by Dorico)
-    musescore.py      MuseScore plugin protocol (thin subclass of WebSocketBridge)
+    musescore.py      MuseScore plugin protocol on WebSocketBridge
     dorico.py         Dorico defaults (thin subclass of RemoteControlBridge, experimental)
     registry.py       BridgeRegistry: the bridges and which one is active
   musescore/
@@ -42,7 +42,7 @@ src/mcp_score/
 scripts/
   musescore_harness.py  Installs and drives a real MuseScore for integration tests
 
-tests/                pytest tests, one file per module
+tests/                pytest tests, grouped by concern, offline
 tests/integration/    Tests against a real MuseScore (opt-in, MCP_SCORE_INTEGRATION=1)
 docs/                 Diataxis-structured documentation
 ```
@@ -97,11 +97,11 @@ Integration tests against a real MuseScore are opt-in; see [CONTRIBUTING.md](CON
 
 ## Tool design principles
 
-MCP tools fall into five categories:
+MCP tools fall into these categories:
 
 1. **Connection** — manage WebSocket bridges to MuseScore and Dorico
 2. **Analysis** — read and understand musical content from the live score
-3. **Manipulation** — modify the live score (barlines, chords, keys, tempo, transpose, undo)
+3. **Manipulation** — modify the live score (notes, rehearsal marks, dynamics, chords, barlines, keys, time signatures, tempo, measures, transpose, undo)
 4. **Generation** — run a music21 script (`generate_score`) and serve the skill text (`score_generation_guide`) so clients other than Claude Code get the same workflow
 5. **Rendering** — export a score file through the MuseScore command line (`render_score`); needs MuseScore installed, not running
 
@@ -114,7 +114,7 @@ In Claude Code, generation is handled by the `score-generate` skill — Claude w
 - **Skill in Claude Code, tools elsewhere** — one script per score, full API access; the tools reuse the skill text so there is one source of truth
 - **WebSocket bridge** to MuseScore Studio 4.4.2+ via a QML plugin that uses MuseScore's built-in `api.websocketserver` (4.4 dropped the `QtWebSockets` QML module; 4.4.2 added the replacement). Older MuseScore is not supported
 - **Dorico experimental** — undocumented Remote Control API, command-only, unverified against a running instance. **Sibelius removed** (out of scope). LilyPond out of scope for now
-- **Integration tests against real MuseScore** — the `Integration` workflow runs `tests/integration/` on 4.4, 4.6 and 4.7 (Linux) and 4.7 (Windows, macOS), driven by `scripts/musescore_harness.py`
+- **Integration tests against real MuseScore** — the `Integration` workflow runs `tests/integration/` on Linux against the versions in `tests/integration/musescore-versions.json` (the oldest supported line, one in between and the newest), and on Windows and macOS against the newest, driven by `scripts/musescore_harness.py`
 - **PyPI name `mcp-score-server`** — PyPI rejected `mcp-score` as too similar to an existing project. The repo, the import package `mcp_score` and the CLI `mcp-score` keep their names
 - **Python** because music21 is Python-only and the MCP SDK has first-class Python support
 
@@ -136,4 +136,4 @@ GitHub Issues for implementation tracking. Linear for higher-level planning (wor
 
 **Templates:** Enhancement, Bug, Research. Use the appropriate template. Blank issues disabled.
 
-**Labels:** `bug`, `enhancement`, `documentation`, `research`, `dependencies`, `github actions`
+**Labels:** `bug`, `enhancement`, `documentation`, `research`, `prompt-request`, `dependencies`, `github actions`

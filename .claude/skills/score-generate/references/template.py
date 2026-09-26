@@ -22,14 +22,15 @@ from music21 import (  # noqa: F401
 )
 
 TITLE = "Score Title"
-OUTPUT = Path.home() / "Desktop" / f"{TITLE}.musicxml"
+# Relative on purpose: the working directory decides where the score lands.
+OUTPUT = Path(f"{TITLE}.musicxml")
 
 # ── Create score ──────────────────────────────────────────────
 score = stream.Score()
 score.metadata = metadata.Metadata()
 score.metadata.title = TITLE
 # score.metadata.composer = "Composer Name"
-# score.metadata.movementName = "Subtitle"  # shows below title
+# score.metadata.movementName = "Subtitle"  # exported; MuseScore 4 does not show it
 # score.metadata.addContributor(
 #     metadata.Contributor(role="arranger", name="Arranger Name")
 # )

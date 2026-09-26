@@ -21,7 +21,8 @@ the tool exists so that a music21 script can produce a score file. Use an MCP
 client that lets you review tool calls before they run, and only connect
 assistants you trust.
 
-Reports about the MuseScore plugin's WebSocket server are in scope. It listens
-on `localhost` only and accepts commands without authentication, so anything
-that could reach it from another host, or escape the score it operates on,
-is worth reporting.
+Reports about the MuseScore plugin's WebSocket server are in scope. It is
+MuseScore's built-in server (`api.websocketserver`) on port 8765, intended for
+the same machine, and it accepts commands without authentication; the plugin
+does not choose the interface it binds to. Anything that could reach it from
+another host, or escape the score it operates on, is worth reporting.

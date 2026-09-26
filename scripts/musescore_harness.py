@@ -42,6 +42,19 @@ from websockets.exceptions import WebSocketException
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+__all__ = [
+    "Layout",
+    "Settings",
+    "install",
+    "latest_version",
+    "layout_for",
+    "main",
+    "release_asset_url",
+    "seed_configuration",
+    "start",
+    "stop",
+]
+
 logger = logging.getLogger("musescore-harness")
 
 # ── Defaults ──────────────────────────────────────────────────────────

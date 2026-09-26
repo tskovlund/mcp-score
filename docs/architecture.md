@@ -31,9 +31,11 @@ mcp-score does three things for an AI assistant:
           |         | tools/manipulation.py               |
           |         |                                     |
           |         | bridge/                             |
-          |         |   base.py (ScoreBridge)             |
+          |         |   base.py (ScoreBridge) registry.py |
+          |         |   websocket.py (transport)          |
           |         |   musescore.py   remote_control.py  |
           |         |                  dorico.py          |
+          |         | musescore/headless.py  mscore CLI   |
           |         +--------+---------------+------------+
           v                  |               |
 +----------------+  WebSocket|               |WebSocket
@@ -46,7 +48,7 @@ mcp-score does three things for an AI assistant:
                     +-----------------+  +-------------------+
 ```
 
-The server registers five tool modules: connection, analysis, manipulation, generation and rendering. Generation and rendering work on files and need no live connection.
+The server registers the tool modules: connection, analysis, manipulation, generation and rendering. Generation and rendering work on files and need no live connection.
 
 ## Multi-bridge design
 
@@ -73,7 +75,7 @@ ScoreBridge (ABC)             -- the operations every tool needs
 
 ### Bridge registry
 
-`bridge/registry.py` holds one bridge per application and tracks the active one. `BridgeRegistry.activate(bridge)` connects a bridge and disconnects whichever was active before; `deactivate(bridge)` disconnects it; `connected()` returns the active bridge only while it is connected. The tools share the module-level `registry` through `require_bridge()` in `tools/__init__.py`, which raises `ToolError` when nothing is connected.
+`bridge/registry.py` holds one bridge per application and tracks the active one. `BridgeRegistry.activate(bridge)` disconnects whichever bridge was active, then connects the new one, so a failed connection leaves nothing active; `deactivate(bridge)` disconnects it; `connected()` returns the active bridge only while it is connected. The tools share the module-level `registry` through `require_bridge()` in `tools/__init__.py`, which raises `ToolError` when nothing is connected.
 
 ### Remote Control protocol (Dorico)
 
@@ -108,11 +110,10 @@ Dorico's Remote Control WebSocket API is fundamentally a **command execution and
 | Execute commands (undo, navigation, barlines, rehearsal marks) |            Yes             |           Yes            |
 | Get application status                                         |            Yes             |           Yes            |
 | Get selection properties                                       |            Yes             |           Yes            |
-| Get flows and layouts                                          |            N/A             |           Yes            |
 | Set barlines                                                   |            Yes             |           Yes            |
 | Add rehearsal marks                                            |   Yes (with custom text)   | Yes (auto-numbered only) |
 | Navigate to measure                                            |            Yes             |           Yes            |
-| Read note content                                              |    Yes (via QML plugin)    |            No            |
+| Read the element at the cursor                                 |    Yes (via QML plugin)    |            No            |
 | Read cursor position                                           | Yes (measure, beat, staff) | Limited (UI state only)  |
 
 ### What the WebSocket API cannot do (and why)
@@ -193,7 +194,7 @@ Resolves the skill directory and `plugin.qml` whether the package is installed f
 
 ### `server.py` -- MCP server
 
-`create_server()` builds the `MCPServer` and calls `register(server)` on each of the five tool modules (connection, analysis, manipulation, generation, rendering). Nothing registers itself on import, so tests can build a server the same way. `main()` runs it over stdio and is what `cli.py serve` calls.
+`create_server()` builds the `MCPServer` and calls `register(server)` on each tool module (connection, analysis, manipulation, generation, rendering). Nothing registers itself on import, so tests can build a server the same way. `main()` runs it over stdio and is what `cli.py serve` calls.
 
 ### `tools/__init__.py` -- shared tool plumbing
 
@@ -213,7 +214,7 @@ Locates the MuseScore executable (`MCP_SCORE_MUSESCORE_PATH`, then PATH, then th
 
 ### `bridge/base.py` -- abstract interface
 
-`ScoreBridge` defines what a tool can ask of any application: connection (`connect()`, `disconnect()`, `ping()`, `is_connected`), reading (`get_score()`, `get_cursor_info()`, `get_properties()`), navigation and selection (`go_to_measure()`, `go_to_staff()`, `select_measure()`, `select_range()`), and every edit (`add_note()`, `add_rehearsal_mark()`, `add_chord_symbol()`, `add_dynamic()`, `set_barline()`, `set_key_signature()`, `set_time_signature()`, `set_tempo()`, `append_measures()`, `transpose()`, `undo()`). Each returns a `CommandResult`; an application that cannot do something answers with `{"error": ...}` rather than raising. `NoteDuration` is the value type for note lengths.
+`ScoreBridge` defines what a tool can ask of any application: identity (`application_name`, `content_reading_limitation`), connection (`connect()`, `disconnect()`, `ping()`, `is_connected`, the raw `send_command()`), reading (`get_score()`, `get_cursor_info()`, `get_properties()`), navigation and selection (`go_to_measure()`, `go_to_staff()`, `select_measure()`, `select_range()`), and every edit (`add_note()`, `add_rehearsal_mark()`, `add_chord_symbol()`, `add_dynamic()`, `set_barline()`, `set_key_signature()`, `set_time_signature()`, `set_tempo()`, `append_measures()`, `transpose()`, `undo()`). Each returns a `CommandResult`; an application that cannot do something answers with `{"error": ...}` rather than raising. `NoteDuration` is the value type for note lengths.
 
 ### `bridge/websocket.py` -- transport and connection lifecycle
 
@@ -314,7 +315,7 @@ Sibelius was removed as out of scope; LilyPond is out of scope for now.
 
 ### Verified against real MuseScore in CI
 
-The unit tests mock the WebSocket and the subprocess, so they cannot catch MuseScore API changes (4.7 renamed the undo action, for example). The `Integration` workflow therefore installs real MuseScore Studio releases -- 4.4, 4.6 and 4.7 on Linux, 4.7 on Windows and macOS -- and runs `tests/integration/` against them: headless `render_score` export and the live plugin bridge. `scripts/musescore_harness.py` downloads MuseScore, seeds its configuration with the plugin bound to a keyboard shortcut (plugins cannot be started from the command line), launches it with a fixture score and presses the shortcut. See [CONTRIBUTING.md](../CONTRIBUTING.md#integration-tests) for running it locally.
+The unit tests mock the WebSocket and the subprocess, so they cannot catch MuseScore API changes (4.7 renamed the undo action, for example). The `Integration` workflow therefore installs real MuseScore Studio releases -- on Linux the versions in `tests/integration/musescore-versions.json` (the oldest supported line, one in between and the newest), on Windows and macOS the newest -- and runs `tests/integration/` against them: headless `render_score` export and the live plugin bridge. `scripts/musescore_harness.py` downloads MuseScore, seeds its configuration with the plugin bound to a keyboard shortcut (plugins cannot be started from the command line), launches it with a fixture score and presses the shortcut. See [CONTRIBUTING.md](../CONTRIBUTING.md#integration-tests) for running it locally.
 
 ### Server does not call LLMs
 
