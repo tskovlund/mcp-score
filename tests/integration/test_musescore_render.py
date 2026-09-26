@@ -16,10 +16,9 @@ from mcp_score.tools import ToolError
 from mcp_score.tools.render import render_score
 
 if TYPE_CHECKING:
-    from mcp_score.bridge import CommandResult
-
-if TYPE_CHECKING:
     from pathlib import Path
+
+    from mcp_score.tools.render import RenderedScore
 
 pytestmark = pytest.mark.integration
 
@@ -30,7 +29,7 @@ _MIDI_MAGIC = b"MThd"
 
 async def _render(
     input_path: Path, render_format: str, output_path: Path | None = None
-) -> CommandResult:
+) -> RenderedScore:
     """Call the tool with string paths, as an MCP client would."""
     return await render_score(
         str(input_path),
@@ -60,10 +59,9 @@ class TestRenderScoreWithMuseScore:
         response = await _render(fixture_score, render_format, output_path)
 
         # Assert
-        assert response["success"] is True
-        assert response["output_path"] == str(output_path)
-        assert response["output_files"] == [str(output_path)]
-        assert response["format"] == render_format
+        assert response.output_path == str(output_path)
+        assert response.output_files == [str(output_path)]
+        assert response.format == render_format
         assert output_path.stat().st_size > 0
         assert output_path.read_bytes().startswith(magic)
 
@@ -80,7 +78,7 @@ class TestRenderScoreWithMuseScore:
 
         # Assert
         expected_output = tmp_path / "piece.pdf"
-        assert response["output_path"] == str(expected_output)
+        assert response.output_path == str(expected_output)
         assert expected_output.read_bytes().startswith(_PDF_MAGIC)
 
     @pytest.mark.anyio()

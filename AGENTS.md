@@ -25,7 +25,8 @@ src/mcp_score/
     generate.py       Run music21 scripts and serve the score-generate guide (any MCP client)
     render.py         Export score files through the MuseScore command line
   bridge/
-    base.py           ScoreBridge abstract interface, CommandResult, NoteDuration
+    base.py           ScoreBridge abstract interface and BridgeError
+    results.py        The result models every operation returns (published as tool output schemas)
     websocket.py      WebSocketTransport and WebSocketBridge (connection lifecycle, reconnect)
     remote_control.py Remote Control protocol layer (used by Dorico)
     musescore.py      MuseScore plugin protocol on WebSocketBridge

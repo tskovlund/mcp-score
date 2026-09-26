@@ -16,10 +16,32 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from pydantic import BaseModel
 
-from mcp_score.bridge import BridgeError, CommandResult, NoteDuration
+from mcp_score.bridge import BridgeError
+from mcp_score.bridge.results import (
+    ApplicationReply,
+    BarlineSet,
+    ChordSymbolAdded,
+    CursorInfo,
+    CursorPosition,
+    Duration,
+    DynamicAdded,
+    KeySignatureSet,
+    MeasuresAppended,
+    NoteAdded,
+    Part,
+    RehearsalMarkAdded,
+    ScoreInfo,
+    SelectionProperties,
+    TempoSet,
+    TimeSignature,
+    TimeSignatureSet,
+    Transposed,
+)
 from mcp_score.tools import NOT_CONNECTED, ToolError, score_tool
 from mcp_score.tools.analysis import (
+    MeasureContent,
     get_measure_content,
     get_selection_properties,
     read_passage,
@@ -52,24 +74,28 @@ if TYPE_CHECKING:
     from mcp_score.bridge import BridgeRegistry
     from mcp_score.context import ScoreContext
 
-type ToolCall = Callable[[ScoreContext], Awaitable[CommandResult]]
+type ToolCall = Callable[[ScoreContext], Awaitable[BaseModel]]
 """A tool with its arguments bound, ready to run against a context."""
 
 
-def bind_arguments[**P](
-    tool: Callable[Concatenate[ScoreContext, P], Awaitable[CommandResult]],
+def bind_arguments[**P, R: BaseModel](
+    tool: Callable[Concatenate[ScoreContext, P], Awaitable[R]],
     *args: P.args,
     **kwargs: P.kwargs,
 ) -> ToolCall:
     """Bind a tool's arguments, leaving the context for the test to supply."""
 
-    def call(context: ScoreContext) -> Awaitable[CommandResult]:
+    def call(context: ScoreContext) -> Awaitable[R]:
         return tool(context, *args, **kwargs)
 
     return call
 
 
 NAVIGATION_ERROR = "Measure 99 is beyond the end of the score"
+LIMITATION = "Only the selection's properties are available."
+
+CURSOR_AT_C4 = CursorInfo(measure=2, staff=0, voice=0, beat=1, tick=1920, element=None)
+"""A cursor reading the fake application could report for measure 2."""
 
 
 # ── score_tool ────────────────────────────────────────────────────────
@@ -82,7 +108,7 @@ class TestScoreTool:
         refusal = BridgeError("Measure 99 out of range", measure=99)
 
         @score_tool
-        async def refused() -> CommandResult:
+        async def refused() -> CursorPosition:
             raise refusal
 
         # Act
@@ -96,20 +122,22 @@ class TestScoreTool:
     @pytest.mark.anyio()
     async def test_result_passes_through(self) -> None:
         # Arrange
+        position = CursorPosition(measure=4, staff=1)
+
         @score_tool
-        async def succeeding(value: str) -> CommandResult:
-            return {"success": True, "value": value}
+        async def succeeding() -> CursorPosition:
+            return position
 
         # Act
-        result = await succeeding("x")
+        result = await succeeding()
 
         # Assert
-        assert result == {"success": True, "value": "x"}
+        assert result is position
 
     def test_wrapper_keeps_parameters(self) -> None:
         # Arrange
-        async def original(measure: int, text: str = "A") -> CommandResult:
-            return {}
+        async def original(measure: int, text: str = "A") -> CursorPosition:
+            return CursorPosition(measure=measure, staff=0)
 
         # Act
         wrapped = score_tool(original)
@@ -211,8 +239,8 @@ class TestConnectToMusescore:
             result = await connect_to_musescore(context, host="10.0.0.5", port=9000)
 
         # Assert
-        assert result["success"] is True
-        assert "ws://10.0.0.5:9000" in result["message"]
+        assert result.application == "MuseScore"
+        assert result.uri == "ws://10.0.0.5:9000"
         assert registry.active is registry.musescore
         assert registry.musescore.is_connected is True
         connect.assert_awaited_once_with("ws://10.0.0.5:9000")
@@ -248,8 +276,7 @@ class TestConnectToMusescore:
         result = await disconnect_from_musescore(context)
 
         # Assert
-        assert result["success"] is True
-        assert "Disconnected from MuseScore" in result["message"]
+        assert result.application == "MuseScore"
         assert registry.active is None
         connection.close.assert_awaited_once()
 
@@ -260,13 +287,24 @@ class TestGetLiveScoreInfo:
         self, connected_bridge: FakeBridge, context: ScoreContext
     ) -> None:
         # Arrange
-        connected_bridge.reply("get_score", {"result": {"title": "Test Score"}})
+        score = ScoreInfo(
+            title="Test Score",
+            part_count=2,
+            parts=[
+                Part(name="Flute", start_staff=0, end_staff=0),
+                Part(name="Piano", start_staff=1, end_staff=2),
+            ],
+            measure_count=32,
+            key_signature=-3,
+            time_signature=TimeSignature(numerator=3, denominator=4),
+        )
+        connected_bridge.reply("get_score", score)
 
         # Act
         result = await get_live_score_info(context)
 
         # Assert
-        assert result == {"result": {"title": "Test Score"}}
+        assert result is score
 
 
 class TestPingScoreApp:
@@ -281,8 +319,7 @@ class TestPingScoreApp:
         result = await ping_score_app(context)
 
         # Assert
-        assert result["success"] is True
-        assert "FakeApp is responsive" in result["message"]
+        assert result.application == "FakeApp"
 
     @pytest.mark.anyio()
     async def test_ping_unresponsive_app_raises(
@@ -328,17 +365,17 @@ class TestReadPassage:
         self, connected_bridge: FakeBridge, context: ScoreContext
     ) -> None:
         # Arrange
-        connected_bridge.reply("get_cursor_info", {"result": {"beat": 1}})
+        connected_bridge.reply("get_cursor_info", CURSOR_AT_C4)
 
         # Act
         result = await read_passage(context, 2, 3)
 
         # Assert
-        assert result["success"] is True
-        assert result["staff"] is None
-        assert result["elements"] == [
-            {"measure": 2, "content": {"result": {"beat": 1}}},
-            {"measure": 3, "content": {"result": {"beat": 1}}},
+        assert (result.start_measure, result.end_measure) == (2, 3)
+        assert result.staff is None
+        assert result.elements == [
+            MeasureContent(measure=2, content=CURSOR_AT_C4),
+            MeasureContent(measure=3, content=CURSOR_AT_C4),
         ]
         assert connected_bridge.calls == [
             BridgeCall("go_to_measure", (2,)),
@@ -379,15 +416,13 @@ class TestReadPassage:
         self, registry: BridgeRegistry, context: ScoreContext
     ) -> None:
         # Arrange
-        registry.active = FakeBridge(
-            content_reading_limitation="Only status is available."
-        )
+        registry.active = FakeBridge(content_reading_limitation=LIMITATION)
 
         # Act
         result = await read_passage(context, 1, 1)
 
         # Assert
-        assert result["warning"] == "Only status is available."
+        assert result.warning == LIMITATION
 
     @pytest.mark.anyio()
     async def test_read_passage_without_limitation_has_no_warning(
@@ -397,7 +432,7 @@ class TestReadPassage:
         result = await read_passage(context, 1, 1)
 
         # Assert
-        assert "warning" not in result
+        assert result.warning is None
 
 
 class TestGetMeasureContent:
@@ -417,13 +452,14 @@ class TestGetMeasureContent:
         self, connected_bridge: FakeBridge, context: ScoreContext
     ) -> None:
         # Arrange
-        connected_bridge.reply("select_measure", {"result": {"notes": ["C4"]}})
+        connected_bridge.reply("select_measure", CursorPosition(measure=3, staff=1))
 
         # Act
         result = await get_measure_content(context, 3, staff=1)
 
         # Assert
-        assert result == {"result": {"notes": ["C4"]}}
+        assert (result.measure, result.staff) == (3, 1)
+        assert result.warning is None
         assert connected_bridge.calls == [
             BridgeCall("go_to_measure", (3,)),
             BridgeCall("go_to_staff", (1,)),
@@ -449,32 +485,51 @@ class TestGetMeasureContent:
         self, registry: BridgeRegistry, context: ScoreContext
     ) -> None:
         # Arrange
-        registry.active = FakeBridge(
-            content_reading_limitation="Only status is available."
-        )
+        registry.active = FakeBridge(content_reading_limitation=LIMITATION)
 
         # Act
         result = await get_measure_content(context, 1)
 
         # Assert
-        assert result["warning"] == "Only status is available."
+        assert result.warning == LIMITATION
 
 
 class TestGetSelectionProperties:
     @pytest.mark.anyio()
-    async def test_get_properties_returns_bridge_properties(
+    async def test_get_properties_returns_bridge_properties_without_warning(
         self, connected_bridge: FakeBridge, context: ScoreContext
     ) -> None:
         # Arrange
         connected_bridge.reply(
-            "get_properties", {"Properties": [{"Name": "kNoteHideStem"}]}
+            "get_properties", SelectionProperties(cursor=CURSOR_AT_C4)
         )
 
         # Act
         result = await get_selection_properties(context)
 
         # Assert
-        assert result == {"Properties": [{"Name": "kNoteHideStem"}]}
+        assert result.cursor == CURSOR_AT_C4
+        assert result.properties is None
+        assert result.warning is None
+
+    @pytest.mark.anyio()
+    async def test_get_properties_attaches_content_reading_limitation(
+        self, registry: BridgeRegistry, context: ScoreContext
+    ) -> None:
+        # Arrange
+        bridge = FakeBridge(content_reading_limitation=LIMITATION)
+        registry.active = bridge
+        reply = ApplicationReply.model_validate(
+            {"Properties": [{"Name": "kNoteHideStem"}]}
+        )
+        bridge.reply("get_properties", SelectionProperties(properties=reply))
+
+        # Act
+        result = await get_selection_properties(context)
+
+        # Assert
+        assert result.properties is reply
+        assert result.warning == LIMITATION
 
 
 # ── Manipulation tools ───────────────────────────────────────────────
@@ -580,15 +635,23 @@ class TestManipulationValidation:
 class TestManipulationHappyPaths:
     @pytest.mark.anyio()
     @pytest.mark.parametrize(
-        ("call", "expected_calls"),
+        ("call", "expected_calls", "reply"),
         [
             pytest.param(
                 bind_arguments(add_live_note, 5, 60, 1, 8, staff=1),
                 [
                     BridgeCall("go_to_measure", (5,)),
                     BridgeCall("go_to_staff", (1,)),
-                    BridgeCall("add_note", (60, NoteDuration(1, 8), True)),
+                    BridgeCall(
+                        "add_note", (60, Duration(numerator=1, denominator=8), True)
+                    ),
                 ],
+                NoteAdded(
+                    measure=5,
+                    staff=1,
+                    pitch=60,
+                    duration=Duration(numerator=1, denominator=8),
+                ),
                 id="add_live_note",
             ),
             pytest.param(
@@ -597,6 +660,7 @@ class TestManipulationHappyPaths:
                     BridgeCall("go_to_measure", (5,)),
                     BridgeCall("add_rehearsal_mark", ("B",)),
                 ],
+                RehearsalMarkAdded(text="B", measure=5),
                 id="add_live_rehearsal_mark",
             ),
             pytest.param(
@@ -605,6 +669,7 @@ class TestManipulationHappyPaths:
                     BridgeCall("go_to_measure", (2,)),
                     BridgeCall("add_chord_symbol", ("Dm7",)),
                 ],
+                ChordSymbolAdded(text="Dm7", measure=2),
                 id="add_live_chord_symbol",
             ),
             pytest.param(
@@ -614,6 +679,7 @@ class TestManipulationHappyPaths:
                     BridgeCall("go_to_staff", (2,)),
                     BridgeCall("add_dynamic", ("ff",)),
                 ],
+                DynamicAdded(dynamic="ff", measure=4),
                 id="add_live_dynamic",
             ),
             pytest.param(
@@ -622,6 +688,7 @@ class TestManipulationHappyPaths:
                     BridgeCall("go_to_measure", (3,)),
                     BridgeCall("set_barline", ("double",)),
                 ],
+                BarlineSet(barline_type="double", measure=3),
                 id="set_live_barline",
             ),
             pytest.param(
@@ -630,6 +697,7 @@ class TestManipulationHappyPaths:
                     BridgeCall("go_to_measure", (1,)),
                     BridgeCall("set_key_signature", (-3,)),
                 ],
+                KeySignatureSet(fifths=-3, measure=1),
                 id="set_live_key_signature",
             ),
             pytest.param(
@@ -638,6 +706,7 @@ class TestManipulationHappyPaths:
                     BridgeCall("go_to_measure", (9,)),
                     BridgeCall("set_time_signature", (6, 8)),
                 ],
+                TimeSignatureSet(numerator=6, denominator=8, measure=9),
                 id="set_live_time_signature",
             ),
             pytest.param(
@@ -646,6 +715,7 @@ class TestManipulationHappyPaths:
                     BridgeCall("go_to_measure", (1,)),
                     BridgeCall("set_tempo", (66, "Slow Blues")),
                 ],
+                TempoSet(bpm=66, text="Slow Blues", measure=1),
                 id="set_live_tempo-with-text",
             ),
             pytest.param(
@@ -654,11 +724,13 @@ class TestManipulationHappyPaths:
                     BridgeCall("go_to_measure", (1,)),
                     BridgeCall("set_tempo", (120, None)),
                 ],
+                TempoSet(bpm=120, text="Quarter = 120", measure=1),
                 id="set_live_tempo-without-text",
             ),
             pytest.param(
                 bind_arguments(append_live_measures, 4),
                 [BridgeCall("append_measures", (4,))],
+                MeasuresAppended(count=4, total_measures=12),
                 id="append_live_measures",
             ),
             pytest.param(
@@ -669,11 +741,13 @@ class TestManipulationHappyPaths:
                     BridgeCall("select_range", (1, 8, 2, 2)),
                     BridgeCall("transpose", (5,)),
                 ],
+                Transposed(semitones=5, notes=16),
                 id="transpose_passage",
             ),
             pytest.param(
                 undo_last_action,
                 [BridgeCall("undo", ())],
+                CursorPosition(measure=7, staff=0),
                 id="undo_last_action",
             ),
         ],
@@ -684,16 +758,16 @@ class TestManipulationHappyPaths:
         context: ScoreContext,
         call: ToolCall,
         expected_calls: list[BridgeCall],
+        reply: BaseModel,
     ) -> None:
         # Arrange
-        final_method = expected_calls[-1].method
-        connected_bridge.reply(final_method, {"result": {"done": final_method}})
+        connected_bridge.reply(expected_calls[-1].method, reply)
 
         # Act
         result = await call(context)
 
         # Assert
-        assert result == {"result": {"done": final_method}}
+        assert result is reply
         assert connected_bridge.calls == expected_calls
 
     @pytest.mark.anyio()

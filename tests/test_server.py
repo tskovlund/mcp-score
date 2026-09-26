@@ -4,13 +4,15 @@ The server is built around a bridge registry that its lifespan hands to
 every tool through the request context, so these tests build the server
 around the test's registry and inject the matching context. A failing
 tool raises ``ToolError`` out of ``call_tool``; turning that into an
-error response is the SDK's request handler's job, not tested here.
+error response is the SDK's request handler's job, not tested here. The
+output schemas come from the tools' return annotations, so their field
+names are ours to check.
 """
 
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -56,6 +58,20 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
 )
 """Every tool the server must offer, across all tool modules."""
 
+GUIDE_TOOL = "score_generation_guide"
+"""The one tool that returns text rather than a result model."""
+
+SNAKE_CASE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
+
+
+def _property_names(schema: dict[str, Any]) -> set[str]:
+    """Every property name in *schema* and the models it defines."""
+    names: set[str] = set(schema.get("properties", {}))
+    definitions: dict[str, dict[str, Any]] = schema.get("$defs", {})
+    for definition in definitions.values():
+        names |= set(definition.get("properties", {}))
+    return names
+
 
 class TestCreateServer:
     @pytest.mark.anyio()
@@ -69,6 +85,24 @@ class TestCreateServer:
         # Assert
         assert server.name == SERVER_NAME
         assert {tool.name for tool in tools} == EXPECTED_TOOLS
+
+    @pytest.mark.anyio()
+    async def test_every_tool_publishes_snake_case_output_schema(self) -> None:
+        # Arrange
+        server = create_server()
+
+        # Act
+        tools = await server.list_tools()
+
+        # Assert
+        for tool in tools:
+            if tool.name == GUIDE_TOOL:
+                continue
+            assert tool.output_schema is not None, tool.name
+            names = _property_names(tool.output_schema)
+            assert names, tool.name
+            not_snake_case = {name for name in names if not SNAKE_CASE.match(name)}
+            assert not not_snake_case, (tool.name, not_snake_case)
 
     @pytest.mark.anyio()
     async def test_create_server_registers_prompt_under_hyphenated_name(

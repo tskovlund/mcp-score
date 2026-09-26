@@ -13,7 +13,7 @@ an edit.
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from mcp.server.mcpserver.exceptions import ToolError
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from mcp.server.mcpserver import MCPServer
 
-    from mcp_score.bridge import CommandResult, ScoreBridge
+    from mcp_score.bridge import ScoreBridge
     from mcp_score.context import ScoreContext
 
 __all__ = [
@@ -38,7 +38,6 @@ __all__ = [
     "require_measure",
     "require_measure_range",
     "score_tool",
-    "succeeded",
 ]
 
 NOT_CONNECTED = (
@@ -53,11 +52,11 @@ class ToolModule(Protocol):
     def register(self, server: MCPServer) -> None: ...
 
 
-type Tool[**P] = Callable[P, Awaitable[CommandResult]]
-"""An MCP tool: an async function whose result is a :class:`CommandResult`."""
+type Tool[**P, R] = Callable[P, Awaitable[R]]
+"""An MCP tool: an async function whose result the server publishes as its schema."""
 
 
-def score_tool[**P](tool: Tool[P]) -> Tool[P]:
+def score_tool[**P, R](tool: Tool[P, R]) -> Tool[P, R]:
     """Report an application's refusal (:class:`BridgeError`) as a tool error.
 
     The wrapped function keeps its signature, which is what the MCP server
@@ -65,18 +64,13 @@ def score_tool[**P](tool: Tool[P]) -> Tool[P]:
     """
 
     @functools.wraps(tool)
-    async def deliver(*args: P.args, **kwargs: P.kwargs) -> CommandResult:
+    async def deliver(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             return await tool(*args, **kwargs)
         except BridgeError as error:
             raise ToolError(error.message) from error
 
     return deliver
-
-
-def succeeded(message: str, **fields: Any) -> CommandResult:
-    """A success result with a message for the model."""
-    return {"success": True, "message": message, **fields}
 
 
 def require_bridge(context: ScoreContext) -> ScoreBridge:

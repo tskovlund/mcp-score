@@ -3,14 +3,16 @@
 MuseScore reports what sits under its cursor; the tools move the cursor
 measure by measure, so a passage comes back as one entry per measure with
 the element at the start of that measure. Dorico's Remote Control API has
-no cursor: it reports application status and selection properties.
+no cursor: the only thing it can read is the selection's properties.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from mcp_score.bridge import CommandResult
+from pydantic import BaseModel
+
+from mcp_score.bridge.results import CursorInfo, CursorPosition, SelectionProperties
 from mcp_score.context import ScoreContext
 from mcp_score.tools import (
     navigate,
@@ -26,11 +28,25 @@ if TYPE_CHECKING:
 __all__ = ["register"]
 
 
-def _with_limitation(result: CommandResult, limitation: str | None) -> CommandResult:
-    """Attach the application's content-reading caveat, when it has one."""
-    if limitation is not None:
-        result["warning"] = limitation
-    return result
+class MeasureContent(BaseModel):
+    measure: int
+    content: CursorInfo
+    """The cursor at the start of the measure and the element there."""
+
+
+class Passage(BaseModel):
+    start_measure: int
+    end_measure: int
+    staff: int | None
+    elements: list[MeasureContent]
+    warning: str | None = None
+    """Why the application could not read more, when it could not."""
+
+
+class Selected(CursorPosition):
+    """A measure of a staff is selected in the application."""
+
+    warning: str | None = None
 
 
 @score_tool
@@ -39,15 +55,14 @@ async def read_passage(
     start_measure: int,
     end_measure: int,
     staff: int | None = None,
-) -> CommandResult:
+) -> Passage:
     """Read a range of measures in the live score, one entry per measure.
 
     For each measure MuseScore reports the cursor position (measure, staff,
     voice, beat, tick) and the element at the start of the measure on that
     staff: its type, and for a note or chord its pitches and duration. It
-    does not list every element in the measure. Dorico only reports its
-    application status (see the warning in the result) and cannot move to
-    a staff.
+    does not list every element in the measure. Not available with Dorico,
+    which cannot read score content.
 
     Args:
         start_measure: First measure to read (1-indexed).
@@ -57,27 +72,25 @@ async def read_passage(
     bridge = require_bridge(context)
     require_measure_range(start_measure, end_measure)
 
-    elements: list[dict[str, Any]] = []
+    elements: list[MeasureContent] = []
     for measure in range(start_measure, end_measure + 1):
         await navigate(bridge, measure, staff)
-        elements.append({"measure": measure, "content": await bridge.get_cursor_info()})
+        content = await bridge.get_cursor_info()
+        elements.append(MeasureContent(measure=measure, content=content))
 
-    return _with_limitation(
-        {
-            "success": True,
-            "start_measure": start_measure,
-            "end_measure": end_measure,
-            "staff": staff,
-            "elements": elements,
-        },
-        bridge.content_reading_limitation,
+    return Passage(
+        start_measure=start_measure,
+        end_measure=end_measure,
+        staff=staff,
+        elements=elements,
+        warning=bridge.content_reading_limitation,
     )
 
 
 @score_tool
 async def get_measure_content(
     context: ScoreContext, measure: int, staff: int = 0
-) -> CommandResult:
+) -> Selected:
     """Select one measure of one staff in MuseScore and report the selection.
 
     The selection becomes visible in the score, ready for a manual edit;
@@ -92,20 +105,25 @@ async def get_measure_content(
     bridge = require_bridge(context)
     require_measure(measure)
     await navigate(bridge, measure, staff)
-    return _with_limitation(
-        await bridge.select_measure(), bridge.content_reading_limitation
+    selected = await bridge.select_measure()
+    return Selected(
+        measure=selected.measure,
+        staff=selected.staff,
+        warning=bridge.content_reading_limitation,
     )
 
 
 @score_tool
-async def get_selection_properties(context: ScoreContext) -> CommandResult:
+async def get_selection_properties(context: ScoreContext) -> SelectionProperties:
     """Get properties of the current selection in the connected application.
 
     MuseScore reports the cursor position (measure, beat, staff, element).
     Dorico reports the names, types and values of every property of the
     selected items, which is the closest its API gets to reading the score.
     """
-    return await require_bridge(context).get_properties()
+    bridge = require_bridge(context)
+    properties = await bridge.get_properties()
+    return properties.model_copy(update={"warning": bridge.content_reading_limitation})
 
 
 def register(server: MCPServer) -> None:

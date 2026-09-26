@@ -134,9 +134,9 @@ The plugin accepts JSON messages over WebSocket. Each message must have a `comma
 
 ### Undo
 
-| Command | Params | Description           |
-| ------- | ------ | --------------------- |
-| `undo`  | none   | Undo the last action. |
+| Command | Params | Description                                                   |
+| ------- | ------ | ------------------------------------------------------------- |
+| `undo`  | none   | Undo the last action; reports the cursor position afterwards. |
 
 ### Batch operations
 

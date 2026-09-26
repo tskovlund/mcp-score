@@ -22,6 +22,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from mcp_score.bridge.base import BridgeError
+from mcp_score.bridge.results import (
+    ApplicationReply,
+    BarlineSet,
+    CursorPosition,
+    RehearsalMarkAdded,
+    SelectionProperties,
+)
 from mcp_score.bridge.websocket import (
     TransportError,
     WebSocketBridge,
@@ -29,7 +36,21 @@ from mcp_score.bridge.websocket import (
 )
 
 if TYPE_CHECKING:
-    from mcp_score.bridge.base import CommandResult, NoteDuration
+    from mcp_score.bridge.base import CommandResult
+    from mcp_score.bridge.results import (
+        ChordSymbolAdded,
+        CursorInfo,
+        Duration,
+        DynamicAdded,
+        KeySignatureSet,
+        MeasuresAppended,
+        NoteAdded,
+        ScoreInfo,
+        SelectedRange,
+        TempoSet,
+        TimeSignatureSet,
+        Transposed,
+    )
 
 __all__ = [
     "DEFAULT_CLIENT_NAME",
@@ -65,6 +86,7 @@ BARLINE_COMMANDS: dict[str, str] = {
 
 POPOVER_REASON = "it is entered through a popover, which the API cannot type into"
 SELECTION_REASON = "the API acts on the current selection and cannot move it"
+READING_REASON = "the API triggers commands and cannot read the score"
 
 
 class HandshakeError(TransportError):
@@ -84,13 +106,14 @@ class RemoteControlBridge(WebSocketBridge):
         super().__init__(application_name, host, port)
         self.client_name = client_name
         self._session_token: str | None = None
+        self._measure = 1
+        """The measure last navigated to; the protocol cannot report a position."""
 
     @property
     def content_reading_limitation(self) -> str:
         return (
-            f"{self.application_name}'s Remote Control API reports application "
-            "status and selection properties, not note content. "
-            "get_selection_properties gives the most detail."
+            f"{self.application_name}'s Remote Control API reads the selection's "
+            "properties, not note content."
         )
 
     # ── Handshake ───────────────────────────────────────────────────
@@ -173,78 +196,90 @@ class RemoteControlBridge(WebSocketBridge):
             return False
         return True
 
-    async def get_score(self) -> CommandResult:
-        return await self.get_status()
+    async def get_score(self) -> ScoreInfo:
+        raise self._unsupported("describe the score", READING_REASON)
 
-    async def get_cursor_info(self) -> CommandResult:
-        """The application status is the closest the protocol has to a cursor."""
-        return await self.get_status()
+    async def get_cursor_info(self) -> CursorInfo:
+        raise self._unsupported("report the cursor", READING_REASON)
 
-    async def get_properties(self) -> CommandResult:
-        return await self.send_message("getproperties")
+    async def get_properties(self) -> SelectionProperties:
+        """The properties of the selected items, as the application reports them."""
+        reply = await self.send_message("getproperties")
+        properties = {key: value for key, value in reply.items() if key != "message"}
+        return SelectionProperties(
+            properties=ApplicationReply.model_validate(properties)
+        )
 
-    async def go_to_measure(self, measure: int) -> CommandResult:
-        return await self.send_command(COMMAND_GO_TO_BAR, {"barNumber": str(measure)})
+    async def go_to_measure(self, measure: int) -> CursorPosition:
+        await self.send_command(COMMAND_GO_TO_BAR, {"barNumber": str(measure)})
+        self._measure = measure
+        return self._position()
 
-    async def go_to_staff(self, staff: int) -> CommandResult:
+    async def go_to_staff(self, staff: int) -> CursorPosition:
         raise self._unsupported(f"move to staff {staff}", SELECTION_REASON)
 
-    async def select_measure(self) -> CommandResult:
+    async def select_measure(self) -> CursorPosition:
         raise self._unsupported("select a measure", SELECTION_REASON)
 
     async def select_range(
         self, start_measure: int, end_measure: int, start_staff: int, end_staff: int
-    ) -> CommandResult:
+    ) -> SelectedRange:
         raise self._unsupported("select a range", SELECTION_REASON)
 
     async def add_note(
-        self, pitch: int, duration: NoteDuration, advance_cursor: bool = True
-    ) -> CommandResult:
+        self, pitch: int, duration: Duration, advance_cursor: bool = True
+    ) -> NoteAdded:
         raise self._unsupported("add notes", POPOVER_REASON)
 
-    async def add_rehearsal_mark(self, text: str) -> CommandResult:
-        reply = await self.send_command(COMMAND_ADD_REHEARSAL_MARK)
-        reply.setdefault(
-            "warning",
-            f"{self.application_name} numbers rehearsal marks itself; "
+    async def add_rehearsal_mark(self, text: str) -> RehearsalMarkAdded:
+        await self.send_command(COMMAND_ADD_REHEARSAL_MARK)
+        return RehearsalMarkAdded(
+            text=text,
+            measure=self._measure,
+            warning=f"{self.application_name} numbers rehearsal marks itself; "
             f"the requested text {text!r} was ignored.",
         )
-        return reply
 
-    async def add_chord_symbol(self, text: str) -> CommandResult:
+    async def add_chord_symbol(self, text: str) -> ChordSymbolAdded:
         raise self._unsupported(f"set chord symbol text {text!r}", POPOVER_REASON)
 
-    async def add_dynamic(self, dynamic: str) -> CommandResult:
+    async def add_dynamic(self, dynamic: str) -> DynamicAdded:
         raise self._unsupported(f"add the dynamic {dynamic!r}", POPOVER_REASON)
 
-    async def set_barline(self, barline_type: str) -> CommandResult:
+    async def set_barline(self, barline_type: str) -> BarlineSet:
         command = BARLINE_COMMANDS.get(barline_type)
         if command is None:
             raise BridgeError(
                 f"Unknown barline type {barline_type!r}. "
                 f"Supported: {', '.join(BARLINE_COMMANDS)}"
             )
-        return await self.send_command(command)
+        await self.send_command(command)
+        return BarlineSet(barline_type=barline_type, measure=self._measure)
 
-    async def set_key_signature(self, fifths: int) -> CommandResult:
+    async def set_key_signature(self, fifths: int) -> KeySignatureSet:
         raise self._unsupported("set a key signature", POPOVER_REASON)
 
     async def set_time_signature(
         self, numerator: int, denominator: int
-    ) -> CommandResult:
+    ) -> TimeSignatureSet:
         raise self._unsupported("set a time signature", POPOVER_REASON)
 
-    async def set_tempo(self, bpm: int, text: str | None = None) -> CommandResult:
+    async def set_tempo(self, bpm: int, text: str | None = None) -> TempoSet:
         raise self._unsupported("set a tempo", POPOVER_REASON)
 
-    async def append_measures(self, count: int) -> CommandResult:
+    async def append_measures(self, count: int) -> MeasuresAppended:
         raise self._unsupported("append measures", POPOVER_REASON)
 
-    async def transpose(self, semitones: int) -> CommandResult:
+    async def transpose(self, semitones: int) -> Transposed:
         raise self._unsupported("transpose a selection", POPOVER_REASON)
 
-    async def undo(self) -> CommandResult:
-        return await self.send_command(COMMAND_UNDO)
+    async def undo(self) -> CursorPosition:
+        await self.send_command(COMMAND_UNDO)
+        return self._position()
+
+    def _position(self) -> CursorPosition:
+        """The last measure navigated to; the protocol has no staves."""
+        return CursorPosition(measure=self._measure, staff=0)
 
     # ── Application information ─────────────────────────────────────
 

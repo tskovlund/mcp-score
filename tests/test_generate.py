@@ -58,9 +58,8 @@ class TestGenerateScore:
             result = await generate_score(script, output_dir=str(tmp_path))
 
         # Assert
-        assert result["success"] is True
-        assert result["output_files"] == [str(tmp_path / "Song.musicxml")]
-        assert result["stdout"] == "Exported\n"
+        assert result.output_files == [str(tmp_path / "Song.musicxml")]
+        assert result.stdout == "Exported\n"
         assert executed["args"][0] == sys.executable
         assert executed["script"] == script
 

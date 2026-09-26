@@ -7,19 +7,21 @@ started (``uv run scripts/musescore_harness.py start <fixture>``).
 Every mutating test undoes its change and checks that the score is back
 to what it found, so the tests do not depend on their order. The
 read-only checks of the untouched fixture still run first. A command the
-plugin refuses raises ``BridgeError``, so a step that must succeed needs
-no assertion on its reply.
+plugin refuses raises ``BridgeError``, and a reply that does not fit its
+result model fails validation, so a step that must succeed needs no
+assertion on its reply.
 """
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
-from mcp_score.bridge import BridgeError, NoteDuration
+from mcp_score.bridge import BridgeError
 from mcp_score.bridge.musescore import MuseScoreBridge
+from mcp_score.bridge.results import BarlineSet, Duration, Note
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -33,7 +35,7 @@ _FIXTURE_MEASURE_COUNT = 1
 _FIXTURE_FIRST_PITCH = 60
 _FIXTURE_FIRST_TPC = 14  # C natural
 
-_QUARTER_NOTE = NoteDuration(1, 4)
+_QUARTER_NOTE = Duration(numerator=1, denominator=4)
 _MIDDLE_C = 60
 _TEMPO_BPM = 96
 _CHORD_SYMBOL = "Cmaj7"
@@ -55,13 +57,15 @@ async def _connected_bridge() -> AsyncGenerator[MuseScoreBridge]:
 
 async def _measure_count(bridge: MuseScoreBridge) -> int:
     score = await bridge.get_score()
-    return int(score["result"]["measureCount"])
+    return score.measure_count
 
 
-async def _first_note(bridge: MuseScoreBridge) -> dict[str, Any]:
-    """Pitch and spelling of the first note of the measure at the cursor."""
+async def _first_note(bridge: MuseScoreBridge) -> Note:
+    """Pitch and spelling of the first note of the chord at the cursor."""
     cursor = await bridge.get_cursor_info()
-    return cursor["result"]["element"]["notes"][0]
+    assert cursor.element is not None
+    assert cursor.element.notes is not None
+    return cursor.element.notes[0]
 
 
 class TestMuseScoreBridgeReadsFixture:
@@ -85,9 +89,10 @@ class TestMuseScoreBridgeReadsFixture:
             score = await bridge.get_score()
 
         # Assert
-        assert score["result"]["title"] == _FIXTURE_TITLE
-        assert score["result"]["partCount"] == _FIXTURE_PART_COUNT
-        assert score["result"]["measureCount"] == _FIXTURE_MEASURE_COUNT
+        assert score.title == _FIXTURE_TITLE
+        assert score.part_count == _FIXTURE_PART_COUNT
+        assert len(score.parts) == _FIXTURE_PART_COUNT
+        assert score.measure_count == _FIXTURE_MEASURE_COUNT
 
     @pytest.mark.anyio()
     async def test_go_to_measure_out_of_range_raises(self) -> None:
@@ -110,13 +115,14 @@ class TestMuseScoreBridgeModifiesScore:
             # Act
             appended = await bridge.append_measures(2)
             count_after = await _measure_count(bridge)
-            await bridge.undo()
+            position = await bridge.undo()
             count_restored = await _measure_count(bridge)
 
         # Assert
-        assert appended["result"]["totalMeasures"] == count_before + 2
+        assert appended.total_measures == count_before + 2
         assert count_after == count_before + 2
         assert count_restored == count_before
+        assert position.measure <= count_before
 
     @pytest.mark.anyio()
     async def test_add_note_in_appended_measure_moves_cursor_there(self) -> None:
@@ -135,8 +141,8 @@ class TestMuseScoreBridgeModifiesScore:
             count_restored = await _measure_count(bridge)
 
         # Assert
-        assert moved["result"]["measure"] == new_measure
-        assert cursor["result"]["measure"] == new_measure
+        assert moved.measure == new_measure
+        assert cursor.measure == new_measure
         assert count_restored == count_before
 
     @pytest.mark.anyio()
@@ -150,7 +156,8 @@ class TestMuseScoreBridgeModifiesScore:
             await bridge.undo()
 
         # Assert
-        assert tempo["result"]["bpm"] == _TEMPO_BPM
+        assert tempo.bpm == _TEMPO_BPM
+        assert tempo.measure == 1
 
     @pytest.mark.anyio()
     async def test_add_chord_symbol_returns_text(self) -> None:
@@ -164,7 +171,7 @@ class TestMuseScoreBridgeModifiesScore:
             still_alive = await bridge.ping()
 
         # Assert
-        assert chord["result"]["text"] == _CHORD_SYMBOL
+        assert chord.text == _CHORD_SYMBOL
         assert still_alive is True
 
     @pytest.mark.anyio()
@@ -179,7 +186,7 @@ class TestMuseScoreBridgeModifiesScore:
             still_alive = await bridge.ping()
 
         # Assert
-        assert changed["result"] == {"type": "double", "measure": 1}
+        assert changed == BarlineSet(barline_type="double", measure=1)
         assert still_alive is True
 
     @pytest.mark.anyio()
@@ -208,11 +215,11 @@ class TestMuseScoreBridgeModifiesScore:
             note_restored = await _first_note(bridge)
 
         # Assert: C4 down a minor third is A3, spelled A (not Bbb).
-        assert transposed["result"]["semitones"] == _MINOR_THIRD_DOWN
-        assert note_after["pitch"] == _FIXTURE_FIRST_PITCH + _MINOR_THIRD_DOWN
-        assert note_after["tpc"] == _A_NATURAL_TPC
-        assert note_restored["pitch"] == _FIXTURE_FIRST_PITCH
-        assert note_restored["tpc"] == _FIXTURE_FIRST_TPC
+        assert transposed.semitones == _MINOR_THIRD_DOWN
+        assert note_after.pitch == _FIXTURE_FIRST_PITCH + _MINOR_THIRD_DOWN
+        assert note_after.tpc == _A_NATURAL_TPC
+        assert note_restored.pitch == _FIXTURE_FIRST_PITCH
+        assert note_restored.tpc == _FIXTURE_FIRST_TPC
 
 
 class TestMuseScoreBridgeSequences:
@@ -242,7 +249,7 @@ class TestMuseScoreBridgeSequences:
         assert exc_info.value.details["failedIndex"] == 2
         assert exc_info.value.details["failedAction"] == "goToMeasure"
         assert count_after == count_before
-        assert cursor["result"]["measure"] == 1
+        assert cursor.measure == 1
 
     @pytest.mark.anyio()
     async def test_sequence_commits_as_one_undo_step(self) -> None:

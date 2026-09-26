@@ -55,9 +55,10 @@ No parameters.
 
 ### `get_live_score_info`
 
-Get information about the score open in the connected application.
+Get information about the score open in MuseScore.
 
-Requires an active connection (connect_to_musescore or connect_to_dorico).
+Title, parts, measure count and the opening key and time signatures.
+Not available with Dorico, whose API cannot describe the score.
 
 No parameters.
 
@@ -74,7 +75,7 @@ Analysis tools: read from the connected application.
 MuseScore reports what sits under its cursor; the tools move the cursor
 measure by measure, so a passage comes back as one entry per measure with
 the element at the start of that measure. Dorico's Remote Control API has
-no cursor: it reports application status and selection properties.
+no cursor: the only thing it can read is the selection's properties.
 
 ### `read_passage`
 
@@ -83,9 +84,8 @@ Read a range of measures in the live score, one entry per measure.
 For each measure MuseScore reports the cursor position (measure, staff,
 voice, beat, tick) and the element at the start of the measure on that
 staff: its type, and for a note or chord its pitches and duration. It
-does not list every element in the measure. Dorico only reports its
-application status (see the warning in the result) and cannot move to
-a staff.
+does not list every element in the measure. Not available with Dorico,
+which cannot read score content.
 
 | Parameter       | Type          | Default    | Description                                                |
 | --------------- | ------------- | ---------- | ---------------------------------------------------------- |
@@ -252,6 +252,9 @@ unchanged. Not available with Dorico, which cannot select a range.
 
 Undo the last change in the connected application.
 
+Reports where the cursor is afterwards, since undoing can remove the
+measure it was on.
+
 No parameters.
 
 ## Generate tools
@@ -284,7 +287,8 @@ Only send code the user would be comfortable running themselves.
 | `output_dir` | `str \| None` | `None`     | Working directory for the run. Defaults to a fresh directory under the user's Desktop (or home directory when there is no Desktop). Created if it does not exist. |
 | `timeout`    | `float`       | `120.0`    | Seconds to wait before killing the script (default: 120).                                                                                                         |
 
-**Returns:** `{"success": true, "output_files": [absolute paths of files created in the working directory], "stdout": ...}`. A script that fails is a tool error whose message ends with the last lines of its stderr.
+A script that fails is a tool error whose message ends with the last
+lines of its stderr.
 
 ### `score_generation_guide`
 
