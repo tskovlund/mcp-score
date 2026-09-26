@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from mcp_score.bridge import CommandResult
+from pydantic import BaseModel
+
 from mcp_score.musescore.executable import (
     MUSESCORE_PATH_ENV_VAR,
     MuseScoreNotFoundError,
@@ -17,6 +18,17 @@ if TYPE_CHECKING:
     from mcp.server.mcpserver import MCPServer
 
 __all__ = ["register"]
+
+
+class RenderedScore(BaseModel):
+    output_path: str
+    """The file MuseScore was asked to write."""
+    output_files: list[str]
+    """The files it wrote: one, or one per page for PNG."""
+    format: str
+    warning: str | None = None
+    """Set when MuseScore wrote the output but did not exit cleanly afterwards."""
+
 
 # Output file extension for each supported format. MuseScore picks the
 # export format from the extension of the output path.
@@ -67,7 +79,7 @@ def _output_file(input_file: Path, format: str, output_path: str | None) -> Path
 @score_tool
 async def render_score(
     input_path: str, format: str = "pdf", output_path: str | None = None
-) -> CommandResult:
+) -> RenderedScore:
     """Render a score file to PDF, PNG, MIDI, MP3, WAV or MusicXML.
 
     Runs the MuseScore Studio 4 command line, so MuseScore Studio 4 must be
@@ -105,15 +117,12 @@ async def render_score(
         ) from None
     except RenderError as exception:
         raise ToolError(f"Rendering failed: {exception}") from None
-    result: CommandResult = {
-        "success": True,
-        "output_path": str(output_file),
-        "output_files": [str(file) for file in rendered.output_files],
-        "format": format,
-    }
-    if rendered.warning is not None:
-        result["warning"] = rendered.warning
-    return result
+    return RenderedScore(
+        output_path=str(output_file),
+        output_files=[str(file) for file in rendered.output_files],
+        format=format,
+        warning=rendered.warning,
+    )
 
 
 def register(server: MCPServer) -> None:

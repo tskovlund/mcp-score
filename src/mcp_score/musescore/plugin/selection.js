@@ -153,5 +153,5 @@ function undo(plugin, params) {
         plugin.cursorStaff = staffCount - 1;
     }
 
-    return { result: "ok" };
+    return { result: { measure: plugin.cursorMeasure, staff: plugin.cursorStaff } };
 }

@@ -115,7 +115,7 @@ function applySetBarline(plugin, params) {
 
     if (params.type === "startRepeat") {
         measure.repeatStart = true;
-        return { result: { type: params.type, measure: plugin.cursorMeasure } };
+        return { result: { barlineType: params.type, measure: plugin.cursorMeasure } };
     }
     if (params.type === "endStartRepeat") {
         var next = measure.nextMeasure;
@@ -124,11 +124,11 @@ function applySetBarline(plugin, params) {
         }
         measure.repeatEnd = true;
         next.repeatStart = true;
-        return { result: { type: params.type, measure: plugin.cursorMeasure } };
+        return { result: { barlineType: params.type, measure: plugin.cursorMeasure } };
     }
     if (params.type === "endRepeat") {
         measure.repeatEnd = true;
-        return { result: { type: params.type, measure: plugin.cursorMeasure } };
+        return { result: { barlineType: params.type, measure: plugin.cursorMeasure } };
     }
 
     // A plain type replaces any end repeat on this measure.
@@ -146,7 +146,7 @@ function applySetBarline(plugin, params) {
         return { error: "No end bar line found for measure " + plugin.cursorMeasure };
     }
 
-    return { result: { type: params.type, measure: plugin.cursorMeasure } };
+    return { result: { barlineType: params.type, measure: plugin.cursorMeasure } };
 }
 
 function setBarline(plugin, params) {
@@ -297,7 +297,7 @@ function applyAddDynamic(plugin, params) {
     }
     cursor.add(dynamic);
 
-    return { result: { type: params.type, measure: plugin.cursorMeasure } };
+    return { result: { dynamic: params.type, measure: plugin.cursorMeasure } };
 }
 
 function addDynamic(plugin, params) {

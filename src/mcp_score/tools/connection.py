@@ -9,20 +9,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from mcp_score.bridge import CommandResult, ScoreBridge, WebSocketBridge
+from pydantic import BaseModel
+
 from mcp_score.bridge.dorico import DEFAULT_PORT as DORICO_DEFAULT_PORT
 from mcp_score.bridge.musescore import DEFAULT_PORT as MUSESCORE_DEFAULT_PORT
+from mcp_score.bridge.results import ScoreInfo
 from mcp_score.bridge.websocket import DEFAULT_HOST
 from mcp_score.context import ScoreContext, registry_of
-from mcp_score.tools import (
-    ToolError,
-    require_bridge,
-    score_tool,
-    succeeded,
-)
+from mcp_score.tools import ToolError, require_bridge, score_tool
 
 if TYPE_CHECKING:
     from mcp.server.mcpserver import MCPServer
+
+    from mcp_score.bridge import ScoreBridge, WebSocketBridge
 
 __all__ = ["register"]
 
@@ -33,29 +32,43 @@ MUSESCORE_CONNECT_HINT = (
 DORICO_CONNECT_HINT = "Is Dorico running with Remote Control enabled?"
 
 
+class Connected(BaseModel):
+    application: str
+    uri: str
+
+
+class Disconnected(BaseModel):
+    application: str
+
+
+class Responsive(BaseModel):
+    """The connected application answered a ping."""
+
+    application: str
+
+
 async def _connect(
     context: ScoreContext, bridge: WebSocketBridge, host: str, port: int, hint: str
-) -> CommandResult:
+) -> Connected:
     """Point *bridge* at host and port and make it the active connection."""
     bridge.host = host
     bridge.port = port
     if not await registry_of(context).activate(bridge):
         raise ToolError(
-            f"Could not connect to {bridge.application_name} at ws://{host}:{port}. "
-            f"{hint}"
+            f"Could not connect to {bridge.application_name} at {bridge.uri}. {hint}"
         )
-    return succeeded(f"Connected to {bridge.application_name} at ws://{host}:{port}.")
+    return Connected(application=bridge.application_name, uri=bridge.uri)
 
 
-async def _disconnect(context: ScoreContext, bridge: ScoreBridge) -> CommandResult:
+async def _disconnect(context: ScoreContext, bridge: ScoreBridge) -> Disconnected:
     await registry_of(context).deactivate(bridge)
-    return succeeded(f"Disconnected from {bridge.application_name}.")
+    return Disconnected(application=bridge.application_name)
 
 
 @score_tool
 async def connect_to_musescore(
     context: ScoreContext, host: str = DEFAULT_HOST, port: int = MUSESCORE_DEFAULT_PORT
-) -> CommandResult:
+) -> Connected:
     """Connect to a running MuseScore Studio (4.4.2 or later).
 
     The MCP Score Bridge plugin must be running in MuseScore with its
@@ -71,7 +84,7 @@ async def connect_to_musescore(
 
 
 @score_tool
-async def disconnect_from_musescore(context: ScoreContext) -> CommandResult:
+async def disconnect_from_musescore(context: ScoreContext) -> Disconnected:
     """Disconnect from MuseScore."""
     return await _disconnect(context, registry_of(context).musescore)
 
@@ -79,7 +92,7 @@ async def disconnect_from_musescore(context: ScoreContext) -> CommandResult:
 @score_tool
 async def connect_to_dorico(
     context: ScoreContext, host: str = DEFAULT_HOST, port: int = DORICO_DEFAULT_PORT
-) -> CommandResult:
+) -> Connected:
     """Connect to a running Dorico via its Remote Control API (experimental).
 
     Dorico support is experimental: the Remote Control API is undocumented,
@@ -98,27 +111,28 @@ async def connect_to_dorico(
 
 
 @score_tool
-async def disconnect_from_dorico(context: ScoreContext) -> CommandResult:
+async def disconnect_from_dorico(context: ScoreContext) -> Disconnected:
     """Disconnect from Dorico."""
     return await _disconnect(context, registry_of(context).dorico)
 
 
 @score_tool
-async def get_live_score_info(context: ScoreContext) -> CommandResult:
-    """Get information about the score open in the connected application.
+async def get_live_score_info(context: ScoreContext) -> ScoreInfo:
+    """Get information about the score open in MuseScore.
 
-    Requires an active connection (connect_to_musescore or connect_to_dorico).
+    Title, parts, measure count and the opening key and time signatures.
+    Not available with Dorico, whose API cannot describe the score.
     """
     return await require_bridge(context).get_score()
 
 
 @score_tool
-async def ping_score_app(context: ScoreContext) -> CommandResult:
+async def ping_score_app(context: ScoreContext) -> Responsive:
     """Check whether the connected application responds. Does not connect."""
     bridge = require_bridge(context)
     if not await bridge.ping():
         raise ToolError(f"{bridge.application_name} is not responding.")
-    return succeeded(f"{bridge.application_name} is responsive.")
+    return Responsive(application=bridge.application_name)
 
 
 def register(server: MCPServer) -> None:

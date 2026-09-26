@@ -12,7 +12,8 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from mcp_score.bridge import CommandResult
+from pydantic import BaseModel
+
 from mcp_score.guide import load_guide
 from mcp_score.tools import ToolError, score_tool
 
@@ -37,6 +38,13 @@ OUTPUT_DIRECTORY_PREFIX = "mcp-score-"
 
 PROMPT_NAME = "score-generate"
 """Name of the MCP prompt that serves the generation guide."""
+
+
+class GeneratedScore(BaseModel):
+    output_files: list[str]
+    """Absolute paths of the files the script created in its working directory."""
+    stdout: str
+
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -86,7 +94,7 @@ async def generate_score(
     script: str,
     output_dir: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
-) -> CommandResult:
+) -> GeneratedScore:
     """Run a music21 Python script to generate a score file (MusicXML).
 
     Write a COMPLETE, self-contained music21 script that builds the whole
@@ -109,10 +117,8 @@ async def generate_score(
             is no Desktop). Created if it does not exist.
         timeout: Seconds to wait before killing the script (default: 120).
 
-    Returns:
-        `{"success": true, "output_files": [absolute paths of files created
-        in the working directory], "stdout": ...}`. A script that fails is
-        a tool error whose message ends with the last lines of its stderr.
+    A script that fails is a tool error whose message ends with the last
+    lines of its stderr.
     """
     working_directory = _resolve_output_directory(output_dir)
     files_before = _list_files(working_directory)
@@ -148,11 +154,7 @@ async def generate_score(
         )
 
     new_files = sorted(_list_files(working_directory) - files_before)
-    return {
-        "success": True,
-        "output_files": [str(path) for path in new_files],
-        "stdout": stdout,
-    }
+    return GeneratedScore(output_files=[str(path) for path in new_files], stdout=stdout)
 
 
 def score_generation_guide() -> str:

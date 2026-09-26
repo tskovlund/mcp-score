@@ -18,7 +18,7 @@ from mcp_score.musescore.executable import (
 )
 from mcp_score.musescore.headless import RenderError, RenderResult, render
 from mcp_score.tools import ToolError
-from mcp_score.tools.render import render_score
+from mcp_score.tools.render import RenderedScore, render_score
 
 _MUSESCORE_COMMAND = ["/opt/musescore/mscore"]
 
@@ -308,12 +308,11 @@ class TestRenderScore:
             result = await render_score(str(score_file))
 
         # Assert
-        assert result == {
-            "success": True,
-            "output_path": str(expected_output),
-            "output_files": [str(expected_output)],
-            "format": "pdf",
-        }
+        assert result == RenderedScore(
+            output_path=str(expected_output),
+            output_files=[str(expected_output)],
+            format="pdf",
+        )
         render_mock.assert_awaited_once_with(score_file, expected_output)
 
     @pytest.mark.anyio()
@@ -328,8 +327,8 @@ class TestRenderScore:
             result = await render_score(str(score_file), format="midi")
 
         # Assert
-        assert result["output_path"] == str(score_file.with_suffix(".mid"))
-        assert result["format"] == "midi"
+        assert result.output_path == str(score_file.with_suffix(".mid"))
+        assert result.format == "midi"
 
     @pytest.mark.anyio()
     async def test_render_score_uses_explicit_output_path(
@@ -346,8 +345,7 @@ class TestRenderScore:
             result = await render_score(str(score_file), "png", str(output))
 
         # Assert
-        assert result["success"] is True
-        assert result["output_files"] == [str(page) for page in pages]
+        assert result.output_files == [str(page) for page in pages]
         render_mock.assert_awaited_once_with(score_file, output)
 
     @pytest.mark.anyio()
@@ -363,8 +361,7 @@ class TestRenderScore:
             result = await render_score(str(score_file))
 
         # Assert
-        assert result["success"] is True
-        assert result["warning"] == "MuseScore exited with code -6."
+        assert result.warning == "MuseScore exited with code -6."
 
     @pytest.mark.anyio()
     async def test_render_score_with_missing_input_raises_without_rendering(
@@ -517,10 +514,9 @@ class TestRenderScore:
             result = await render_score(str(score_file), "wav")
 
         # Assert
-        assert result == {
-            "success": True,
-            "output_path": str(expected_output),
-            "output_files": [str(expected_output)],
-            "format": "wav",
-        }
+        assert result == RenderedScore(
+            output_path=str(expected_output),
+            output_files=[str(expected_output)],
+            format="wav",
+        )
         assert create_subprocess.call_args.args[-2] == str(expected_output)

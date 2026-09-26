@@ -1,6 +1,6 @@
 """The MCP tools, one module per category.
 
-A tool is a plain async function returning a :class:`CommandResult`; the
+A tool is a plain async function returning a result model; the
 shared plumbing (``ToolError``, the ``score_tool`` decorator and the
 precondition guards) lives in :mod:`mcp_score.tools.base`. Each category
 module exposes ``register(server)``, which adds its tools to the server;
@@ -17,7 +17,6 @@ from mcp_score.tools.base import (
     require_measure,
     require_measure_range,
     score_tool,
-    succeeded,
 )
 
 __all__ = [
@@ -30,5 +29,4 @@ __all__ = [
     "require_measure",
     "require_measure_range",
     "score_tool",
-    "succeeded",
 ]

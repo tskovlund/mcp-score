@@ -1,9 +1,10 @@
 """Tests for the Remote Control protocol layer shared by Dorico-style bridges.
 
 The handshake, message framing, error responses, the operations the
-protocol cannot perform and the barline mapping are tested here once, on
-a plain ``RemoteControlBridge``. Subclasses only supply defaults, tested
-in their own files.
+protocol cannot perform, the barline mapping and the position the bridge
+tracks itself (the protocol cannot report one) are tested here once, on a
+plain ``RemoteControlBridge``. Subclasses only supply defaults, tested in
+their own files.
 """
 
 from __future__ import annotations
@@ -14,11 +15,16 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mcp_score.bridge import BridgeError, NoteDuration
+from mcp_score.bridge import BridgeError
 from mcp_score.bridge.remote_control import (
     BARLINE_COMMANDS,
     HANDSHAKE_VERSION,
     RemoteControlBridge,
+)
+from mcp_score.bridge.results import (
+    BarlineSet,
+    CursorPosition,
+    Duration,
 )
 from tests.fakes import (
     REMOTE_CONTROL_HANDSHAKE,
@@ -31,9 +37,7 @@ from tests.fakes import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from mcp_score.bridge import CommandResult
-
-type BridgeOperation = Callable[[RemoteControlBridge], Awaitable[CommandResult]]
+type BridgeOperation = Callable[[RemoteControlBridge], Awaitable[object]]
 
 APPLICATION_NAME = "TestApp"
 CLIENT_NAME = "test-client"
@@ -266,19 +270,14 @@ class TestRemoteControlMessages:
                 id="undo",
             ),
             pytest.param(
-                RemoteControlBridge.get_score,
-                {"message": "getstatus"},
-                id="get_score-is-status",
-            ),
-            pytest.param(
-                RemoteControlBridge.get_cursor_info,
-                {"message": "getstatus"},
-                id="get_cursor_info-is-status",
-            ),
-            pytest.param(
                 RemoteControlBridge.get_properties,
                 {"message": "getproperties"},
                 id="get_properties",
+            ),
+            pytest.param(
+                RemoteControlBridge.get_status,
+                {"message": "getstatus"},
+                id="get_status",
             ),
             pytest.param(
                 RemoteControlBridge.get_flows,
@@ -294,11 +293,27 @@ class TestRemoteControlMessages:
         bridge, connection = await _connected_bridge(ACCEPTED)
 
         # Act
-        reply = await operation(bridge)
+        await operation(bridge)
 
         # Assert
-        assert reply == ACCEPTED
         assert sent_payloads(connection)[-1] == expected_message
+
+    @pytest.mark.anyio()
+    async def test_get_properties_wraps_reply_as_application_reply(self) -> None:
+        # Arrange
+        reply: dict[str, Any] = {
+            "message": "properties",
+            "Properties": [{"Name": "kNoteHideStem", "Value": "false"}],
+        }
+        bridge, _ = await _connected_bridge(reply)
+
+        # Act
+        properties = await bridge.get_properties()
+
+        # Assert: the protocol envelope is dropped, the application's data kept
+        assert properties.cursor is None
+        assert properties.properties is not None
+        assert properties.properties.model_dump() == {"Properties": reply["Properties"]}
 
     @pytest.mark.anyio()
     @pytest.mark.parametrize(
@@ -332,6 +347,16 @@ class TestRemoteControlUnsupportedOperations:
         ("operation", "expected_fragment"),
         [
             pytest.param(
+                RemoteControlBridge.get_score,
+                "cannot describe the score: the API triggers commands",
+                id="get_score",
+            ),
+            pytest.param(
+                RemoteControlBridge.get_cursor_info,
+                "cannot report the cursor: the API triggers commands",
+                id="get_cursor_info",
+            ),
+            pytest.param(
                 partial(RemoteControlBridge.go_to_staff, staff=2),
                 "cannot move to staff 2: the API acts on the current selection",
                 id="go_to_staff",
@@ -354,7 +379,9 @@ class TestRemoteControlUnsupportedOperations:
             ),
             pytest.param(
                 partial(
-                    RemoteControlBridge.add_note, pitch=60, duration=NoteDuration(1, 4)
+                    RemoteControlBridge.add_note,
+                    pitch=60,
+                    duration=Duration(numerator=1, denominator=4),
                 ),
                 "cannot add notes: it is entered through a popover",
                 id="add_note",
@@ -421,17 +448,72 @@ class TestRemoteControlUnsupportedOperations:
 
         # Assert
         assert limitation.startswith(f"{APPLICATION_NAME}'s Remote Control API")
-        assert "get_selection_properties" in limitation
+        assert "not note content" in limitation
 
 
-# ── Rehearsal marks ──────────────────────────────────────────────────
+# ── Position tracking ────────────────────────────────────────────────
 
 
-class TestRemoteControlRehearsalMarks:
+class TestRemoteControlPosition:
+    """The protocol cannot report a position, so the bridge remembers its own."""
+
     @pytest.mark.anyio()
-    async def test_add_rehearsal_mark_warns_that_text_is_ignored(self) -> None:
+    async def test_go_to_measure_reports_the_measure_moved_to(self) -> None:
         # Arrange
-        bridge, connection = await _connected_bridge(ACCEPTED)
+        bridge, _ = await _connected_bridge(ACCEPTED)
+
+        # Act
+        position = await bridge.go_to_measure(5)
+
+        # Assert
+        assert position == CursorPosition(measure=5, staff=0)
+
+    @pytest.mark.anyio()
+    async def test_undo_before_navigating_reports_first_measure(self) -> None:
+        # Arrange
+        bridge, _ = await _connected_bridge(ACCEPTED)
+
+        # Act
+        position = await bridge.undo()
+
+        # Assert
+        assert position == CursorPosition(measure=1, staff=0)
+
+    @pytest.mark.anyio()
+    async def test_undo_reports_last_measure_navigated_to(self) -> None:
+        # Arrange
+        bridge, _ = await _connected_bridge(ACCEPTED, ACCEPTED)
+        await bridge.go_to_measure(7)
+
+        # Act
+        position = await bridge.undo()
+
+        # Assert
+        assert position.measure == 7
+
+    @pytest.mark.anyio()
+    async def test_refused_navigation_keeps_previous_measure(self) -> None:
+        # Arrange
+        bridge, _ = await _connected_bridge(
+            ACCEPTED, {**REFUSED, "detail": "No such bar"}, ACCEPTED
+        )
+        await bridge.go_to_measure(4)
+
+        # Act
+        with pytest.raises(BridgeError, match="No such bar"):
+            await bridge.go_to_measure(99)
+        position = await bridge.undo()
+
+        # Assert
+        assert position.measure == 4
+
+    @pytest.mark.anyio()
+    async def test_add_rehearsal_mark_reports_measure_and_warns_text_ignored(
+        self,
+    ) -> None:
+        # Arrange
+        bridge, connection = await _connected_bridge(ACCEPTED, ACCEPTED)
+        await bridge.go_to_measure(9)
 
         # Act
         result = await bridge.add_rehearsal_mark("B")
@@ -441,7 +523,9 @@ class TestRemoteControlRehearsalMarks:
             "message": "command",
             "commandName": "AddRehearsalMark",
         }
-        assert "'B' was ignored" in result["warning"]
+        assert (result.text, result.measure) == ("B", 9)
+        assert result.warning is not None
+        assert "'B' was ignored" in result.warning
 
 
 # ── Barlines ─────────────────────────────────────────────────────────
@@ -462,16 +546,18 @@ class TestRemoteControlBarlines:
         self, barline_type: str, expected_command: str
     ) -> None:
         # Arrange
-        bridge, connection = await _connected_bridge(ACCEPTED)
+        bridge, connection = await _connected_bridge(ACCEPTED, ACCEPTED)
+        await bridge.go_to_measure(3)
 
         # Act
-        await bridge.set_barline(barline_type)
+        result = await bridge.set_barline(barline_type)
 
         # Assert
         assert sent_payloads(connection)[-1] == {
             "message": "command",
             "commandName": expected_command,
         }
+        assert result == BarlineSet(barline_type=barline_type, measure=3)
 
     @pytest.mark.anyio()
     async def test_set_barline_with_unknown_type_lists_supported_types(self) -> None:

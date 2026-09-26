@@ -9,13 +9,35 @@ module is the only place they are spelled out on the Python side.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+
+from pydantic import ValidationError
+from pydantic.alias_generators import to_snake
 
 from mcp_score.bridge.base import BridgeError
+from mcp_score.bridge.results import (
+    BarlineSet,
+    ChordSymbolAdded,
+    CursorInfo,
+    CursorPosition,
+    DynamicAdded,
+    KeySignatureSet,
+    MeasuresAppended,
+    NoteAdded,
+    RehearsalMarkAdded,
+    Result,
+    ScoreInfo,
+    SelectedRange,
+    SelectionProperties,
+    TempoSet,
+    TimeSignatureSet,
+    Transposed,
+)
 from mcp_score.bridge.websocket import DEFAULT_HOST, WebSocketBridge
 
 if TYPE_CHECKING:
-    from mcp_score.bridge.base import CommandResult, NoteDuration
+    from mcp_score.bridge.base import CommandResult
+    from mcp_score.bridge.results import Duration
 
 __all__ = ["DEFAULT_PORT", "MuseScoreBridge", "MuseScoreCommand"]
 
@@ -74,35 +96,59 @@ class MuseScoreBridge(WebSocketBridge):
             return False
         return reply.get("result") == "pong"
 
+    async def _run[R: Result](
+        self, result_type: type[R], action: str, params: dict[str, Any] | None = None
+    ) -> R:
+        """Run a plugin command and read its ``result`` as *result_type*.
+
+        The plugin names its fields in camelCase, as the QML side does;
+        the models use the Python names.
+
+        Raises:
+            BridgeError: When the reply does not have the shape the model
+                describes, which means the plugin and this bridge disagree.
+        """
+        reply = await self.send_command(action, params)
+        try:
+            return result_type.model_validate(_snake_case_keys(reply.get("result")))
+        except ValidationError as error:
+            raise BridgeError(
+                f"{self.application_name}'s plugin answered {action} with an "
+                f"unexpected reply: {error}"
+            ) from error
+
     # ── Reading ─────────────────────────────────────────────────────
 
-    async def get_score(self) -> CommandResult:
-        return await self.send_command(MuseScoreCommand.GET_SCORE)
+    async def get_score(self) -> ScoreInfo:
+        return await self._run(ScoreInfo, MuseScoreCommand.GET_SCORE)
 
-    async def get_cursor_info(self) -> CommandResult:
-        return await self.send_command(MuseScoreCommand.GET_CURSOR_INFO)
+    async def get_cursor_info(self) -> CursorInfo:
+        return await self._run(CursorInfo, MuseScoreCommand.GET_CURSOR_INFO)
 
-    async def get_properties(self) -> CommandResult:
+    async def get_properties(self) -> SelectionProperties:
         """The cursor position is the closest MuseScore has to selection properties."""
-        return await self.get_cursor_info()
+        return SelectionProperties(cursor=await self.get_cursor_info())
 
     # ── Navigation and selection ────────────────────────────────────
 
-    async def go_to_measure(self, measure: int) -> CommandResult:
-        return await self.send_command(
-            MuseScoreCommand.GO_TO_MEASURE, {"measure": measure}
+    async def go_to_measure(self, measure: int) -> CursorPosition:
+        return await self._run(
+            CursorPosition, MuseScoreCommand.GO_TO_MEASURE, {"measure": measure}
         )
 
-    async def go_to_staff(self, staff: int) -> CommandResult:
-        return await self.send_command(MuseScoreCommand.GO_TO_STAFF, {"staff": staff})
+    async def go_to_staff(self, staff: int) -> CursorPosition:
+        return await self._run(
+            CursorPosition, MuseScoreCommand.GO_TO_STAFF, {"staff": staff}
+        )
 
-    async def select_measure(self) -> CommandResult:
-        return await self.send_command(MuseScoreCommand.SELECT_CURRENT_MEASURE)
+    async def select_measure(self) -> CursorPosition:
+        return await self._run(CursorPosition, MuseScoreCommand.SELECT_CURRENT_MEASURE)
 
     async def select_range(
         self, start_measure: int, end_measure: int, start_staff: int, end_staff: int
-    ) -> CommandResult:
-        return await self.send_command(
+    ) -> SelectedRange:
+        return await self._run(
+            SelectedRange,
             MuseScoreCommand.SELECT_CUSTOM_RANGE,
             {
                 "startMeasure": start_measure,
@@ -115,66 +161,70 @@ class MuseScoreBridge(WebSocketBridge):
     # ── Writing ─────────────────────────────────────────────────────
 
     async def add_note(
-        self, pitch: int, duration: NoteDuration, advance_cursor: bool = True
-    ) -> CommandResult:
-        return await self.send_command(
+        self, pitch: int, duration: Duration, advance_cursor: bool = True
+    ) -> NoteAdded:
+        return await self._run(
+            NoteAdded,
             MuseScoreCommand.ADD_NOTE,
             {
                 "pitch": pitch,
-                "duration": duration._asdict(),
+                "duration": duration.model_dump(),
                 "advanceCursorAfterAction": advance_cursor,
             },
         )
 
-    async def add_rehearsal_mark(self, text: str) -> CommandResult:
-        return await self.send_command(
-            MuseScoreCommand.ADD_REHEARSAL_MARK, {"text": text}
+    async def add_rehearsal_mark(self, text: str) -> RehearsalMarkAdded:
+        return await self._run(
+            RehearsalMarkAdded, MuseScoreCommand.ADD_REHEARSAL_MARK, {"text": text}
         )
 
-    async def add_chord_symbol(self, text: str) -> CommandResult:
-        return await self.send_command(
-            MuseScoreCommand.ADD_CHORD_SYMBOL, {"text": text}
+    async def add_chord_symbol(self, text: str) -> ChordSymbolAdded:
+        return await self._run(
+            ChordSymbolAdded, MuseScoreCommand.ADD_CHORD_SYMBOL, {"text": text}
         )
 
-    async def add_dynamic(self, dynamic: str) -> CommandResult:
-        return await self.send_command(MuseScoreCommand.ADD_DYNAMIC, {"type": dynamic})
-
-    async def set_barline(self, barline_type: str) -> CommandResult:
-        return await self.send_command(
-            MuseScoreCommand.SET_BARLINE, {"type": barline_type}
+    async def add_dynamic(self, dynamic: str) -> DynamicAdded:
+        return await self._run(
+            DynamicAdded, MuseScoreCommand.ADD_DYNAMIC, {"type": dynamic}
         )
 
-    async def set_key_signature(self, fifths: int) -> CommandResult:
-        return await self.send_command(
-            MuseScoreCommand.SET_KEY_SIGNATURE, {"fifths": fifths}
+    async def set_barline(self, barline_type: str) -> BarlineSet:
+        return await self._run(
+            BarlineSet, MuseScoreCommand.SET_BARLINE, {"type": barline_type}
+        )
+
+    async def set_key_signature(self, fifths: int) -> KeySignatureSet:
+        return await self._run(
+            KeySignatureSet, MuseScoreCommand.SET_KEY_SIGNATURE, {"fifths": fifths}
         )
 
     async def set_time_signature(
         self, numerator: int, denominator: int
-    ) -> CommandResult:
-        return await self.send_command(
+    ) -> TimeSignatureSet:
+        return await self._run(
+            TimeSignatureSet,
             MuseScoreCommand.SET_TIME_SIGNATURE,
             {"numerator": numerator, "denominator": denominator},
         )
 
-    async def set_tempo(self, bpm: int, text: str | None = None) -> CommandResult:
+    async def set_tempo(self, bpm: int, text: str | None = None) -> TempoSet:
         params: dict[str, Any] = {"bpm": bpm}
         if text is not None:
             params["text"] = text
-        return await self.send_command(MuseScoreCommand.SET_TEMPO, params)
+        return await self._run(TempoSet, MuseScoreCommand.SET_TEMPO, params)
 
-    async def append_measures(self, count: int) -> CommandResult:
-        return await self.send_command(
-            MuseScoreCommand.APPEND_MEASURES, {"count": count}
+    async def append_measures(self, count: int) -> MeasuresAppended:
+        return await self._run(
+            MeasuresAppended, MuseScoreCommand.APPEND_MEASURES, {"count": count}
         )
 
-    async def transpose(self, semitones: int) -> CommandResult:
-        return await self.send_command(
-            MuseScoreCommand.TRANSPOSE, {"semitones": semitones}
+    async def transpose(self, semitones: int) -> Transposed:
+        return await self._run(
+            Transposed, MuseScoreCommand.TRANSPOSE, {"semitones": semitones}
         )
 
-    async def undo(self) -> CommandResult:
-        return await self.send_command(MuseScoreCommand.UNDO)
+    async def undo(self) -> CursorPosition:
+        return await self._run(CursorPosition, MuseScoreCommand.UNDO)
 
     async def process_sequence(self, steps: list[dict[str, Any]]) -> CommandResult:
         """Run several plugin commands as one undo step.
@@ -185,3 +235,13 @@ class MuseScoreBridge(WebSocketBridge):
         return await self.send_command(
             MuseScoreCommand.PROCESS_SEQUENCE, {"sequence": steps}
         )
+
+
+def _snake_case_keys(value: object) -> object:
+    """*value* with every mapping key, at any depth, converted to snake_case."""
+    if isinstance(value, dict):
+        entries = cast("dict[object, object]", value).items()
+        return {to_snake(str(key)): _snake_case_keys(item) for key, item in entries}
+    if isinstance(value, list):
+        return [_snake_case_keys(item) for item in cast("list[object]", value)]
+    return value

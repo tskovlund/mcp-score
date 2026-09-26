@@ -12,7 +12,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from mcp_score.bridge import CommandResult, NoteDuration
+from mcp_score.bridge.results import (
+    BarlineSet,
+    ChordSymbolAdded,
+    CursorPosition,
+    Duration,
+    DynamicAdded,
+    KeySignatureSet,
+    MeasuresAppended,
+    NoteAdded,
+    RehearsalMarkAdded,
+    TempoSet,
+    TimeSignatureSet,
+    Transposed,
+)
 from mcp_score.context import ScoreContext
 from mcp_score.tools import (
     ToolError,
@@ -40,7 +53,7 @@ async def add_live_note(
     numerator: int = 1,
     denominator: int = 4,
     staff: int = 0,
-) -> CommandResult:
+) -> NoteAdded:
     """Add a note at the start of a measure in the live score.
 
     Consecutive calls on the same measure append notes one after another,
@@ -61,13 +74,15 @@ async def add_live_note(
     if numerator < 1 or denominator < 1:
         raise ToolError("numerator and denominator must be >= 1.")
     await navigate(bridge, measure, staff)
-    return await bridge.add_note(pitch, NoteDuration(numerator, denominator))
+    return await bridge.add_note(
+        pitch, Duration(numerator=numerator, denominator=denominator)
+    )
 
 
 @score_tool
 async def add_live_rehearsal_mark(
     context: ScoreContext, measure: int, text: str
-) -> CommandResult:
+) -> RehearsalMarkAdded:
     """Add a rehearsal mark to a measure in the live score.
 
     Dorico numbers rehearsal marks itself and ignores the text (the result
@@ -86,7 +101,7 @@ async def add_live_rehearsal_mark(
 @score_tool
 async def add_live_chord_symbol(
     context: ScoreContext, measure: int, symbol: str
-) -> CommandResult:
+) -> ChordSymbolAdded:
     """Add a chord symbol to a measure in the live score.
 
     Not available with Dorico.
@@ -104,7 +119,7 @@ async def add_live_chord_symbol(
 @score_tool
 async def add_live_dynamic(
     context: ScoreContext, measure: int, dynamic: str, staff: int = 0
-) -> CommandResult:
+) -> DynamicAdded:
     """Add a dynamic marking to a measure in the live score.
 
     Not available with Dorico.
@@ -123,7 +138,7 @@ async def add_live_dynamic(
 @score_tool
 async def set_live_barline(
     context: ScoreContext, measure: int, barline_type: str
-) -> CommandResult:
+) -> BarlineSet:
     """Set the bar line at the end of a measure in the live score.
 
     Args:
@@ -143,7 +158,7 @@ async def set_live_barline(
 @score_tool
 async def set_live_key_signature(
     context: ScoreContext, measure: int, fifths: int
-) -> CommandResult:
+) -> KeySignatureSet:
     """Set the key signature from a measure onward in the live score.
 
     Not available with Dorico.
@@ -162,7 +177,7 @@ async def set_live_key_signature(
 @score_tool
 async def set_live_time_signature(
     context: ScoreContext, measure: int, numerator: int, denominator: int
-) -> CommandResult:
+) -> TimeSignatureSet:
     """Set the time signature from a measure onward in the live score.
 
     Not available with Dorico.
@@ -183,7 +198,7 @@ async def set_live_time_signature(
 @score_tool
 async def set_live_tempo(
     context: ScoreContext, measure: int, bpm: int, text: str | None = None
-) -> CommandResult:
+) -> TempoSet:
     """Set the tempo at a measure in the live score.
 
     Not available with Dorico.
@@ -202,7 +217,9 @@ async def set_live_tempo(
 
 
 @score_tool
-async def append_live_measures(context: ScoreContext, count: int = 1) -> CommandResult:
+async def append_live_measures(
+    context: ScoreContext, count: int = 1
+) -> MeasuresAppended:
     """Append empty measures to the end of the live score.
 
     Not available with Dorico.
@@ -223,7 +240,7 @@ async def transpose_passage(
     end_measure: int,
     staff: int,
     semitones: int,
-) -> CommandResult:
+) -> Transposed:
     """Transpose the notes of a passage by a number of semitones in the live score.
 
     Notes are moved with conventional spelling (a minor second up turns C
@@ -244,8 +261,12 @@ async def transpose_passage(
 
 
 @score_tool
-async def undo_last_action(context: ScoreContext) -> CommandResult:
-    """Undo the last change in the connected application."""
+async def undo_last_action(context: ScoreContext) -> CursorPosition:
+    """Undo the last change in the connected application.
+
+    Reports where the cursor is afterwards, since undoing can remove the
+    measure it was on.
+    """
     return await require_bridge(context).undo()
 
 

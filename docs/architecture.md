@@ -66,7 +66,7 @@ ScoreBridge (ABC)             -- the operations every tool needs
         └── DoricoBridge      -- Dorico defaults (port 4560)
 ```
 
-- `ScoreBridge` -- the abstract interface: connection, navigation, reading, and every edit the tools offer, each returning a `CommandResult` dict and raising `BridgeError` when the application cannot do it
+- `ScoreBridge` -- the abstract interface: connection, navigation, reading, and every edit the tools offer, each returning one of the result models in `bridge/results.py` and raising `BridgeError` when the application cannot do it
 - `WebSocketTransport` -- owns the socket: open, close, send, and one request/reply exchange
 - `WebSocketBridge` -- connects a transport, auto-connects on the first command, reconnects once on a lost connection, and gives subclasses two hooks (`_on_connected`, `_on_disconnecting`) for their protocol's handshake
 - `MuseScoreBridge` -- frames commands for the MuseScore plugin and maps the interface to plugin commands
@@ -153,7 +153,8 @@ src/mcp_score/
     manipulation.py     Live notes, dynamics, rehearsal marks, chords, barlines, keys, time, tempo, measures, transpose, undo
     render.py           render_score (export through the MuseScore command line)
   bridge/
-    base.py             ScoreBridge abstract interface, CommandResult, NoteDuration
+    base.py             ScoreBridge abstract interface and BridgeError
+    results.py          The result models every operation returns (published as tool output schemas)
     websocket.py        WebSocketTransport and WebSocketBridge -- connection lifecycle, reconnect
     remote_control.py   RemoteControlBridge -- Remote Control protocol layer
     musescore.py        MuseScoreBridge -- MuseScore plugin protocol
