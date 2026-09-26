@@ -269,6 +269,54 @@ class TestSeedConfiguration:
         ]
 
 
+class TestLaunch:
+    @staticmethod
+    def _settings(tmp_path: Path) -> Any:
+        layout = harness.layout_for("Darwin", tmp_path)
+        layout.stdout_log.parent.mkdir(parents=True, exist_ok=True)
+        return harness.Settings("Darwin", "4.7.5", tmp_path, layout)
+
+    def test_relaunches_once_when_musescore_dies_during_startup(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange: the first process exits during startup, the second stays up
+        dead = MagicMock()
+        dead.poll.return_value = -6
+        alive = MagicMock()
+        alive.poll.return_value = None
+        popen = MagicMock(side_effect=[dead, alive])
+
+        with (
+            patch.object(harness, "musescore_running", return_value=False),
+            patch.object(harness.subprocess, "Popen", popen),
+            patch.object(harness.time, "sleep"),
+        ):
+            # Act
+            process = harness.launch(self._settings(tmp_path), tmp_path / "s.xml")
+
+        # Assert
+        assert process is alive
+        assert popen.call_count == 2
+
+    def test_gives_up_after_the_second_startup_crash(self, tmp_path: Path) -> None:
+        # Arrange
+        dead = MagicMock()
+        dead.poll.return_value = -6
+        popen = MagicMock(return_value=dead)
+
+        with (
+            patch.object(harness, "musescore_running", return_value=False),
+            patch.object(harness.subprocess, "Popen", popen),
+            patch.object(harness.time, "sleep"),
+            patch.object(harness, "print_log_tails"),
+            pytest.raises(harness.HarnessError, match="exited during startup"),
+        ):
+            # Act / Assert
+            harness.launch(self._settings(tmp_path), tmp_path / "s.xml")
+
+        assert popen.call_count == harness.LAUNCH_ATTEMPTS
+
+
 class TestMuseScoreProcessPattern:
     def test_linux_matches_the_appimage_binary_path(self) -> None:
         # The AppImage's binary renames its process, so the pattern must be

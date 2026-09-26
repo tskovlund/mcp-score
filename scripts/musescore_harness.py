@@ -61,6 +61,7 @@ BRIDGE_TIMEOUT_SECONDS = 60.0
 BRIDGE_POLL_INTERVAL_SECONDS = 2.0
 BRIDGE_ROUND_TRIP_SECONDS = 2.0
 STARTUP_SECONDS = 45.0
+LAUNCH_ATTEMPTS = 2
 DIALOG_DISMISS_SECONDS = 2.0
 LOG_TAIL_LINES = 40
 
@@ -417,9 +418,25 @@ def stop_xvfb() -> None:
 
 
 def launch(settings: Settings, score: Path) -> subprocess.Popen[bytes]:
-    """Start MuseScore with *score* open and give it time to load."""
+    """Start MuseScore with *score* open and give it time to load.
+
+    MuseScore Studio 4.7 on macOS 26 occasionally aborts a few seconds into
+    startup (crashpad reports a kernel failure) and starts fine the next
+    time, so a launch that dies during startup is tried once more.
+    """
     if musescore_running(settings):
         raise HarnessError("MuseScore is already running; run 'stop' first")
+    for attempt in range(1, LAUNCH_ATTEMPTS + 1):
+        process = _start(settings, score)
+        time.sleep(STARTUP_SECONDS)
+        if process.poll() is None:
+            return process
+        logger.warning("MuseScore exited during startup (attempt %d)", attempt)
+    print_log_tails(settings.layout)
+    raise HarnessError("MuseScore exited during startup")
+
+
+def _start(settings: Settings, score: Path) -> subprocess.Popen[bytes]:
     env = dict(os.environ)
     if settings.system == "Linux":
         env["DISPLAY"] = XVFB_DISPLAY
@@ -429,17 +446,12 @@ def launch(settings: Settings, score: Path) -> subprocess.Popen[bytes]:
         STARTUP_SECONDS,
     )
     stdout_log = settings.layout.stdout_log.open("wb")
-    process = subprocess.Popen(  # noqa: S603
+    return subprocess.Popen(  # noqa: S603
         [str(settings.executable), str(score)],
         stdout=stdout_log,
         stderr=subprocess.STDOUT,
         env=env,
     )
-    time.sleep(STARTUP_SECONDS)
-    if process.poll() is not None:
-        print_log_tails(settings.layout)
-        raise HarnessError("MuseScore exited during startup")
-    return process
 
 
 def trigger_plugin(settings: Settings) -> None:
