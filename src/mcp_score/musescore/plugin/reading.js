@@ -55,7 +55,7 @@ function getCursorInfo(plugin, params) {
     if (req.error) return req.error;
     var cursor = req.cursor;
 
-    var elementInfo = cursor.element ? Score.describeElement(cursor.element) : null;
+    var elementInfo = cursor.element ? Score.describeElement(plugin, cursor.element) : null;
 
     var beat = null;
     if (cursor.measure && cursor.timeSignature) {

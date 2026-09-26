@@ -139,7 +139,7 @@ function respellTpc(tpc) {
 }
 
 /// Describe a score element as a plain object for JSON serialization.
-function describeElement(element) {
+function describeElement(plugin, element) {
     if (!element) return null;
 
     var info = { type: element.type };
