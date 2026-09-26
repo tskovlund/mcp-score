@@ -174,51 +174,6 @@ Any other text is accepted as the marking's text; only the ones listed also set 
 | 6     | F# major  | D# minor  |
 | 7     | C# major  | A# minor  |
 
-## Example: writing a melody
-
-This example uses `processSequence` to write a four-note melody in the first measure:
-
-```json
-{
-  "command": "processSequence",
-  "params": {
-    "sequence": [
-      { "action": "goToMeasure", "params": { "measure": 1 } },
-      { "action": "goToStaff", "params": { "staff": 0 } },
-      { "action": "setTempo", "params": { "bpm": 120, "text": "Allegro" } },
-      {
-        "action": "addNote",
-        "params": {
-          "pitch": 60,
-          "duration": { "numerator": 1, "denominator": 4 }
-        }
-      },
-      {
-        "action": "addNote",
-        "params": {
-          "pitch": 62,
-          "duration": { "numerator": 1, "denominator": 4 }
-        }
-      },
-      {
-        "action": "addNote",
-        "params": {
-          "pitch": 64,
-          "duration": { "numerator": 1, "denominator": 4 }
-        }
-      },
-      {
-        "action": "addNote",
-        "params": {
-          "pitch": 65,
-          "duration": { "numerator": 1, "denominator": 4 }
-        }
-      }
-    ]
-  }
-}
-```
-
 ## Troubleshooting
 
 ### Plugin doesn't appear in Manage plugins

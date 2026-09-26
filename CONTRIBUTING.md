@@ -188,15 +188,4 @@ The skill is bundled with the pip package so users can install it with `mcp-scor
 
 ## Architecture decisions
 
-- **MusicXML** as interchange format (not `.mscz`/`.mscx`, which are undocumented and version-fragile)
-- **music21** for programmatic score generation
-- **Skill in Claude Code, tools for other clients** — one script per score beats dozens of tool calls; `generate_score` and `score_generation_guide` give every MCP client the same workflow from the same skill text
-- **MCP for live manipulation** — WebSocket bridge to MuseScore Studio 4.4.2+ through a QML plugin built on MuseScore's built-in plugin WebSocket API; older MuseScore is not supported
-- **Dorico is experimental** (undocumented, command-only Remote Control API, unverified); **Sibelius was removed** as out of scope
-- **Integration tests against real MuseScore** in CI, on several versions and all three platforms
-- **Semver, 0.x until stable**
-- **Python** — music21 is Python-only and the MCP SDK has first-class Python support
-
-See [docs/architecture.md](docs/architecture.md) for the full rationale and
-[issue #91](https://github.com/tskovlund/mcp-score/issues/91) for the decision
-ledger behind the beta.
+The rationale is in [docs/architecture.md](docs/architecture.md#key-design-decisions); the decision ledger behind the beta is [issue #91](https://github.com/tskovlund/mcp-score/issues/91). Check both before reopening a settled question.
