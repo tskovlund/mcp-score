@@ -40,7 +40,7 @@ import websockets
 from websockets.exceptions import WebSocketException
 
 from mcp_score.cli import install_plugin
-from mcp_score.musescore.paths import PLUGIN_QML_NAME
+from mcp_score.musescore.paths import PLUGIN_DIRECTORY_NAME, PLUGIN_QML_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -81,18 +81,21 @@ LAUNCH_ATTEMPTS = 2
 DIALOG_DISMISS_SECONDS = 2.0
 LOG_TAIL_LINES = 40
 
+# MuseScore identifies a plugin by its QML file's path under the plugins
+# directory (ExtPluginsLoader::makeUri).
+PLUGIN_PATH = f"{PLUGIN_DIRECTORY_NAME}/{PLUGIN_QML_NAME}"
 # Bound to every action-code form MuseScore 4 has used for a plugin:
 # muse://...?action=main in 4.4, action://...?action=main from 4.5.
 PLUGIN_ACTION_CODES = (
-    f"muse://extensions/v1/{PLUGIN_QML_NAME}?action=main",
-    f"musescore://extensions/v1/{PLUGIN_QML_NAME}?action=main",
-    f"action://extensions/v1/{PLUGIN_QML_NAME}?action=main",
+    f"muse://extensions/v1/{PLUGIN_PATH}?action=main",
+    f"musescore://extensions/v1/{PLUGIN_PATH}?action=main",
+    f"action://extensions/v1/{PLUGIN_PATH}?action=main",
 )
 # MuseScore 4.4 identifies plugins with a muse:// URI, 4.5 and later with
 # musescore://; each version ignores the entry it does not know.
 PLUGIN_URIS = (
-    f"muse://extensions/v1/{PLUGIN_QML_NAME}",
-    f"musescore://extensions/v1/{PLUGIN_QML_NAME}",
+    f"muse://extensions/v1/{PLUGIN_PATH}",
+    f"musescore://extensions/v1/{PLUGIN_PATH}",
 )
 PLUGIN_SHORTCUT = "Ctrl+Shift+F12"
 
