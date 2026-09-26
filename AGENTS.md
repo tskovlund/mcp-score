@@ -49,11 +49,7 @@ docs/                 Diataxis-structured documentation
 
 ### Why a skill and tools for generation?
 
-**Generation** works best as one script: the assistant writes a complete music21 script in one shot, with full access to the music21 API, instead of dozens of tool calls against a limited API surface. In Claude Code the skill does this directly. `generate_score` gives every other MCP client the same one-script workflow, and `score_generation_guide` serves the skill text so the instructions live in one place.
-
-**Manipulation** is best as MCP: reading from and writing to a live score application requires a persistent WebSocket connection and state management that MCP handles well.
-
-See [docs/architecture.md](docs/architecture.md) for detailed design documentation.
+One music21 script per score beats dozens of tool calls. Claude Code runs the skill directly; `generate_score` and `score_generation_guide` give every other MCP client the same script from the same skill text. Live manipulation needs a persistent connection and state, which is what MCP tools are for. Details: [docs/architecture.md](docs/architecture.md).
 
 ## Dev environment
 
@@ -109,14 +105,12 @@ In Claude Code, generation is handled by the `score-generate` skill — Claude w
 
 ## Key technical decisions
 
-- **MusicXML** as interchange format (not .mscz/.mscx — undocumented and version-fragile)
-- **music21** for programmatic score generation (handles transposing instruments, voice leading, MusicXML export)
-- **Skill in Claude Code, tools elsewhere** — one script per score, full API access; the tools reuse the skill text so there is one source of truth
-- **WebSocket bridge** to MuseScore Studio 4.4.2+ via a QML plugin that uses MuseScore's built-in `api.websocketserver` (4.4 dropped the `QtWebSockets` QML module; 4.4.2 added the replacement). Older MuseScore is not supported
-- **Dorico experimental** — undocumented Remote Control API, command-only, unverified against a running instance. **Sibelius removed** (out of scope). LilyPond out of scope for now
-- **Integration tests against real MuseScore** — the `Integration` workflow runs `tests/integration/` on Linux against the versions in `tests/integration/musescore-versions.json` (the oldest supported line, one in between and the newest), and on Windows and macOS against the newest, driven by `scripts/musescore_harness.py`
-- **PyPI name `mcp-score-server`** — PyPI rejected `mcp-score` as too similar to an existing project. The repo, the import package `mcp_score` and the CLI `mcp-score` keep their names
-- **Python** because music21 is Python-only and the MCP SDK has first-class Python support
+The rationale lives in [docs/architecture.md](docs/architecture.md#key-design-decisions) and the decision ledger in [issue #91](https://github.com/tskovlund/mcp-score/issues/91). The constraints to keep in mind while coding:
+
+- **MuseScore Studio 4.4.2+ only** for the live plugin; older versions lack the plugin WebSocket API. Dorico is experimental; Sibelius is out.
+- **MusicXML** is the interchange format; never generate `.mscz`/`.mscx`.
+- **PyPI name `mcp-score-server`**; the import package `mcp_score` and the CLI `mcp-score` keep their names.
+- **Integration tests run against real MuseScore** in CI on all three platforms; the versions live in `tests/integration/musescore-versions.json`.
 
 ## Git workflow
 
