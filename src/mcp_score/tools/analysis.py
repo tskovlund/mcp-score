@@ -10,9 +10,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
-
-from mcp_score.bridge.results import CursorInfo, CursorPosition, SelectionProperties
+from mcp_score.bridge.results import (
+    CursorInfo,
+    CursorPosition,
+    Result,
+    SelectionProperties,
+)
 from mcp_score.context import ScoreContext
 from mcp_score.tools import (
     navigate,
@@ -28,13 +31,13 @@ if TYPE_CHECKING:
 __all__ = ["register"]
 
 
-class MeasureContent(BaseModel):
+class MeasureContent(Result):
     measure: int
     content: CursorInfo
     """The cursor at the start of the measure and the element there."""
 
 
-class Passage(BaseModel):
+class Passage(Result):
     start_measure: int
     end_measure: int
     staff: int | None

@@ -9,11 +9,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
-
 from mcp_score.bridge.dorico import DEFAULT_PORT as DORICO_DEFAULT_PORT
 from mcp_score.bridge.musescore import DEFAULT_PORT as MUSESCORE_DEFAULT_PORT
-from mcp_score.bridge.results import ScoreInfo
+from mcp_score.bridge.results import Result, ScoreInfo
 from mcp_score.bridge.websocket import DEFAULT_HOST
 from mcp_score.context import ScoreContext, registry_of
 from mcp_score.tools import ToolError, require_bridge, score_tool
@@ -32,16 +30,16 @@ MUSESCORE_CONNECT_HINT = (
 DORICO_CONNECT_HINT = "Is Dorico running with Remote Control enabled?"
 
 
-class Connected(BaseModel):
+class Connected(Result):
     application: str
     uri: str
 
 
-class Disconnected(BaseModel):
+class Disconnected(Result):
     application: str
 
 
-class Responsive(BaseModel):
+class Responsive(Result):
     """The connected application answered a ping."""
 
     application: str

@@ -12,8 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
-
+from mcp_score.bridge.results import Result
 from mcp_score.guide import load_guide
 from mcp_score.tools import ToolError, score_tool
 
@@ -40,7 +39,7 @@ PROMPT_NAME = "score-generate"
 """Name of the MCP prompt that serves the generation guide."""
 
 
-class GeneratedScore(BaseModel):
+class GeneratedScore(Result):
     output_files: list[str]
     """Absolute paths of the files the script created in its working directory."""
     stdout: str

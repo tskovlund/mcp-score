@@ -5,8 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
-
+from mcp_score.bridge.results import Result
 from mcp_score.musescore.executable import (
     MUSESCORE_PATH_ENV_VAR,
     MuseScoreNotFoundError,
@@ -20,7 +19,7 @@ if TYPE_CHECKING:
 __all__ = ["register"]
 
 
-class RenderedScore(BaseModel):
+class RenderedScore(Result):
     output_path: str
     """The file MuseScore was asked to write."""
     output_files: list[str]
