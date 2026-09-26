@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from mcp_score.bridge.base import BridgeError
 from mcp_score.bridge.websocket import (
     TransportError,
     WebSocketBridge,
@@ -149,16 +150,28 @@ class RemoteControlBridge(WebSocketBridge):
         """Send a protocol-level message such as ``getstatus``."""
         return await self._exchange({"message": message_type, **(fields or {})})
 
-    def _unsupported(self, operation: str, reason: str) -> CommandResult:
-        return {
-            "error": f"{self.application_name}'s Remote Control API cannot "
+    async def _exchange(self, payload: dict[str, Any]) -> CommandResult:
+        reply = await super()._exchange(payload)
+        if reply.get("code") == RESPONSE_ERROR:
+            raise BridgeError(
+                str(reply.get("detail", "the application reported an error"))
+            )
+        return reply
+
+    def _unsupported(self, operation: str, reason: str) -> BridgeError:
+        return BridgeError(
+            f"{self.application_name}'s Remote Control API cannot "
             f"{operation}: {reason}."
-        }
+        )
 
     # ── ScoreBridge ─────────────────────────────────────────────────
 
     async def ping(self) -> bool:
-        return "error" not in await self.get_app_info()
+        try:
+            await self.get_app_info()
+        except BridgeError:
+            return False
+        return True
 
     async def get_score(self) -> CommandResult:
         return await self.get_status()
@@ -174,62 +187,61 @@ class RemoteControlBridge(WebSocketBridge):
         return await self.send_command(COMMAND_GO_TO_BAR, {"barNumber": str(measure)})
 
     async def go_to_staff(self, staff: int) -> CommandResult:
-        return self._unsupported(f"move to staff {staff}", SELECTION_REASON)
+        raise self._unsupported(f"move to staff {staff}", SELECTION_REASON)
 
     async def select_measure(self) -> CommandResult:
-        return self._unsupported("select a measure", SELECTION_REASON)
+        raise self._unsupported("select a measure", SELECTION_REASON)
 
     async def select_range(
         self, start_measure: int, end_measure: int, start_staff: int, end_staff: int
     ) -> CommandResult:
-        return self._unsupported("select a range", SELECTION_REASON)
+        raise self._unsupported("select a range", SELECTION_REASON)
 
     async def add_note(
         self, pitch: int, duration: NoteDuration, advance_cursor: bool = True
     ) -> CommandResult:
-        return self._unsupported("add notes", POPOVER_REASON)
+        raise self._unsupported("add notes", POPOVER_REASON)
 
     async def add_rehearsal_mark(self, text: str) -> CommandResult:
         reply = await self.send_command(COMMAND_ADD_REHEARSAL_MARK)
-        if "error" not in reply:
-            reply.setdefault(
-                "warning",
-                f"{self.application_name} numbers rehearsal marks itself; "
-                f"the requested text {text!r} was ignored.",
-            )
+        reply.setdefault(
+            "warning",
+            f"{self.application_name} numbers rehearsal marks itself; "
+            f"the requested text {text!r} was ignored.",
+        )
         return reply
 
     async def add_chord_symbol(self, text: str) -> CommandResult:
-        return self._unsupported(f"set chord symbol text {text!r}", POPOVER_REASON)
+        raise self._unsupported(f"set chord symbol text {text!r}", POPOVER_REASON)
 
     async def add_dynamic(self, dynamic: str) -> CommandResult:
-        return self._unsupported(f"add the dynamic {dynamic!r}", POPOVER_REASON)
+        raise self._unsupported(f"add the dynamic {dynamic!r}", POPOVER_REASON)
 
     async def set_barline(self, barline_type: str) -> CommandResult:
         command = BARLINE_COMMANDS.get(barline_type)
         if command is None:
-            return {
-                "error": f"Unknown barline type {barline_type!r}. "
+            raise BridgeError(
+                f"Unknown barline type {barline_type!r}. "
                 f"Supported: {', '.join(BARLINE_COMMANDS)}"
-            }
+            )
         return await self.send_command(command)
 
     async def set_key_signature(self, fifths: int) -> CommandResult:
-        return self._unsupported("set a key signature", POPOVER_REASON)
+        raise self._unsupported("set a key signature", POPOVER_REASON)
 
     async def set_time_signature(
         self, numerator: int, denominator: int
     ) -> CommandResult:
-        return self._unsupported("set a time signature", POPOVER_REASON)
+        raise self._unsupported("set a time signature", POPOVER_REASON)
 
     async def set_tempo(self, bpm: int, text: str | None = None) -> CommandResult:
-        return self._unsupported("set a tempo", POPOVER_REASON)
+        raise self._unsupported("set a tempo", POPOVER_REASON)
 
     async def append_measures(self, count: int) -> CommandResult:
-        return self._unsupported("append measures", POPOVER_REASON)
+        raise self._unsupported("append measures", POPOVER_REASON)
 
     async def transpose(self, semitones: int) -> CommandResult:
-        return self._unsupported("transpose a selection", POPOVER_REASON)
+        raise self._unsupported("transpose a selection", POPOVER_REASON)
 
     async def undo(self) -> CommandResult:
         return await self.send_command(COMMAND_UNDO)

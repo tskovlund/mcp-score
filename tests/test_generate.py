@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from mcp_score.tools import ToolError
 from mcp_score.tools.generate import (
     STDERR_TAIL_LINES,
     generate_score,
@@ -65,27 +65,28 @@ class TestGenerateScore:
         assert executed["script"] == script
 
     @pytest.mark.anyio()
-    async def test_failing_script_returns_stderr_tail(self, tmp_path: Path) -> None:
+    async def test_failing_script_raises_with_stderr_tail(self, tmp_path: Path) -> None:
         # Arrange
         noise = [f"line {index}" for index in range(STDERR_TAIL_LINES)]
         stderr = "\n".join([*noise, "NameError: name 'x' is not defined"])
         process = _fake_process(1, stderr=stderr.encode())
 
-        with patch(_SUBPROCESS_TARGET, AsyncMock(return_value=process)):
+        with (
+            patch(_SUBPROCESS_TARGET, AsyncMock(return_value=process)),
+            pytest.raises(ToolError, match="code 1") as exc_info,
+        ):
             # Act
-            result = await generate_score("x", output_dir=str(tmp_path))
+            await generate_score("x", output_dir=str(tmp_path))
 
         # Assert
-        assert result["returncode"] == 1
-        assert "code 1" in result["error"]
-        assert result["stderr"].endswith("NameError: name 'x' is not defined")
-        assert "line 0" not in result["stderr"]
-        assert len(result["stderr"].splitlines()) == STDERR_TAIL_LINES
+        message = str(exc_info.value)
+        assert message.endswith("NameError: name 'x' is not defined")
+        assert "line 0" not in message
+        stderr_tail = message.split("\n", 1)[1]
+        assert len(stderr_tail.splitlines()) == STDERR_TAIL_LINES
 
     @pytest.mark.anyio()
-    async def test_timeout_kills_process_and_returns_error(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_timeout_kills_process_and_raises(self, tmp_path: Path) -> None:
         # Arrange
         process = _fake_process(-9)
 
@@ -95,30 +96,33 @@ class TestGenerateScore:
 
         process.communicate = AsyncMock(side_effect=never_finishes)
 
-        with patch(_SUBPROCESS_TARGET, AsyncMock(return_value=process)):
+        with (
+            patch(_SUBPROCESS_TARGET, AsyncMock(return_value=process)),
+            pytest.raises(ToolError, match="timed out"),
+        ):
             # Act
-            result = await generate_score("x", output_dir=str(tmp_path), timeout=0.01)
+            await generate_score("x", output_dir=str(tmp_path), timeout=0.01)
 
         # Assert
         process.kill.assert_called_once()
         process.wait.assert_awaited_once()
-        assert "timed out" in result["error"]
-        assert result["returncode"] == -9
 
     @pytest.mark.anyio()
-    async def test_output_dir_pointing_at_file_returns_error(
+    async def test_output_dir_pointing_at_file_raises_without_running(
         self, tmp_path: Path
     ) -> None:
         # Arrange
         not_a_directory = tmp_path / "file.txt"
         not_a_directory.write_text("x")
 
-        with patch(_SUBPROCESS_TARGET, AsyncMock()) as mock_exec:
+        with (
+            patch(_SUBPROCESS_TARGET, AsyncMock()) as mock_exec,
+            pytest.raises(ToolError, match="not a directory"),
+        ):
             # Act
-            result = await generate_score("x", output_dir=str(not_a_directory))
+            await generate_score("x", output_dir=str(not_a_directory))
 
         # Assert
-        assert "not a directory" in result["error"]
         mock_exec.assert_not_awaited()
 
     @pytest.mark.anyio()
@@ -172,14 +176,14 @@ class TestScoreGenerationGuide:
         # Assert
         assert guide == "# Guide"
 
-    def test_guide_with_missing_skill_files_returns_error(self) -> None:
+    def test_guide_with_missing_skill_files_raises(self) -> None:
         # Arrange
-        with patch(_LOAD_GUIDE_TARGET, side_effect=FileNotFoundError("no skill files")):
-            # Act
-            result = json.loads(score_generation_guide())
-
-        # Assert
-        assert result["error"] == "no skill files"
+        with (
+            patch(_LOAD_GUIDE_TARGET, side_effect=FileNotFoundError("no skill files")),
+            pytest.raises(ToolError, match="no skill files"),
+        ):
+            # Act / Assert
+            score_generation_guide()
 
 
 # ── score-generate prompt ────────────────────────────────────────────

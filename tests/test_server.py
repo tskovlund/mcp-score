@@ -2,19 +2,20 @@
 
 The server is built around a bridge registry that its lifespan hands to
 every tool through the request context, so these tests build the server
-around the test's registry and inject the matching context.
+around the test's registry and inject the matching context. A failing
+tool raises ``ToolError`` out of ``call_tool``; turning that into an
+error response is the SDK's request handler's job, not tested here.
 """
 
 from __future__ import annotations
 
-import json
+import re
 from typing import TYPE_CHECKING
 
 import pytest
-from mcp.types import CallToolResult, TextContent
 
 from mcp_score.server import SERVER_NAME, create_server
-from mcp_score.tools import NOT_CONNECTED
+from mcp_score.tools import NOT_CONNECTED, ToolError
 from mcp_score.tools.generate import PROMPT_NAME
 
 if TYPE_CHECKING:
@@ -97,21 +98,12 @@ class TestCreateServer:
             assert state.registry is registry
 
     @pytest.mark.anyio()
-    async def test_tool_called_through_server_returns_not_connected_error(
+    async def test_tool_called_through_server_raises_not_connected(
         self, registry: BridgeRegistry, context: ScoreContext
     ) -> None:
         # Arrange: the fresh registry has nothing connected.
         server = create_server(registry)
 
-        # Act
-        result = await server.call_tool("undo_last_action", {}, context=context)
-
-        # Assert
-        assert isinstance(result, CallToolResult)
-        assert result.is_error is False
-        text_blocks = [
-            block for block in result.content if isinstance(block, TextContent)
-        ]
-        assert len(text_blocks) == 1
-        assert json.loads(text_blocks[0].text) == {"error": NOT_CONNECTED}
-        assert result.structured_content == {"result": {"error": NOT_CONNECTED}}
+        # Act / Assert
+        with pytest.raises(ToolError, match=re.escape(NOT_CONNECTED)):
+            await server.call_tool("undo_last_action", {}, context=context)

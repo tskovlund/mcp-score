@@ -239,9 +239,7 @@ async def transpose_passage(
     bridge = require_bridge(context)
     require_measure_range(start_measure, end_measure)
     await navigate(bridge, start_measure, staff)
-    selection = await bridge.select_range(start_measure, end_measure, staff, staff)
-    if "error" in selection:
-        return selection
+    await bridge.select_range(start_measure, end_measure, staff, staff)
     return await bridge.transpose(semitones)
 
 

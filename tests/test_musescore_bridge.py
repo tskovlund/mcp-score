@@ -2,7 +2,7 @@
 
 Connection handling is tested in ``test_websocket_bridge.py``; here a
 connected bridge sends to a mock connection and the tests check the
-messages the plugin would receive.
+messages the plugin would receive and how the plugin's refusals surface.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mcp_score.bridge import NoteDuration
+from mcp_score.bridge import BridgeError, NoteDuration
 from mcp_score.bridge.musescore import DEFAULT_PORT, MuseScoreBridge
 from tests.fakes import WEBSOCKETS_CONNECT, fake_connection, sent_payloads
 
@@ -197,6 +197,25 @@ class TestMuseScoreBridgeFraming:
         assert sent_payloads(connection) == [expected_message]
 
 
+class TestMuseScoreBridgeErrors:
+    @pytest.mark.anyio()
+    async def test_error_reply_raises_with_other_fields_as_details(self) -> None:
+        # Arrange
+        bridge, _ = await _connected_bridge(
+            {"error": "Step 3 failed", "failedIndex": 2, "failedAction": "goToMeasure"}
+        )
+
+        # Act
+        with pytest.raises(BridgeError, match="Step 3 failed") as exc_info:
+            await bridge.send_command("processSequence")
+
+        # Assert
+        assert exc_info.value.details == {
+            "failedIndex": 2,
+            "failedAction": "goToMeasure",
+        }
+
+
 class TestMuseScoreBridgePing:
     @pytest.mark.anyio()
     async def test_ping_with_pong_returns_true(self) -> None:
@@ -207,9 +226,17 @@ class TestMuseScoreBridgePing:
         assert await bridge.ping() is True
 
     @pytest.mark.anyio()
+    async def test_ping_with_unexpected_reply_returns_false(self) -> None:
+        # Arrange
+        bridge, _ = await _connected_bridge({"result": "hello"})
+
+        # Act / Assert
+        assert await bridge.ping() is False
+
+    @pytest.mark.anyio()
     async def test_ping_with_error_reply_returns_false(self) -> None:
         # Arrange
-        bridge, _ = await _connected_bridge({"error": "no score open"})
+        bridge, _ = await _connected_bridge({"error": "busy"})
 
         # Act / Assert
         assert await bridge.ping() is False

@@ -1,20 +1,23 @@
-"""Tests for the MCP tools: the JSON wrapper, connection, analysis, manipulation.
+"""Tests for the MCP tools: the error wrapper, connection, analysis, manipulation.
 
 Behaviour shared by every application (validation, the not-connected
 error, navigation, what the bridge is asked to do) is tested here once,
 against a ``FakeBridge`` behind the context a tool receives from the
-server. Dorico-specific behaviour lives in ``test_dorico_tools.py``.
+server. A tool that cannot do what was asked raises ``ToolError``; an
+application's refusal (``BridgeError``) reaches the model the same way.
+Dorico-specific behaviour lives in ``test_dorico_tools.py``.
 """
 
 from __future__ import annotations
 
 import inspect
+import re
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mcp_score.bridge import CommandResult, NoteDuration
+from mcp_score.bridge import BridgeError, CommandResult, NoteDuration
 from mcp_score.tools import NOT_CONNECTED, ToolError, score_tool
 from mcp_score.tools.analysis import (
     get_measure_content,
@@ -74,17 +77,21 @@ NAVIGATION_ERROR = "Measure 99 is beyond the end of the score"
 
 class TestScoreTool:
     @pytest.mark.anyio()
-    async def test_tool_error_with_details_becomes_error_result(self) -> None:
+    async def test_bridge_error_becomes_tool_error_with_same_message(self) -> None:
         # Arrange
+        refusal = BridgeError("Measure 99 out of range", measure=99)
+
         @score_tool
-        async def failing(returncode: int) -> CommandResult:
-            raise ToolError("Script failed.", returncode=returncode, stderr="boom")
+        async def refused() -> CommandResult:
+            raise refusal
 
         # Act
-        result = await failing(3)
+        with pytest.raises(ToolError) as exc_info:
+            await refused()
 
         # Assert
-        assert result == {"error": "Script failed.", "returncode": 3, "stderr": "boom"}
+        assert str(exc_info.value) == "Measure 99 out of range"
+        assert exc_info.value.__cause__ is refusal
 
     @pytest.mark.anyio()
     async def test_result_passes_through(self) -> None:
@@ -168,28 +175,24 @@ class TestToolsWithoutConnection:
             pytest.param(undo_last_action, id="undo_last_action"),
         ],
     )
-    async def test_tool_without_connection_returns_not_connected(
+    async def test_tool_without_connection_raises_not_connected(
         self, context: ScoreContext, call: ToolCall
     ) -> None:
         # Arrange: the fresh registry behind the context has nothing active.
-        # Act
-        result = await call(context)
-
-        # Assert
-        assert result == {"error": NOT_CONNECTED}
+        # Act / Assert
+        with pytest.raises(ToolError, match=re.escape(NOT_CONNECTED)):
+            await call(context)
 
     @pytest.mark.anyio()
-    async def test_tool_with_disconnected_active_bridge_returns_not_connected(
+    async def test_tool_with_disconnected_active_bridge_raises_not_connected(
         self, registry: BridgeRegistry, context: ScoreContext
     ) -> None:
         # Arrange
         registry.active = FakeBridge(is_connected=False)
 
-        # Act
-        result = await undo_last_action(context)
-
-        # Assert
-        assert result == {"error": NOT_CONNECTED}
+        # Act / Assert
+        with pytest.raises(ToolError, match=re.escape(NOT_CONNECTED)):
+            await undo_last_action(context)
 
 
 # ── Connection tools ─────────────────────────────────────────────────
@@ -215,17 +218,21 @@ class TestConnectToMusescore:
         connect.assert_awaited_once_with("ws://10.0.0.5:9000")
 
     @pytest.mark.anyio()
-    async def test_connect_failure_returns_error_with_plugin_hint(
+    async def test_connect_failure_raises_with_plugin_hint(
         self, registry: BridgeRegistry, context: ScoreContext
     ) -> None:
         # Arrange
-        with patch(WEBSOCKETS_CONNECT, AsyncMock(side_effect=OSError("refused"))):
+        with (
+            patch(WEBSOCKETS_CONNECT, AsyncMock(side_effect=OSError("refused"))),
+            pytest.raises(
+                ToolError, match="Could not connect to MuseScore"
+            ) as exc_info,
+        ):
             # Act
-            result = await connect_to_musescore(context)
+            await connect_to_musescore(context)
 
         # Assert
-        assert "Could not connect to MuseScore" in result["error"]
-        assert "plugin" in result["error"]
+        assert "plugin" in str(exc_info.value)
         assert registry.active is None
 
     @pytest.mark.anyio()
@@ -278,17 +285,15 @@ class TestPingScoreApp:
         assert "FakeApp is responsive" in result["message"]
 
     @pytest.mark.anyio()
-    async def test_ping_unresponsive_app_returns_error(
+    async def test_ping_unresponsive_app_raises(
         self, connected_bridge: FakeBridge, context: ScoreContext
     ) -> None:
         # Arrange
         connected_bridge.ping_succeeds = False
 
-        # Act
-        result = await ping_score_app(context)
-
-        # Assert
-        assert result == {"error": "FakeApp is not responding."}
+        # Act / Assert
+        with pytest.raises(ToolError, match="FakeApp is not responding"):
+            await ping_score_app(context)
 
 
 # ── Analysis tools ───────────────────────────────────────────────────
@@ -303,7 +308,7 @@ class TestReadPassage:
             pytest.param(5, 3, "end_measure must be >= start_measure.", id="empty"),
         ],
     )
-    async def test_read_passage_with_invalid_range_returns_error(
+    async def test_read_passage_with_invalid_range_raises_without_reading(
         self,
         connected_bridge: FakeBridge,
         context: ScoreContext,
@@ -312,10 +317,10 @@ class TestReadPassage:
         expected_error: str,
     ) -> None:
         # Act
-        result = await read_passage(context, start_measure, end_measure)
+        with pytest.raises(ToolError, match=re.escape(expected_error)):
+            await read_passage(context, start_measure, end_measure)
 
         # Assert
-        assert result == {"error": expected_error}
         assert connected_bridge.calls == []
 
     @pytest.mark.anyio()
@@ -363,10 +368,10 @@ class TestReadPassage:
         connected_bridge.fail("go_to_measure", NAVIGATION_ERROR)
 
         # Act
-        result = await read_passage(context, 99, 100)
+        with pytest.raises(ToolError, match=NAVIGATION_ERROR):
+            await read_passage(context, 99, 100)
 
         # Assert
-        assert result == {"error": NAVIGATION_ERROR}
         assert connected_bridge.calls == [BridgeCall("go_to_measure", (99,))]
 
     @pytest.mark.anyio()
@@ -397,14 +402,14 @@ class TestReadPassage:
 
 class TestGetMeasureContent:
     @pytest.mark.anyio()
-    async def test_get_measure_with_invalid_number_returns_error(
+    async def test_get_measure_with_invalid_number_raises_without_navigating(
         self, connected_bridge: FakeBridge, context: ScoreContext
     ) -> None:
         # Act
-        result = await get_measure_content(context, 0)
+        with pytest.raises(ToolError, match="measure must be >= 1"):
+            await get_measure_content(context, 0)
 
         # Assert
-        assert result == {"error": "measure must be >= 1."}
         assert connected_bridge.calls == []
 
     @pytest.mark.anyio()
@@ -433,10 +438,10 @@ class TestGetMeasureContent:
         connected_bridge.fail("go_to_staff", "No staff 7")
 
         # Act
-        result = await get_measure_content(context, 1, staff=7)
+        with pytest.raises(ToolError, match="No staff 7"):
+            await get_measure_content(context, 1, staff=7)
 
         # Assert
-        assert result == {"error": "No staff 7"}
         assert connected_bridge.calls_to("select_measure") == []
 
     @pytest.mark.anyio()
@@ -557,7 +562,7 @@ class TestManipulationValidation:
             ),
         ],
     )
-    async def test_tool_with_invalid_argument_returns_error_without_touching_score(
+    async def test_tool_with_invalid_argument_raises_without_touching_score(
         self,
         connected_bridge: FakeBridge,
         context: ScoreContext,
@@ -565,10 +570,10 @@ class TestManipulationValidation:
         expected_error: str,
     ) -> None:
         # Act
-        result = await call(context)
+        with pytest.raises(ToolError, match=re.escape(expected_error)):
+            await call(context)
 
         # Assert
-        assert result == {"error": expected_error}
         assert connected_bridge.calls == []
 
 
@@ -741,31 +746,31 @@ class TestManipulationNavigationErrors:
             ),
         ],
     )
-    async def test_tool_with_measure_error_returns_it_and_writes_nothing(
+    async def test_tool_with_measure_error_raises_it_and_writes_nothing(
         self, connected_bridge: FakeBridge, context: ScoreContext, call: ToolCall
     ) -> None:
         # Arrange
         connected_bridge.fail("go_to_measure", NAVIGATION_ERROR)
 
         # Act
-        result = await call(context)
+        with pytest.raises(ToolError, match=NAVIGATION_ERROR):
+            await call(context)
 
         # Assert
-        assert result == {"error": NAVIGATION_ERROR}
         assert connected_bridge.calls == [BridgeCall("go_to_measure", (99,))]
 
     @pytest.mark.anyio()
-    async def test_tool_with_staff_error_returns_it_and_writes_nothing(
+    async def test_tool_with_staff_error_raises_it_and_writes_nothing(
         self, connected_bridge: FakeBridge, context: ScoreContext
     ) -> None:
         # Arrange
         connected_bridge.fail("go_to_staff", "No staff 7")
 
         # Act
-        result = await add_live_dynamic(context, 1, "mf", staff=7)
+        with pytest.raises(ToolError, match="No staff 7"):
+            await add_live_dynamic(context, 1, "mf", staff=7)
 
         # Assert
-        assert result == {"error": "No staff 7"}
         assert connected_bridge.calls == [
             BridgeCall("go_to_measure", (1,)),
             BridgeCall("go_to_staff", (7,)),
@@ -774,17 +779,17 @@ class TestManipulationNavigationErrors:
 
 class TestTransposePassage:
     @pytest.mark.anyio()
-    async def test_transpose_with_failed_selection_returns_error_without_transposing(
+    async def test_transpose_with_failed_selection_raises_without_transposing(
         self, connected_bridge: FakeBridge, context: ScoreContext
     ) -> None:
         # Arrange
         connected_bridge.fail("select_range", "Invalid range")
 
         # Act
-        result = await transpose_passage(context, 1, 4, 0, 5)
+        with pytest.raises(ToolError, match="Invalid range"):
+            await transpose_passage(context, 1, 4, 0, 5)
 
         # Assert
-        assert result == {"error": "Invalid range"}
         assert connected_bridge.calls_to("transpose") == []
 
     @pytest.mark.anyio()
@@ -792,10 +797,9 @@ class TestTransposePassage:
         self, connected_bridge: FakeBridge, context: ScoreContext
     ) -> None:
         # Act
-        result = await transpose_passage(context, 5, 5, 0, 2)
+        await transpose_passage(context, 5, 5, 0, 2)
 
         # Assert
-        assert "error" not in result
         assert connected_bridge.calls_to("select_range") == [
             BridgeCall("select_range", (5, 5, 0, 0))
         ]

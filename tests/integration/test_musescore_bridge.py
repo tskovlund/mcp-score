@@ -6,7 +6,9 @@ started (``uv run scripts/musescore_harness.py start <fixture>``).
 
 Every mutating test undoes its change and checks that the score is back
 to what it found, so the tests do not depend on their order. The
-read-only checks of the untouched fixture still run first.
+read-only checks of the untouched fixture still run first. A command the
+plugin refuses raises ``BridgeError``, so a step that must succeed needs
+no assertion on its reply.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from mcp_score.bridge import NoteDuration
+from mcp_score.bridge import BridgeError, NoteDuration
 from mcp_score.bridge.musescore import MuseScoreBridge
 
 if TYPE_CHECKING:
@@ -83,22 +85,19 @@ class TestMuseScoreBridgeReadsFixture:
             score = await bridge.get_score()
 
         # Assert
-        assert "error" not in score
         assert score["result"]["title"] == _FIXTURE_TITLE
         assert score["result"]["partCount"] == _FIXTURE_PART_COUNT
         assert score["result"]["measureCount"] == _FIXTURE_MEASURE_COUNT
 
     @pytest.mark.anyio()
-    async def test_go_to_measure_out_of_range_returns_error(self) -> None:
+    async def test_go_to_measure_out_of_range_raises(self) -> None:
         # Arrange
         async with _connected_bridge() as bridge:
             count = await _measure_count(bridge)
 
-            # Act
-            response = await bridge.go_to_measure(count + 1)
-
-        # Assert
-        assert "out of range" in response["error"]
+            # Act / Assert
+            with pytest.raises(BridgeError, match="out of range"):
+                await bridge.go_to_measure(count + 1)
 
 
 class TestMuseScoreBridgeModifiesScore:
@@ -111,13 +110,12 @@ class TestMuseScoreBridgeModifiesScore:
             # Act
             appended = await bridge.append_measures(2)
             count_after = await _measure_count(bridge)
-            undone = await bridge.undo()
+            await bridge.undo()
             count_restored = await _measure_count(bridge)
 
         # Assert
         assert appended["result"]["totalMeasures"] == count_before + 2
         assert count_after == count_before + 2
-        assert "error" not in undone
         assert count_restored == count_before
 
     @pytest.mark.anyio()
@@ -130,7 +128,7 @@ class TestMuseScoreBridgeModifiesScore:
 
             # Act
             moved = await bridge.go_to_measure(new_measure)
-            added = await bridge.add_note(_MIDDLE_C, _QUARTER_NOTE)
+            await bridge.add_note(_MIDDLE_C, _QUARTER_NOTE)
             cursor = await bridge.get_cursor_info()
             await bridge.undo()  # the note
             await bridge.undo()  # the measure
@@ -138,7 +136,6 @@ class TestMuseScoreBridgeModifiesScore:
 
         # Assert
         assert moved["result"]["measure"] == new_measure
-        assert "error" not in added
         assert cursor["result"]["measure"] == new_measure
         assert count_restored == count_before
 
@@ -150,11 +147,10 @@ class TestMuseScoreBridgeModifiesScore:
 
             # Act
             tempo = await bridge.set_tempo(_TEMPO_BPM)
-            undone = await bridge.undo()
+            await bridge.undo()
 
         # Assert
         assert tempo["result"]["bpm"] == _TEMPO_BPM
-        assert "error" not in undone
 
     @pytest.mark.anyio()
     async def test_add_chord_symbol_returns_text(self) -> None:
@@ -164,12 +160,11 @@ class TestMuseScoreBridgeModifiesScore:
 
             # Act
             chord = await bridge.add_chord_symbol(_CHORD_SYMBOL)
-            undone = await bridge.undo()
+            await bridge.undo()
             still_alive = await bridge.ping()
 
         # Assert
         assert chord["result"]["text"] == _CHORD_SYMBOL
-        assert "error" not in undone
         assert still_alive is True
 
     @pytest.mark.anyio()
@@ -180,12 +175,11 @@ class TestMuseScoreBridgeModifiesScore:
 
             # Act
             changed = await bridge.set_barline("double")
-            undone = await bridge.undo()
+            await bridge.undo()
             still_alive = await bridge.ping()
 
         # Assert
         assert changed["result"] == {"type": "double", "measure": 1}
-        assert "error" not in undone
         assert still_alive is True
 
     @pytest.mark.anyio()
@@ -194,11 +188,9 @@ class TestMuseScoreBridgeModifiesScore:
         async with _connected_bridge() as bridge:
             await bridge.go_to_measure(1)
 
-            # Act
-            response = await bridge.set_barline("wavy")
-
-        # Assert
-        assert "Unknown barline type" in response["error"]
+            # Act / Assert
+            with pytest.raises(BridgeError, match="Unknown barline type"):
+                await bridge.set_barline("wavy")
 
     @pytest.mark.anyio()
     async def test_transpose_shifts_pitch_and_spelling_then_undo_restores(
@@ -207,7 +199,7 @@ class TestMuseScoreBridgeModifiesScore:
         # Arrange: select the fixture measure on its only staff.
         async with _connected_bridge() as bridge:
             await bridge.go_to_measure(1)
-            selected = await bridge.select_range(1, 1, _FIRST_STAFF, _FIRST_STAFF)
+            await bridge.select_range(1, 1, _FIRST_STAFF, _FIRST_STAFF)
 
             # Act
             transposed = await bridge.transpose(_MINOR_THIRD_DOWN)
@@ -216,7 +208,6 @@ class TestMuseScoreBridgeModifiesScore:
             note_restored = await _first_note(bridge)
 
         # Assert: C4 down a minor third is A3, spelled A (not Bbb).
-        assert "error" not in selected
         assert transposed["result"]["semitones"] == _MINOR_THIRD_DOWN
         assert note_after["pitch"] == _FIXTURE_FIRST_PITCH + _MINOR_THIRD_DOWN
         assert note_after["tpc"] == _A_NATURAL_TPC
@@ -233,19 +224,23 @@ class TestMuseScoreBridgeSequences:
             count_before = await _measure_count(bridge)
 
             # Act: the last step fails, so the appended measure must vanish.
-            response = await bridge.process_sequence(
-                [
-                    {"action": "appendMeasures", "params": {"count": 1}},
-                    {"action": "goToMeasure", "params": {"measure": count_before + 1}},
-                    {"action": "goToMeasure", "params": {"measure": 999}},
-                ]
-            )
+            with pytest.raises(BridgeError) as exc_info:
+                await bridge.process_sequence(
+                    [
+                        {"action": "appendMeasures", "params": {"count": 1}},
+                        {
+                            "action": "goToMeasure",
+                            "params": {"measure": count_before + 1},
+                        },
+                        {"action": "goToMeasure", "params": {"measure": 999}},
+                    ]
+                )
             count_after = await _measure_count(bridge)
             cursor = await bridge.get_cursor_info()
 
         # Assert
-        assert response["failedIndex"] == 2
-        assert response["failedAction"] == "goToMeasure"
+        assert exc_info.value.details["failedIndex"] == 2
+        assert exc_info.value.details["failedAction"] == "goToMeasure"
         assert count_after == count_before
         assert cursor["result"]["measure"] == 1
 

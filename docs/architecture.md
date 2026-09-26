@@ -66,7 +66,7 @@ ScoreBridge (ABC)             -- the operations every tool needs
         └── DoricoBridge      -- Dorico defaults (port 4560)
 ```
 
-- `ScoreBridge` -- the abstract interface: connection, navigation, reading, and every edit the tools offer, each returning a `CommandResult` dict (`{"error": ...}` when the application cannot do it)
+- `ScoreBridge` -- the abstract interface: connection, navigation, reading, and every edit the tools offer, each returning a `CommandResult` dict and raising `BridgeError` when the application cannot do it
 - `WebSocketTransport` -- owns the socket: open, close, send, and one request/reply exchange
 - `WebSocketBridge` -- connects a transport, auto-connects on the first command, reconnects once on a lost connection, and gives subclasses two hooks (`_on_connected`, `_on_disconnecting`) for their protocol's handshake
 - `MuseScoreBridge` -- frames commands for the MuseScore plugin and maps the interface to plugin commands
@@ -75,7 +75,7 @@ ScoreBridge (ABC)             -- the operations every tool needs
 
 ### Bridge registry
 
-`bridge/registry.py` holds one bridge per application and tracks the active one. `BridgeRegistry.activate(bridge)` disconnects whichever bridge was active, then connects the new one, so a failed connection leaves nothing active; `deactivate(bridge)` disconnects it; `connected()` returns the active bridge only while it is connected. There is no module-level registry: `server.py` creates one per server and hands it to the tools as `AppState` through the SDK's context injection (`context.py`). `require_bridge(context)` in `tools/__init__.py` reads the connected bridge from it and raises `ToolError` when nothing is connected.
+`bridge/registry.py` holds one bridge per application and tracks the active one. `BridgeRegistry.activate(bridge)` disconnects whichever bridge was active, then connects the new one, so a failed connection leaves nothing active; `deactivate(bridge)` disconnects it; `connected()` returns the active bridge only while it is connected. There is no module-level registry: `server.py` creates one per server and hands it to the tools as `AppState` through the SDK's context injection (`context.py`). `require_bridge(context)` in `tools/base.py` reads the connected bridge from it and raises `ToolError` when nothing is connected.
 
 ### Remote Control protocol (Dorico)
 

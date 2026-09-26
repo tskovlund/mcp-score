@@ -45,10 +45,11 @@ PREAMBLE = "\n".join(
         "",
         "> Reference -- every MCP tool and prompt the server provides, and the CLI.",
         "",
-        "Tools return a JSON object: on success the fields each tool describes, on"
-        ' failure `{"error": ...}` with an explanation. Connection, analysis and'
-        " manipulation tools need a connected application (MuseScore, or"
-        " experimentally Dorico); generation and rendering tools work on files.",
+        "Tools return the JSON object each one describes. A tool that cannot do"
+        " what was asked fails with an MCP tool error whose message says why."
+        " Connection, analysis and manipulation tools need a connected"
+        " application (MuseScore, or experimentally Dorico); generation and"
+        " rendering tools work on files.",
     ]
 )
 

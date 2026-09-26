@@ -4,7 +4,7 @@
 
 > Reference -- every MCP tool and prompt the server provides, and the CLI.
 
-Tools return a JSON object: on success the fields each tool describes, on failure `{"error": ...}` with an explanation. Connection, analysis and manipulation tools need a connected application (MuseScore, or experimentally Dorico); generation and rendering tools work on files.
+Tools return the JSON object each one describes. A tool that cannot do what was asked fails with an MCP tool error whose message says why. Connection, analysis and manipulation tools need a connected application (MuseScore, or experimentally Dorico); generation and rendering tools work on files.
 
 ## Connection tools
 
@@ -284,7 +284,7 @@ Only send code the user would be comfortable running themselves.
 | `output_dir` | `str \| None` | `None`     | Working directory for the run. Defaults to a fresh directory under the user's Desktop (or home directory when there is no Desktop). Created if it does not exist. |
 | `timeout`    | `float`       | `120.0`    | Seconds to wait before killing the script (default: 120).                                                                                                         |
 
-**Returns:** JSON. On success: `{"success": true, "output_files": [absolute paths of files created in the working directory], "stdout": ...}`. On failure: `{"error": ..., "stderr": last lines, "returncode": n}`.
+**Returns:** `{"success": true, "output_files": [absolute paths of files created in the working directory], "stdout": ...}`. A script that fails is a tool error whose message ends with the last lines of its stderr.
 
 ### `score_generation_guide`
 
@@ -296,8 +296,7 @@ troubleshooting), the instrument class reference (which class to use for
 each instrument, with transposition handled by music21), and a complete
 runnable template script. Takes no parameters.
 
-Returns the guide as Markdown, or `{"error": ...}` JSON if the bundled
-skill files cannot be found.
+Returns the guide as Markdown.
 
 No parameters.
 

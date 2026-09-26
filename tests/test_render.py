@@ -17,6 +17,7 @@ from mcp_score.musescore.executable import (
     MuseScoreNotFoundError,
 )
 from mcp_score.musescore.headless import RenderError, RenderResult, render
+from mcp_score.tools import ToolError
 from mcp_score.tools.render import render_score
 
 _MUSESCORE_COMMAND = ["/opt/musescore/mscore"]
@@ -366,18 +367,20 @@ class TestRenderScore:
         assert result["warning"] == "MuseScore exited with code -6."
 
     @pytest.mark.anyio()
-    async def test_render_score_with_missing_input_returns_error(
+    async def test_render_score_with_missing_input_raises_without_rendering(
         self, tmp_path: Path
     ) -> None:
         # Arrange
         render_mock = AsyncMock()
 
-        with patch("mcp_score.tools.render.render", render_mock):
+        with (
+            patch("mcp_score.tools.render.render", render_mock),
+            pytest.raises(ToolError, match="not found"),
+        ):
             # Act
-            result = await render_score(str(tmp_path / "missing.xml"))
+            await render_score(str(tmp_path / "missing.xml"))
 
         # Assert
-        assert "not found" in result["error"]
         render_mock.assert_not_awaited()
 
     @pytest.mark.anyio()
@@ -389,65 +392,71 @@ class TestRenderScore:
         score.write_text("<score-partwise/>")
         render_mock = AsyncMock()
 
-        with patch("mcp_score.tools.render.render", render_mock):
+        with (
+            patch("mcp_score.tools.render.render", render_mock),
+            pytest.raises(ToolError, match="overwrite the input"),
+        ):
             # Act
-            result = await render_score(str(score), format="musicxml")
+            await render_score(str(score), format="musicxml")
 
         # Assert
-        assert "overwrite the input" in result["error"]
         render_mock.assert_not_awaited()
 
     @pytest.mark.anyio()
-    async def test_render_score_with_bad_format_returns_error(
+    async def test_render_score_with_bad_format_raises_listing_formats(
         self, score_file: Path
     ) -> None:
         # Arrange
         render_mock = AsyncMock()
 
-        with patch("mcp_score.tools.render.render", render_mock):
+        with (
+            patch("mcp_score.tools.render.render", render_mock),
+            pytest.raises(ToolError, match="Unsupported format 'svg'") as exc_info,
+        ):
             # Act
-            result = await render_score(str(score_file), format="svg")
+            await render_score(str(score_file), format="svg")
 
         # Assert
-        assert "Unsupported format 'svg'" in result["error"]
-        assert "pdf" in result["error"]
+        assert "pdf" in str(exc_info.value)
         render_mock.assert_not_awaited()
 
     @pytest.mark.anyio()
-    async def test_render_score_with_mismatched_extension_returns_error(
+    async def test_render_score_with_mismatched_extension_raises(
         self, score_file: Path, tmp_path: Path
     ) -> None:
         # Arrange
         render_mock = AsyncMock()
 
-        with patch("mcp_score.tools.render.render", render_mock):
+        with (
+            patch("mcp_score.tools.render.render", render_mock),
+            pytest.raises(ToolError, match=r"must end with \.pdf"),
+        ):
             # Act
-            result = await render_score(
-                str(score_file), "pdf", str(tmp_path / "out.png")
-            )
+            await render_score(str(score_file), "pdf", str(tmp_path / "out.png"))
 
         # Assert
-        assert "must end with .pdf" in result["error"]
         render_mock.assert_not_awaited()
 
     @pytest.mark.anyio()
-    async def test_render_score_with_missing_output_dir_returns_error(
+    async def test_render_score_with_missing_output_dir_raises(
         self, score_file: Path, tmp_path: Path
     ) -> None:
         # Arrange
         render_mock = AsyncMock()
         output = tmp_path / "no-such-dir" / "out.pdf"
 
-        with patch("mcp_score.tools.render.render", render_mock):
+        with (
+            patch("mcp_score.tools.render.render", render_mock),
+            pytest.raises(ToolError, match="Output directory does not exist"),
+        ):
             # Act
-            result = await render_score(str(score_file), "pdf", str(output))
+            await render_score(str(score_file), "pdf", str(output))
 
         # Assert
-        assert "Output directory does not exist" in result["error"]
         render_mock.assert_not_awaited()
 
     @pytest.mark.anyio()
-    async def test_render_score_without_musescore_returns_error(
+    async def test_render_score_without_musescore_raises_naming_env_var(
         self, score_file: Path
     ) -> None:
         # Arrange
@@ -455,16 +464,20 @@ class TestRenderScore:
             side_effect=MuseScoreNotFoundError("MuseScore Studio 4 was not found.")
         )
 
-        with patch("mcp_score.tools.render.render", render_mock):
+        with (
+            patch("mcp_score.tools.render.render", render_mock),
+            pytest.raises(
+                ToolError, match="MuseScore Studio 4 was not found"
+            ) as exc_info,
+        ):
             # Act
-            result = await render_score(str(score_file))
+            await render_score(str(score_file))
 
         # Assert
-        assert "MuseScore Studio 4 was not found" in result["error"]
-        assert MUSESCORE_PATH_ENV_VAR in result["error"]
+        assert MUSESCORE_PATH_ENV_VAR in str(exc_info.value)
 
     @pytest.mark.anyio()
-    async def test_render_score_with_failed_render_returns_stderr(
+    async def test_render_score_with_failed_render_raises_with_stderr(
         self, score_file: Path
     ) -> None:
         # Arrange
@@ -472,12 +485,15 @@ class TestRenderScore:
             side_effect=RenderError("MuseScore exited with code 1.\nbad input")
         )
 
-        with patch("mcp_score.tools.render.render", render_mock):
+        with (
+            patch("mcp_score.tools.render.render", render_mock),
+            pytest.raises(ToolError) as exc_info,
+        ):
             # Act
-            result = await render_score(str(score_file))
+            await render_score(str(score_file))
 
         # Assert
-        assert result["error"] == (
+        assert str(exc_info.value) == (
             "Rendering failed: MuseScore exited with code 1.\nbad input"
         )
 

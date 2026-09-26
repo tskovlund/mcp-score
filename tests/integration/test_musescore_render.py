@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from mcp_score.tools import ToolError
 from mcp_score.tools.render import render_score
 
 if TYPE_CHECKING:
@@ -83,7 +84,7 @@ class TestRenderScoreWithMuseScore:
         assert expected_output.read_bytes().startswith(_PDF_MAGIC)
 
     @pytest.mark.anyio()
-    async def test_render_musicxml_over_input_returns_error_and_keeps_input(
+    async def test_render_musicxml_over_input_raises_and_keeps_input(
         self, fixture_score: Path, tmp_path: Path
     ) -> None:
         # Arrange: the default output for "musicxml" is the input path itself.
@@ -92,8 +93,8 @@ class TestRenderScoreWithMuseScore:
         original_content = input_path.read_bytes()
 
         # Act
-        response = await _render(input_path, "musicxml")
+        with pytest.raises(ToolError, match="overwrite the input file"):
+            await _render(input_path, "musicxml")
 
         # Assert
-        assert "overwrite the input file" in response["error"]
         assert input_path.read_bytes() == original_content

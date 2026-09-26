@@ -15,6 +15,7 @@ import pytest
 from websockets.exceptions import ConnectionClosed
 from websockets.protocol import State
 
+from mcp_score.bridge import BridgeError
 from mcp_score.bridge.musescore import MuseScoreBridge
 from mcp_score.bridge.websocket import (
     TransportError,
@@ -269,16 +270,18 @@ class TestWebSocketBridgeExchange:
         assert len(bridge.connected_with) == 1
 
     @pytest.mark.anyio()
-    async def test_exchange_without_server_returns_error_result(self) -> None:
+    async def test_exchange_without_server_raises(self) -> None:
         # Arrange
         bridge = _HookRecordingBridge()
 
-        with patch(WEBSOCKETS_CONNECT, AsyncMock(side_effect=OSError("refused"))):
-            # Act
-            reply = await bridge.send_command("ping")
-
-        # Assert
-        assert reply == {"error": f"Cannot connect to MuseScore at {bridge.uri}"}
+        with (
+            patch(WEBSOCKETS_CONNECT, AsyncMock(side_effect=OSError("refused"))),
+            pytest.raises(
+                BridgeError, match=f"Cannot connect to MuseScore at {bridge.uri}"
+            ),
+        ):
+            # Act / Assert
+            await bridge.send_command("ping")
 
     @pytest.mark.anyio()
     async def test_exchange_reconnects_once_and_retries_when_connection_drops(
@@ -302,34 +305,39 @@ class TestWebSocketBridgeExchange:
         assert len(bridge.connected_with) == 2
 
     @pytest.mark.anyio()
-    async def test_exchange_with_failed_reconnect_returns_error_result(self) -> None:
+    async def test_exchange_with_failed_reconnect_raises(self) -> None:
         # Arrange
         bridge = _HookRecordingBridge()
         dropped = fake_connection(ConnectionClosed(None, None))
         connect = AsyncMock(side_effect=[dropped, OSError("gone")])
 
-        with patch(WEBSOCKETS_CONNECT, connect):
+        with (
+            patch(WEBSOCKETS_CONNECT, connect),
+            pytest.raises(
+                BridgeError,
+                match="Lost connection to MuseScore and could not reconnect",
+            ),
+        ):
             # Act
-            reply = await bridge.send_command("ping")
+            await bridge.send_command("ping")
 
         # Assert
-        assert reply == {
-            "error": "Lost connection to MuseScore and could not reconnect"
-        }
         assert bridge.is_connected is False
 
     @pytest.mark.anyio()
-    async def test_exchange_with_failed_retry_returns_error_result(self) -> None:
+    async def test_exchange_with_failed_retry_raises(self) -> None:
         # Arrange
         bridge = _HookRecordingBridge()
         dropped = fake_connection(ConnectionClosed(None, None))
         dropped_again = fake_connection(ConnectionClosed(None, None))
         connect = AsyncMock(side_effect=[dropped, dropped_again])
 
-        with patch(WEBSOCKETS_CONNECT, connect):
+        with (
+            patch(WEBSOCKETS_CONNECT, connect),
+            pytest.raises(BridgeError, match="MuseScore request failed"),
+        ):
             # Act
-            reply = await bridge.send_command("ping")
+            await bridge.send_command("ping")
 
         # Assert
-        assert "MuseScore request failed" in reply["error"]
         assert connect.await_count == 2
