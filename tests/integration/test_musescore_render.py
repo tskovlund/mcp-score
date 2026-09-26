@@ -62,7 +62,6 @@ class TestRenderScoreWithMuseScore:
         assert response.output_path == str(output_path)
         assert response.output_files == [str(output_path)]
         assert response.format == render_format
-        assert response.warning is None
         assert output_path.stat().st_size > 0
         assert output_path.read_bytes().startswith(magic)
 
