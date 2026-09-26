@@ -44,7 +44,7 @@ mcp-score does three things for an AI assistant:
 | writes music21 |  +--------v--------+  +---v---------------+
 | -> MusicXML    |  | MuseScore QML   |  | Dorico Remote     |
 +----------------+  | plugin          |  | Control (built-in,|
-                    | (plugin.qml)    |  | experimental)     |
+                    | (plugin/)       |  | experimental)     |
                     +-----------------+  +-------------------+
 ```
 
@@ -141,7 +141,7 @@ Each module's docstring says what it is responsible for; the tools themselves ar
 src/mcp_score/
   __init__.py           Package root
   cli.py                CLI entry point (serve, run, install, install-skill, install-plugin)
-  resources.py          Locate bundled files (skill directory, plugin.qml)
+  resources.py          Locate bundled files (skill directory, plugin directory)
   server.py             create_server() builds the MCPServer and registers every tool module
   context.py            AppState and ScoreContext: what the server hands every tool
   guide.py              The score-generate skill assembled into one document for MCP clients
@@ -163,7 +163,8 @@ src/mcp_score/
     paths.py            Where MuseScore keeps user files (plugins directory)
     executable.py       Where MuseScore's executable is (env var, PATH, platform defaults)
     headless.py         Headless rendering through the MuseScore command line
-    plugin.qml          MuseScore QML plugin (WebSocket server)
+    plugin/             MuseScore plugin: mcp-score-bridge.qml (server, dispatch) and its JS modules
+                        (constants, score, reading, editing, selection, sequence)
 
 .claude/skills/
   score-generate/       Claude Code skill for score generation

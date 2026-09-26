@@ -39,6 +39,9 @@ from typing import TYPE_CHECKING, Any, Protocol
 import websockets
 from websockets.exceptions import WebSocketException
 
+from mcp_score.cli import install_plugin
+from mcp_score.musescore.paths import PLUGIN_QML_NAME
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -78,20 +81,18 @@ LAUNCH_ATTEMPTS = 2
 DIALOG_DISMISS_SECONDS = 2.0
 LOG_TAIL_LINES = 40
 
-PLUGIN_FILE = "mcp-score-bridge.qml"
-PLUGIN_SOURCE = REPOSITORY_ROOT / "src" / "mcp_score" / "musescore" / "plugin.qml"
 # Bound to every action-code form MuseScore 4 has used for a plugin:
 # muse://...?action=main in 4.4, action://...?action=main from 4.5.
 PLUGIN_ACTION_CODES = (
-    f"muse://extensions/v1/{PLUGIN_FILE}?action=main",
-    f"musescore://extensions/v1/{PLUGIN_FILE}?action=main",
-    f"action://extensions/v1/{PLUGIN_FILE}?action=main",
+    f"muse://extensions/v1/{PLUGIN_QML_NAME}?action=main",
+    f"musescore://extensions/v1/{PLUGIN_QML_NAME}?action=main",
+    f"action://extensions/v1/{PLUGIN_QML_NAME}?action=main",
 )
 # MuseScore 4.4 identifies plugins with a muse:// URI, 4.5 and later with
 # musescore://; each version ignores the entry it does not know.
 PLUGIN_URIS = (
-    f"muse://extensions/v1/{PLUGIN_FILE}",
-    f"musescore://extensions/v1/{PLUGIN_FILE}",
+    f"muse://extensions/v1/{PLUGIN_QML_NAME}",
+    f"musescore://extensions/v1/{PLUGIN_QML_NAME}",
 )
 PLUGIN_SHORTCUT = "Ctrl+Shift+F12"
 
@@ -374,8 +375,7 @@ def seed_configuration(layout: Layout) -> None:
     MuseScore in console mode without a GUI), so the plugin is enabled and
     bound to a keyboard shortcut that ``start`` presses after launch.
     """
-    layout.plugins_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(PLUGIN_SOURCE, layout.plugins_dir / PLUGIN_FILE)
+    install_plugin(layout.plugins_dir)
 
     layout.preferences.write(STARTUP_PREFERENCES)
 

@@ -22,7 +22,7 @@ The easy way:
 mcp-score install-plugin
 ```
 
-Or copy `src/mcp_score/musescore/plugin.qml` by hand to `~/Documents/MuseScore4/Plugins/mcp-score-bridge.qml`. MuseScore uses that directory on macOS, Linux and Windows (`%USERPROFILE%\Documents\MuseScore4\Plugins\` on Windows); if you changed it in MuseScore's preferences (Folders > Plugins), use your own path.
+Or copy the `src/mcp_score/musescore/plugin/` directory by hand to `~/Documents/MuseScore4/Plugins/mcp-score-bridge/`. MuseScore uses that directory on macOS, Linux and Windows (`%USERPROFILE%\Documents\MuseScore4\Plugins\` on Windows); if you changed it in MuseScore's preferences (Folders > Plugins), use your own path.
 
 Then:
 
@@ -178,9 +178,8 @@ Any other text is accepted as the marking's text; only the ones listed also set 
 
 ### Plugin doesn't appear in Manage plugins
 
-- Verify the `.qml` file is in the correct directory
+- Verify the whole `mcp-score-bridge/` directory is in the Plugins directory: the `.qml` file imports the `.js` modules next to it
 - Restart MuseScore after adding the plugin
-- Check that the file is named with a `.qml` extension
 - Check your MuseScore version: **Help > About**. The bridge requires 4.4.2 or later
 - MuseScore hides plugins that fail to compile. Look in the log file (paths above) for `ExtensionBuilder::load | Failed to load QML file` and the line after it, which names the cause. `module "QtWebSockets" is not installed` means an old copy of the plugin: re-run `mcp-score install-plugin`
 
