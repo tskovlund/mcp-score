@@ -6,9 +6,6 @@ description: >
   "make an arrangement", "write out parts", or describes a musical piece to notate.
   Do NOT use for live MuseScore manipulation (use the mcp-score MCP bridge tools).
 allowed-tools: [Bash, Write, Read]
-metadata:
-  author: tskovlund
-  version: "1.3"
 ---
 
 # Score Generation
@@ -24,14 +21,14 @@ Generate music scores by writing and executing music21 Python scripts that expor
    - **Arranger** (ask if applicable, e.g. arrangements, charts)
    - **Subtitle** (ask if the piece has a descriptive subtitle, genre, or dedication)
    - **Copyright** (ask if the user wants a copyright notice)
-3. **Write a complete Python script** using music21 that builds the entire score. Save to `/tmp/generate_score.py`.
-4. **Execute** the script:
+3. **Write a complete Python script** using music21 that builds the entire score. Save it to a temporary file (for example `/tmp/generate_score.py`, or under `%TEMP%` on Windows).
+4. **Execute** the script from the folder where the score should land. The script writes `<Title>.musicxml` into the working directory:
    ```bash
-   mcp-score run /tmp/generate_score.py
+   cd ~/Desktop && mcp-score run /tmp/generate_score.py
    ```
 5. **Report** the output file path. The user opens it in MuseScore.
 
-Default output location: `~/Desktop/<Title>.musicxml`
+Default output location: `~/Desktop/<Title>.musicxml` unless the user names another folder.
 
 ## Critical Conventions
 
@@ -87,7 +84,7 @@ Example — 12-bar blues in Bb, each `|` is a bar:
 Bb7 |    |    |    | Eb7 |    | Bb7 |    | F7  | Eb7 | Bb7 | F7
 ```
 
-Chord symbols appear on bars 1, 5, 6, 7, 9, 10, 11, 12 — NOT every bar.
+Chord symbols appear on bars 1, 5, 7, 9, 10, 11, 12 — NOT every bar.
 
 ### Score Metadata
 
@@ -99,15 +96,13 @@ from music21 import metadata
 score.metadata = metadata.Metadata()
 score.metadata.title = "Score Title"
 score.metadata.composer = "Composer Name"  # if provided
-score.metadata.movementName = (
-    "Subtitle Here"  # subtitle (shows below title in MusicXML)
-)
+score.metadata.movementName = "Subtitle Here"  # subtitle: exported as <movement-title>; MuseScore 4 does not display it (see Troubleshooting)
 
 # Arranger and copyright are set via Contributor and Copyright objects:
-from music21 import metadata as md
-
-score.metadata.addContributor(md.Contributor(role="arranger", name="Arranger Name"))
-score.metadata.copyright = md.Copyright("© 2026 Author Name")
+score.metadata.addContributor(
+    metadata.Contributor(role="arranger", name="Arranger Name")
+)
+score.metadata.copyright = metadata.Copyright("© 2026 Author Name")
 ```
 
 ### Barlines Including Repeats
@@ -196,7 +191,7 @@ Script creates:
 - 12 measures with whole rests
 - Chord symbols at change points only: B-7 (m1), E-7 (m5), B-7 (m7), F7 (m9), E-7 (m10), B-7 (m11), F7 (m12)
 - Final barline on m12
-- Export to `~/Desktop/Blues in Bb.musicxml`
+- Export to `Blues in Bb.musicxml` in the working directory (Desktop by default)
 
 ### "Create a big band chart — 32-bar AABA, Bb major, slow blues at 66 BPM"
 
@@ -210,7 +205,7 @@ Script creates:
 - Double barlines at section boundaries
 - Repeat signs where the chart calls for them
 - Tempo: MetronomeMark(number=66, text="Slow Blues")
-- Export to `~/Desktop/Big Band Chart.musicxml`
+- Export to `Big Band Chart.musicxml` in the working directory (Desktop by default)
 
 ## Troubleshooting
 

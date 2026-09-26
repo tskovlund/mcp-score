@@ -6,7 +6,7 @@ Thanks for your interest in contributing! This guide covers everything you need 
 
 - **Python 3.14+**
 - **[Devbox](https://www.jetify.com/devbox)** (recommended) or manually install `uv`, `ruff`, `pyright`
-- **MuseScore Studio 4.4.2+** — only for the live features (the QML plugin, `render_score`) and the integration tests. Everything else runs without it
+- **MuseScore Studio 4** — only for `render_score`, the live plugin (which needs 4.4.2 or later) and the integration tests. Everything else runs without it
 
 ## Development setup
 
@@ -80,7 +80,7 @@ pytest -k "test_install"  # run tests matching pattern
 headless `render_score` export and the live plugin bridge. The tests are
 marked `integration` and skip unless `MCP_SCORE_INTEGRATION=1` is set, so the
 plain `pytest` run stays fast and offline. CI runs them in the `Integration`
-workflow on Linux (MuseScore 4.4, 4.6 and 4.7), Windows and macOS.
+workflow: on Linux against the versions in `tests/integration/musescore-versions.json` (the oldest supported line, one in between and the newest), and on Windows and macOS against the newest.
 
 `scripts/musescore_harness.py` installs MuseScore and drives it on all three
 platforms (Linux needs `xvfb`, `xdotool` and the Qt runtime libraries listed
@@ -99,14 +99,21 @@ MCP_SCORE_INTEGRATION=1 pytest tests/integration/test_musescore_bridge.py
 uv run scripts/musescore_harness.py stop
 ```
 
-`start` overwrites MuseScore's user configuration (plugin, shortcut,
-first-launch flags), so use a throwaway `HOME` on a machine where you use
-MuseScore yourself. The version defaults to the newest one in
-`tests/integration/musescore-versions.json`, the file the workflow matrix reads
-and Renovate keeps current; `MUSESCORE_VERSION` picks another. The harness
-looks the release asset up through the GitHub releases API (set
-`GITHUB_TOKEN` to raise the rate limit) unless `MUSESCORE_DOWNLOAD_URL` names
-it, and keeps downloads in `MUSESCORE_CACHE_DIR`.
+`start` rewrites MuseScore's user configuration: it installs the plugin,
+replaces `extensions/config.json` (other plugins end up disabled) and
+`shortcuts.xml` (custom shortcuts are lost), sets the startup preferences that
+suppress the first-launch and welcome dialogs, and deletes the saved session.
+Use a throwaway `HOME` on a machine where you use MuseScore yourself.
+
+The harness reads these environment variables:
+
+| Variable                 | Meaning                                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `MUSESCORE_VERSION`      | Release to install; defaults to the newest in `tests/integration/musescore-versions.json`                            |
+| `MUSESCORE_DOWNLOAD_URL` | Asset to download; otherwise the release is looked up through the GitHub releases API                                |
+| `GITHUB_TOKEN`           | Raises the GitHub API rate limit for that lookup                                                                     |
+| `MUSESCORE_CACHE_DIR`    | Where downloads and the unpacked application live; defaults to `~/.cache/mcp-score/musescore-<version>`              |
+| `MUSESCORE_DISPLAY`      | Linux only: the Xvfb display the GUI runs on, default `:87` (not `:99`, which `xvfb-run` takes for the render tests) |
 
 ## PR process
 
@@ -167,44 +174,7 @@ normal review process applies after implementation.
 
 ## Project structure
 
-```
-src/mcp_score/
-  cli.py              CLI entry point (serve, run, install, install-skill, install-plugin)
-  server.py           create_server(): builds the MCPServer and registers every tool module
-  resources.py        Locate bundled files (skill directory, plugin.qml)
-  tools/
-    __init__.py       Shared tool plumbing: ToolError, score_tool, bridge and measure guards
-    connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
-    analysis.py       Score reading tools (read_passage, get_measure_content, get_selection_properties)
-    generate.py       Score generation tools (generate_score, score_generation_guide) and the score-generate prompt
-    manipulation.py   Score modification tools (notes, dynamics, barlines, chords, keys, time, tempo, measures, transpose, undo)
-    render.py         render_score: export through the MuseScore command line
-  bridge/
-    base.py           ScoreBridge abstract interface, CommandResult, NoteDuration
-    websocket.py      WebSocketTransport and WebSocketBridge (connection lifecycle, reconnect)
-    remote_control.py Remote Control protocol layer (used by Dorico)
-    musescore.py      MuseScore plugin protocol (thin subclass of WebSocketBridge)
-    dorico.py         Dorico defaults (thin subclass of RemoteControlBridge, experimental)
-    registry.py       BridgeRegistry: the bridges and which one is active
-  musescore/
-    paths.py          Where MuseScore keeps user files (plugins directory)
-    headless.py       MuseScore executable discovery and headless rendering
-    plugin.qml        MuseScore QML plugin (WebSocket server)
-
-.claude/skills/
-  score-generate/     Claude Code skill for music21 score generation
-    SKILL.md          Skill definition and instructions
-    references/
-      instruments.md  music21 instrument class reference
-      template.py     Complete, runnable generation script to start from
-
-scripts/
-  musescore_harness.py  Installs and drives a real MuseScore for the integration tests
-
-tests/                One test file per module
-tests/integration/    Tests against a real MuseScore (opt-in, see above)
-docs/                 Diataxis-structured documentation
-```
+The package layout, with a line per module, is in [docs/architecture.md](docs/architecture.md#package-structure). Tests live in `tests/`, grouped by concern; `tests/integration/` holds the opt-in tests against a real MuseScore.
 
 ## Skill development
 

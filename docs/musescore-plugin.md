@@ -6,7 +6,7 @@
 
 The MuseScore plugin runs inside MuseScore Studio 4 and opens a WebSocket server on `localhost:8765` using MuseScore's built-in plugin API (`api.websocketserver`). The mcp-score Python server connects to this WebSocket to read from and write to the active score.
 
-The plugin is only needed for **manipulation** and **analysis** tools (reading passages, arranging, transposing, etc.). **Generation** tools work without it -- they produce MusicXML files that MuseScore can open directly.
+The plugin is only needed for the **manipulation** and **analysis** tools (reading passages, arranging, transposing, etc.). The **generation** tools work without it -- they produce MusicXML files that MuseScore can open directly -- and so does `render_score`, which runs MuseScore's command line.
 
 ## Supported versions
 
@@ -29,7 +29,7 @@ Then:
 1. Restart MuseScore, then go to **Plugins > Manage plugins** and enable "MCP Score Bridge"
 2. Run the plugin: **Plugins > MCP Score Bridge**
 
-The plugin opens a small status window and starts a WebSocket server on port 8765. **Keep the window open** -- closing it stops the plugin and the server with it (MuseScore 4 has no persistent dock plugins). The mcp-score Python server connects automatically when you use manipulation or analysis tools.
+The plugin opens a small status window and starts a WebSocket server on port 8765. **Keep the window open** -- closing it stops the plugin and the server with it (MuseScore 4 has no persistent dock plugins). Then connect from your MCP client with `connect_to_musescore`; the manipulation and analysis tools return a "not connected" error until you do.
 
 ## Verifying the connection
 
@@ -140,9 +140,9 @@ The plugin accepts JSON messages over WebSocket. Each message must have a `comma
 
 ### Batch operations
 
-| Command           | Params                                | Description                                                                                                |
-| ----------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `processSequence` | `{sequence: [{action, params}, ...]}` | Execute multiple commands atomically in a single undo group. If any step fails, all steps are rolled back. |
+| Command           | Params                                | Description                                                                                                                                                                                                                                                                         |
+| ----------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `processSequence` | `{sequence: [{action, params}, ...]}` | Execute several commands in one undo step; if any step fails, all steps are rolled back. Steps may use `ping`, the navigation, writing, marking, structure, selection and transformation commands above, but not `getScore`, `getCursorInfo`, `undo` or a nested `processSequence`. |
 
 ### Barline types
 
@@ -151,6 +151,8 @@ The plugin accepts JSON messages over WebSocket. Each message must have a `comma
 ### Dynamic types
 
 `pppp`, `ppp`, `pp`, `p`, `mp`, `mf`, `f`, `ff`, `fff`, `ffff`, `fp`, `sfz`, `sffz`, `sfp`, `rfz`, `fz`
+
+Any other text is accepted as the marking's text; only the ones listed also set the playback velocity.
 
 ### Key signature fifths values
 
@@ -256,7 +258,7 @@ This example uses `processSequence` to write a four-note melody in the first mea
 
 ## Plugin development notes
 
-Things the MuseScore 4 plugin API does not document, learned by crashing MuseScore. The live bridge integration tests (`tests/integration/test_musescore_bridge.py`) exercise the first five against real MuseScore.
+Things the MuseScore 4 plugin API does not document, learned by crashing MuseScore. The live bridge integration tests (`tests/integration/test_musescore_bridge.py`) exercise these against real MuseScore.
 
 - **Bar lines cannot be added through the cursor.** `cursor.add` crashes MuseScore for `BAR_LINE` elements. Change the existing end bar line instead (`measure.lastSegment.elementAt(staff * 4).barlineType`), or set the measure's `repeatStart` / `repeatEnd` flags for repeats.
 - **Chord symbols get their text after insertion.** A `HARMONY` element must be added with `cursor.add` before its `text` is set; setting `text` first crashes MuseScore.
