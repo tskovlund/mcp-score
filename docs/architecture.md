@@ -75,7 +75,7 @@ ScoreBridge (ABC)             -- the operations every tool needs
 
 ### Bridge registry
 
-`bridge/registry.py` holds one bridge per application and tracks the active one. `BridgeRegistry.activate(bridge)` disconnects whichever bridge was active, then connects the new one, so a failed connection leaves nothing active; `deactivate(bridge)` disconnects it; `connected()` returns the active bridge only while it is connected. The tools share the module-level `registry` through `require_bridge()` in `tools/__init__.py`, which raises `ToolError` when nothing is connected.
+`bridge/registry.py` holds one bridge per application and tracks the active one. `BridgeRegistry.activate(bridge)` disconnects whichever bridge was active, then connects the new one, so a failed connection leaves nothing active; `deactivate(bridge)` disconnects it; `connected()` returns the active bridge only while it is connected. There is no module-level registry: `server.py` creates one per server and hands it to the tools as `AppState` through the SDK's context injection (`context.py`). `require_bridge(context)` in `tools/__init__.py` reads the connected bridge from it and raises `ToolError` when nothing is connected.
 
 ### Remote Control protocol (Dorico)
 
@@ -143,6 +143,7 @@ src/mcp_score/
   cli.py                CLI entry point (serve, run, install, install-skill, install-plugin)
   resources.py          Locate bundled files (skill directory, plugin.qml)
   server.py             create_server() builds the MCPServer and registers every tool module
+  context.py            AppState and ScoreContext: what the server hands every tool
   tools/
     __init__.py         Shared tool plumbing: ToolError, score_tool, require_bridge(), navigate()
     connection.py       Connect/disconnect MuseScore & Dorico, ping, score info

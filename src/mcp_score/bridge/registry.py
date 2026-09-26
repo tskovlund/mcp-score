@@ -1,8 +1,10 @@
 """Which application the server is talking to right now.
 
-The MCP server keeps one bridge per supported application and at most one
-of them active. Connecting to an application deactivates the previous
-one, so a tool never has to ask which application it is operating on.
+The server keeps one bridge per supported application and at most one of
+them active. Connecting to an application deactivates the previous one,
+so a tool never has to ask which application it is operating on. The
+server owns the registry for its lifetime and hands it to the tools
+through their context.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from mcp_score.bridge.musescore import MuseScoreBridge
 if TYPE_CHECKING:
     from mcp_score.bridge.base import ScoreBridge
 
-__all__ = ["BridgeRegistry", "registry"]
+__all__ = ["BridgeRegistry"]
 
 
 class BridgeRegistry:
@@ -56,7 +58,3 @@ class BridgeRegistry:
         await bridge.disconnect()
         if self.active is bridge:
             self.active = None
-
-
-registry = BridgeRegistry()
-"""The server's registry. Tools and connection commands share this one."""
