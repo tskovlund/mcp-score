@@ -3,7 +3,8 @@
 //
 // Every function takes the plugin (the MuseScore QML item) explicitly:
 // it holds the logical cursor position and is the way into MuseScore's
-// plugin API (curScore, newElement, cmd, ...).
+// plugin API (curScore, newElement, cmd and the Element enum, which
+// MuseScore exposes as a property of the item rather than a QML type).
 .pragma library
 .import MuseScore 3.0 as MS
 .import "constants.js" as Constants
@@ -143,7 +144,7 @@ function describeElement(element) {
 
     var info = { type: element.type };
 
-    if (element.type === MS.Element.CHORD) {
+    if (element.type === plugin.Element.CHORD) {
         var notes = [];
         for (var i = 0; i < element.notes.length; i++) {
             var note = element.notes[i];
@@ -158,12 +159,12 @@ function describeElement(element) {
             numerator: element.duration.numerator,
             denominator: element.duration.denominator
         };
-    } else if (element.type === MS.Element.REST) {
+    } else if (element.type === plugin.Element.REST) {
         info.duration = {
             numerator: element.duration.numerator,
             denominator: element.duration.denominator
         };
-    } else if (element.type === MS.Element.NOTE) {
+    } else if (element.type === plugin.Element.NOTE) {
         info.pitch = element.pitch;
         info.tpc = element.tpc;
         info.name = element.noteName || null;

@@ -6,7 +6,6 @@
 // several `apply*` calls inside a single step so the batch undoes
 // together.
 .pragma library
-.import MuseScore 3.0 as MS
 .import "constants.js" as Constants
 .import "score.js" as Score
 
@@ -78,7 +77,7 @@ function applyAddRehearsalMark(plugin, params) {
         return { error: "No valid segment at cursor position" };
     }
 
-    var rehearsalMark = plugin.newElement(MS.Element.REHEARSAL_MARK);
+    var rehearsalMark = plugin.newElement(plugin.Element.REHEARSAL_MARK);
     rehearsalMark.text = params.text;
     cursor.add(rehearsalMark);
 
@@ -138,7 +137,7 @@ function applySetBarline(plugin, params) {
     var changed = 0;
     for (var staff = 0; staff < plugin.curScore.nstaves; staff++) {
         var element = endSegment ? endSegment.elementAt(staff * Constants.voicesPerStaff) : null;
-        if (element && element.type === MS.Element.BAR_LINE) {
+        if (element && element.type === plugin.Element.BAR_LINE) {
             element.barlineType = barlineType;
             changed++;
         }
@@ -176,7 +175,7 @@ function applySetKeySignature(plugin, params) {
         return { error: "No valid segment at cursor position" };
     }
 
-    var keySig = plugin.newElement(MS.Element.KEYSIG);
+    var keySig = plugin.newElement(plugin.Element.KEYSIG);
     keySig.key = fifths;
     cursor.add(keySig);
 
@@ -206,7 +205,7 @@ function applySetTimeSignature(plugin, params) {
         return { error: "No valid segment at cursor position" };
     }
 
-    var timeSig = plugin.newElement(MS.Element.TIMESIG);
+    var timeSig = plugin.newElement(plugin.Element.TIMESIG);
     timeSig.timesig = plugin.fraction(numerator, denominator);
     cursor.add(timeSig);
 
@@ -236,7 +235,7 @@ function applySetTempo(plugin, params) {
         return { error: "No valid segment at cursor position" };
     }
 
-    var tempo = plugin.newElement(MS.Element.TEMPO_TEXT);
+    var tempo = plugin.newElement(plugin.Element.TEMPO_TEXT);
     tempo.text = displayText;
     tempo.tempo = bpm / Constants.secondsPerMinute;
     tempo.followText = false;
@@ -266,7 +265,7 @@ function applyAddChordSymbol(plugin, params) {
         return { error: "No valid segment at cursor position" };
     }
 
-    var harmony = plugin.newElement(MS.Element.HARMONY);
+    var harmony = plugin.newElement(plugin.Element.HARMONY);
     cursor.add(harmony);
     harmony.text = params.text;
 
@@ -291,7 +290,7 @@ function applyAddDynamic(plugin, params) {
         return { error: "No valid segment at cursor position" };
     }
 
-    var dynamic = plugin.newElement(MS.Element.DYNAMIC);
+    var dynamic = plugin.newElement(plugin.Element.DYNAMIC);
     dynamic.text = params.type;
     if (Constants.dynamicVelocities[params.type] !== undefined) {
         dynamic.velocity = Constants.dynamicVelocities[params.type];

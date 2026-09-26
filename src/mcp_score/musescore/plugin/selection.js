@@ -1,6 +1,5 @@
 // Selection, transposition and undo.
 .pragma library
-.import MuseScore 3.0 as MS
 .import "constants.js" as Constants
 .import "score.js" as Score
 
@@ -104,7 +103,7 @@ function applyTranspose(plugin, params) {
     var elements = selection.elements;
     var notes = [];
     for (var i = 0; i < elements.length; i++) {
-        if (elements[i].type === MS.Element.NOTE) {
+        if (elements[i].type === plugin.Element.NOTE) {
             notes.push(elements[i]);
         }
     }
