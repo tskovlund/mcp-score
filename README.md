@@ -81,12 +81,13 @@ Details and troubleshooting: [MuseScore plugin](docs/musescore-plugin.md).
 
 ## Documentation
 
-| Document                                     | Description                                    |
-| -------------------------------------------- | ---------------------------------------------- |
-| [Getting started](docs/getting-started.md)   | Set up mcp-score and generate your first score |
-| [Tool reference](docs/reference.md)          | All MCP tools and CLI commands                 |
-| [MuseScore plugin](docs/musescore-plugin.md) | Plugin installation and WebSocket protocol     |
-| [Architecture](docs/architecture.md)         | System design and key decisions                |
+| Document                                                    | Description                                    |
+| ----------------------------------------------------------- | ---------------------------------------------- |
+| [Getting started](docs/getting-started.md)                  | Set up mcp-score and generate your first score |
+| [Releases](https://github.com/tskovlund/mcp-score/releases) | What changed in each version                   |
+| [Tool reference](docs/reference.md)                         | All MCP tools and CLI commands                 |
+| [MuseScore plugin](docs/musescore-plugin.md)                | Plugin installation and WebSocket protocol     |
+| [Architecture](docs/architecture.md)                        | System design and key decisions                |
 
 ## Contributing
 

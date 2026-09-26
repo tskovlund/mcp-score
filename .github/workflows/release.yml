@@ -48,15 +48,24 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # git-cliff needs the history back to the previous tag
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
           path: dist/
-      - name: Create GitHub Release
+      # Notes are drafted from the conventional commits since the previous
+      # tag (cliff.toml). The release is a draft: releases are immutable once
+      # published, so the maintainer curates the notes and publishes by hand.
+      - name: Draft release notes from the commits
+        run: uvx git-cliff==2.14.2 --latest --strip all --output release-notes.md
+      - name: Create draft GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create "${{ github.ref_name }}"
           dist/*
-          --generate-notes
+          --draft
+          --notes-file release-notes.md
           --title "${{ github.ref_name }}"

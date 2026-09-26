@@ -125,6 +125,24 @@ Releases follow [semver](https://semver.org/); versions stay 0.x until the
 tool set is stable, so minor releases may still change tool names and
 parameters.
 
+### Cutting a release
+
+Release notes live on the [Releases page](https://github.com/tskovlund/mcp-score/releases);
+there is no changelog file. Conventional commit messages are the raw material:
+with squash merges, every commit on `main` is one typed line, and the release
+workflow turns them into a draft.
+
+1. Open a release PR that bumps `version` in `pyproject.toml`. Merge it.
+2. Tag the merge commit and push the tag: `git tag -a vX.Y.Z -m "mcp-score-server X.Y.Z"`
+   then `git push origin vX.Y.Z`. Tags are signed and protected.
+3. The `Release` workflow builds the package, publishes it to PyPI through the
+   `pypi` environment (approve the deployment when asked) and creates a
+   **draft** GitHub release with the build artifacts and notes drafted by
+   [git-cliff](https://git-cliff.org/) from the commits since the previous tag,
+   grouped by type (`cliff.toml`).
+4. Curate the draft into authored release notes and publish it. Published
+   releases are immutable, so review before publishing.
+
 ### Prompt request PRs
 
 We welcome **prompt request PRs** — pull requests that contain a well-described

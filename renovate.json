@@ -12,6 +12,14 @@
       "depNameTemplate": "musescore/MuseScore",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "git-cliff pinned in the Release workflow",
+      "managerFilePatterns": ["/^\\.github/workflows/release\\.yml$/"],
+      "matchStrings": ["uvx git-cliff==(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "git-cliff",
+      "datasourceTemplate": "pypi"
     }
   ]
 }
