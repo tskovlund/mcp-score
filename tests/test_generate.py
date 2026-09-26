@@ -19,7 +19,7 @@ from mcp_score.tools.generate import (
 )
 
 _SUBPROCESS_TARGET = "mcp_score.tools.generate.asyncio.create_subprocess_exec"
-_PACKAGE_PATH_TARGET = "mcp_score.tools.generate.package_path"
+_LOAD_GUIDE_TARGET = "mcp_score.tools.generate.load_guide"
 _HOME_TARGET = "mcp_score.tools.generate.Path.home"
 
 
@@ -33,17 +33,6 @@ def _fake_process(
     process.kill = MagicMock()
     process.wait = AsyncMock()
     return process
-
-
-def _make_skill_directory(root: Path) -> Path:
-    """Create a fake skill directory with all three guide files."""
-    skill_directory = root / "score-generate"
-    references = skill_directory / "references"
-    references.mkdir(parents=True)
-    (skill_directory / "SKILL.md").write_text("# Fake skill\n\nUse B- for flats.")
-    (references / "instruments.md").write_text("# Fake instruments\n\nTrumpet")
-    (references / "template.py").write_text('score.write("musicxml", fp=OUTPUT)')
-    return skill_directory
 
 
 # ── generate_score ───────────────────────────────────────────────────
@@ -174,41 +163,18 @@ class TestGenerateScore:
 
 
 class TestScoreGenerationGuide:
-    def test_guide_contains_all_sections_in_order(self, tmp_path: Path) -> None:
+    def test_guide_tool_returns_the_assembled_guide(self) -> None:
         # Arrange
-        skill_directory = _make_skill_directory(tmp_path)
-
-        with patch(_PACKAGE_PATH_TARGET, return_value=skill_directory):
+        with patch(_LOAD_GUIDE_TARGET, return_value="# Guide"):
             # Act
             guide = score_generation_guide()
 
         # Assert
-        skill_index = guide.index("# SKILL.md")
-        instruments_index = guide.index("# references/instruments.md")
-        template_index = guide.index("# references/template.py")
-        assert skill_index < instruments_index < template_index
-        assert "Use B- for flats." in guide
-        assert "Trumpet" in guide
-        assert '```python\nscore.write("musicxml", fp=OUTPUT)\n```' in guide
-        assert "generate_score" in guide[:skill_index]
+        assert guide == "# Guide"
 
-    def test_guide_with_missing_reference_returns_error(self, tmp_path: Path) -> None:
+    def test_guide_with_missing_skill_files_returns_error(self) -> None:
         # Arrange
-        skill_directory = _make_skill_directory(tmp_path)
-        (skill_directory / "references" / "instruments.md").unlink()
-
-        with patch(_PACKAGE_PATH_TARGET, return_value=skill_directory):
-            # Act
-            result = json.loads(score_generation_guide())
-
-        # Assert
-        assert "instruments.md" in result["error"]
-
-    def test_guide_with_missing_skill_directory_returns_error(self) -> None:
-        # Arrange
-        with patch(
-            _PACKAGE_PATH_TARGET, side_effect=FileNotFoundError("no skill files")
-        ):
+        with patch(_LOAD_GUIDE_TARGET, side_effect=FileNotFoundError("no skill files")):
             # Act
             result = json.loads(score_generation_guide())
 
@@ -220,14 +186,12 @@ class TestScoreGenerationGuide:
 
 
 class TestScoreGeneratePrompt:
-    def test_prompt_returns_same_text_as_guide_tool(self, tmp_path: Path) -> None:
+    def test_prompt_returns_same_text_as_guide_tool(self) -> None:
         # Arrange
-        skill_directory = _make_skill_directory(tmp_path)
-
-        with patch(_PACKAGE_PATH_TARGET, return_value=skill_directory):
+        with patch(_LOAD_GUIDE_TARGET, return_value="# Guide"):
             # Act
             prompt_text = score_generate_prompt()
             guide_text = score_generation_guide()
 
         # Assert
-        assert prompt_text == guide_text
+        assert prompt_text == guide_text == "# Guide"

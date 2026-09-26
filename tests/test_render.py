@@ -1,4 +1,4 @@
-"""Tests for the render_score tool and the MuseScore command-line runner."""
+"""Tests for the render_score tool and the headless rendering it delegates to."""
 
 from __future__ import annotations
 
@@ -11,15 +11,12 @@ if TYPE_CHECKING:
 
 import pytest
 
-from mcp_score.musescore import headless as cli
-from mcp_score.musescore.headless import (
+from mcp_score.musescore import headless
+from mcp_score.musescore.executable import (
     MUSESCORE_PATH_ENV_VAR,
     MuseScoreNotFoundError,
-    RenderError,
-    RenderResult,
-    find_musescore_command,
-    render,
 )
+from mcp_score.musescore.headless import RenderError, RenderResult, render
 from mcp_score.tools.render import render_score
 
 _MUSESCORE_COMMAND = ["/opt/musescore/mscore"]
@@ -56,138 +53,6 @@ def score_file(tmp_path: Path) -> Path:
     return path
 
 
-# ── Discovery ─────────────────────────────────────────────────────────
-
-
-class TestFindMusescoreCommand:
-    def test_find_with_env_var_file_returns_configured_path(
-        self, tmp_path: Path
-    ) -> None:
-        # Arrange
-        executable = tmp_path / "mscore-custom"
-        executable.write_text("")
-
-        with (
-            patch.dict("os.environ", {MUSESCORE_PATH_ENV_VAR: str(executable)}),
-            patch.object(cli.shutil, "which", return_value="/usr/bin/mscore"),
-        ):
-            # Act
-            command = find_musescore_command()
-
-        # Assert: the env var wins over PATH.
-        assert command == [str(executable)]
-
-    def test_find_with_env_var_command_name_resolves_on_path(self) -> None:
-        # Arrange
-        with (
-            patch.dict("os.environ", {MUSESCORE_PATH_ENV_VAR: "mscore-nightly"}),
-            patch.object(cli.shutil, "which", return_value="/usr/bin/mscore-nightly"),
-        ):
-            # Act
-            command = find_musescore_command()
-
-        # Assert
-        assert command == ["/usr/bin/mscore-nightly"]
-
-    def test_find_with_bad_env_var_raises_naming_env_var(self) -> None:
-        # Arrange
-        with (
-            patch.dict("os.environ", {MUSESCORE_PATH_ENV_VAR: "/nowhere/mscore"}),
-            patch.object(cli.shutil, "which", return_value=None),
-            pytest.raises(MuseScoreNotFoundError, match=MUSESCORE_PATH_ENV_VAR),
-        ):
-            # Act / Assert
-            find_musescore_command()
-
-    def test_find_on_path_returns_first_known_name(self) -> None:
-        # Arrange
-        def which(name: str) -> str | None:
-            return f"/usr/bin/{name}" if name in {"musescore", "MuseScore4"} else None
-
-        with (
-            patch.dict("os.environ", {MUSESCORE_PATH_ENV_VAR: ""}),
-            patch.object(cli.shutil, "which", side_effect=which),
-        ):
-            # Act
-            command = find_musescore_command()
-
-        # Assert: "musescore" precedes "MuseScore4" in the search order.
-        assert command == ["/usr/bin/musescore"]
-
-    def test_find_on_macos_returns_app_bundle_executable(self, tmp_path: Path) -> None:
-        # Arrange
-        executable = tmp_path / "MuseScore 4.app" / "Contents" / "MacOS" / "mscore"
-        executable.parent.mkdir(parents=True)
-        executable.write_text("")
-
-        with (
-            patch.dict("os.environ", {MUSESCORE_PATH_ENV_VAR: ""}),
-            patch.object(cli.shutil, "which", return_value=None),
-            patch.object(cli.platform, "system", return_value="Darwin"),
-            patch.object(cli, "_MACOS_DEFAULT_EXECUTABLE", executable),
-        ):
-            # Act
-            command = find_musescore_command()
-
-        # Assert
-        assert command == [str(executable)]
-
-    def test_find_on_windows_honours_program_files(self, tmp_path: Path) -> None:
-        # Arrange
-        executable = tmp_path / "MuseScore 4" / "bin" / "MuseScore4.exe"
-        executable.parent.mkdir(parents=True)
-        executable.write_text("")
-
-        with (
-            patch.dict(
-                "os.environ",
-                {MUSESCORE_PATH_ENV_VAR: "", "ProgramFiles": str(tmp_path)},
-            ),
-            patch.object(cli.shutil, "which", return_value=None),
-            patch.object(cli.platform, "system", return_value="Windows"),
-        ):
-            # Act
-            command = find_musescore_command()
-
-        # Assert
-        assert command == [str(executable)]
-
-    def test_find_on_linux_returns_flatpak_argv(self, tmp_path: Path) -> None:
-        # Arrange
-        export_directory = tmp_path / "exports" / "bin"
-        export_directory.mkdir(parents=True)
-        (export_directory / "org.musescore.MuseScore").write_text("")
-
-        def which(name: str) -> str | None:
-            return "/usr/bin/flatpak" if name == "flatpak" else None
-
-        with (
-            patch.dict("os.environ", {MUSESCORE_PATH_ENV_VAR: ""}),
-            patch.object(cli.shutil, "which", side_effect=which),
-            patch.object(cli.platform, "system", return_value="Linux"),
-            patch.object(cli, "_FLATPAK_EXPORT_DIRECTORIES", (export_directory,)),
-        ):
-            # Act
-            command = find_musescore_command()
-
-        # Assert
-        assert command == ["flatpak", "run", "org.musescore.MuseScore"]
-
-    def test_find_with_nothing_installed_raises_naming_env_var(
-        self, tmp_path: Path
-    ) -> None:
-        # Arrange
-        with (
-            patch.dict("os.environ", {MUSESCORE_PATH_ENV_VAR: ""}),
-            patch.object(cli.shutil, "which", return_value=None),
-            patch.object(cli.platform, "system", return_value="Linux"),
-            patch.object(cli, "_FLATPAK_EXPORT_DIRECTORIES", (tmp_path,)),
-            pytest.raises(MuseScoreNotFoundError, match=MUSESCORE_PATH_ENV_VAR),
-        ):
-            # Act / Assert
-            find_musescore_command()
-
-
 # ── Subprocess runner ─────────────────────────────────────────────────
 
 
@@ -202,10 +67,10 @@ class TestRender:
 
         with (
             patch.object(
-                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+                headless, "find_musescore_command", return_value=_MUSESCORE_COMMAND
             ),
-            patch.object(cli.asyncio, "create_subprocess_exec", create_subprocess),
-            patch.object(cli.platform, "system", return_value="Linux"),
+            patch.object(headless.asyncio, "create_subprocess_exec", create_subprocess),
+            patch.object(headless.platform, "system", return_value="Linux"),
             patch.dict("os.environ", {}, clear=True),
         ):
             # Act
@@ -232,10 +97,10 @@ class TestRender:
 
         with (
             patch.object(
-                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+                headless, "find_musescore_command", return_value=_MUSESCORE_COMMAND
             ),
-            patch.object(cli.asyncio, "create_subprocess_exec", create_subprocess),
-            patch.object(cli.platform, "system", return_value="Linux"),
+            patch.object(headless.asyncio, "create_subprocess_exec", create_subprocess),
+            patch.object(headless.platform, "system", return_value="Linux"),
             patch.dict("os.environ", {"QT_QPA_PLATFORM": "xcb"}),
         ):
             # Act
@@ -255,10 +120,10 @@ class TestRender:
 
         with (
             patch.object(
-                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+                headless, "find_musescore_command", return_value=_MUSESCORE_COMMAND
             ),
-            patch.object(cli.asyncio, "create_subprocess_exec", create_subprocess),
-            patch.object(cli.platform, "system", return_value="Darwin"),
+            patch.object(headless.asyncio, "create_subprocess_exec", create_subprocess),
+            patch.object(headless.platform, "system", return_value="Darwin"),
             patch.dict("os.environ", {}, clear=True),
         ):
             # Act
@@ -280,10 +145,12 @@ class TestRender:
 
         with (
             patch.object(
-                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+                headless, "find_musescore_command", return_value=_MUSESCORE_COMMAND
             ),
             patch.object(
-                cli.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
+                headless.asyncio,
+                "create_subprocess_exec",
+                AsyncMock(return_value=process),
             ),
         ):
             # Act
@@ -303,10 +170,12 @@ class TestRender:
 
         with (
             patch.object(
-                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+                headless, "find_musescore_command", return_value=_MUSESCORE_COMMAND
             ),
             patch.object(
-                cli.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
+                headless.asyncio,
+                "create_subprocess_exec",
+                AsyncMock(return_value=process),
             ),
         ):
             # Act
@@ -326,10 +195,12 @@ class TestRender:
 
         with (
             patch.object(
-                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+                headless, "find_musescore_command", return_value=_MUSESCORE_COMMAND
             ),
             patch.object(
-                cli.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
+                headless.asyncio,
+                "create_subprocess_exec",
+                AsyncMock(return_value=process),
             ),
             pytest.raises(RenderError, match="wrote no output file"),
         ):
@@ -348,10 +219,12 @@ class TestRender:
 
         with (
             patch.object(
-                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+                headless, "find_musescore_command", return_value=_MUSESCORE_COMMAND
             ),
             patch.object(
-                cli.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
+                headless.asyncio,
+                "create_subprocess_exec",
+                AsyncMock(return_value=process),
             ),
             pytest.raises(RenderError, match="exited with code 1"),
         ):
@@ -369,10 +242,12 @@ class TestRender:
 
         with (
             patch.object(
-                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+                headless, "find_musescore_command", return_value=_MUSESCORE_COMMAND
             ),
             patch.object(
-                cli.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
+                headless.asyncio,
+                "create_subprocess_exec",
+                AsyncMock(return_value=process),
             ),
             pytest.raises(RenderError) as exception_info,
         ):
@@ -398,12 +273,14 @@ class TestRender:
 
         with (
             patch.object(
-                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+                headless, "find_musescore_command", return_value=_MUSESCORE_COMMAND
             ),
             patch.object(
-                cli.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
+                headless.asyncio,
+                "create_subprocess_exec",
+                AsyncMock(return_value=process),
             ),
-            patch.object(cli, "RENDER_TIMEOUT_SECONDS", 0.01),
+            patch.object(headless, "RENDER_TIMEOUT_SECONDS", 0.01),
             pytest.raises(RenderError, match="did not finish"),
         ):
             # Act / Assert
@@ -616,9 +493,9 @@ class TestRenderScore:
 
         with (
             patch.object(
-                cli, "find_musescore_command", return_value=_MUSESCORE_COMMAND
+                headless, "find_musescore_command", return_value=_MUSESCORE_COMMAND
             ),
-            patch.object(cli.asyncio, "create_subprocess_exec", create_subprocess),
+            patch.object(headless.asyncio, "create_subprocess_exec", create_subprocess),
         ):
             # Act
             result = await render_score(str(score_file), "wav")

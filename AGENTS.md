@@ -15,9 +15,10 @@ src/mcp_score/
   cli.py              CLI entry point (serve, run, install, install-skill, install-plugin)
   server.py           MCP server entry point: create_server() registers every tool module
   context.py          AppState and ScoreContext: what the server hands every tool
+  guide.py            The score-generate skill assembled into one document for MCP clients
   resources.py        Locate bundled files (skill directory, plugin.qml)
   tools/
-    __init__.py       Shared tool plumbing: ToolError, score_tool, bridge and measure guards
+    base.py           Shared tool plumbing: ToolError, score_tool, bridge and measure guards
     connection.py     Connect/disconnect MuseScore & Dorico, ping, score info
     analysis.py       Read passages and measures from live score
     manipulation.py   Modify live score (notes, rehearsal marks, dynamics, chords, barlines, keys, time, tempo, measures, transpose, undo)
@@ -32,7 +33,8 @@ src/mcp_score/
     registry.py       BridgeRegistry: the bridges and which one is active
   musescore/
     paths.py          Where MuseScore keeps user files (plugins directory)
-    headless.py       MuseScore executable discovery and headless rendering
+    executable.py     Where MuseScore's executable is (env var, PATH, platform defaults)
+    headless.py       Headless rendering through the MuseScore command line
     plugin.qml        MuseScore QML plugin (WebSocket server inside MuseScore)
 
 .claude/skills/
