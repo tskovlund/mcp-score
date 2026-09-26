@@ -1,4 +1,9 @@
-"""Connection tools: which application the server talks to."""
+"""Connection tools: which application the server talks to.
+
+Each application has its own connect and disconnect pair, and connecting
+to one disconnects the other. The information and ping tools work with
+whichever application is connected.
+"""
 
 from __future__ import annotations
 

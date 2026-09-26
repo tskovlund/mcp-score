@@ -1,8 +1,11 @@
 """Manipulation tools: change the score in the connected application.
 
-Every tool moves to the requested measure first and refuses to continue
+Every tool that takes a measure moves there first and refuses to continue
 if the application cannot get there, so a change never lands in the wrong
-place. What an application cannot do comes back as its own explanation.
+place. What an application cannot do comes back as its own explanation:
+Dorico's Remote Control API triggers commands but cannot type into
+popovers or move the selection, so most of these tools work with MuseScore
+only.
 """
 
 from __future__ import annotations
@@ -39,7 +42,8 @@ async def add_live_note(
     """Add a note at the start of a measure in the live score.
 
     Consecutive calls on the same measure append notes one after another,
-    since the application advances its cursor after each note.
+    since the application advances its cursor after each note. Not
+    available with Dorico.
 
     Args:
         measure: Measure number (1-indexed).
@@ -62,6 +66,9 @@ async def add_live_note(
 async def add_live_rehearsal_mark(measure: int, text: str) -> CommandResult:
     """Add a rehearsal mark to a measure in the live score.
 
+    Dorico numbers rehearsal marks itself and ignores the text (the result
+    says so in a warning).
+
     Args:
         measure: Measure number (1-indexed).
         text: Rehearsal mark text (e.g. "A", "B", "Intro").
@@ -76,6 +83,8 @@ async def add_live_rehearsal_mark(measure: int, text: str) -> CommandResult:
 async def add_live_chord_symbol(measure: int, symbol: str) -> CommandResult:
     """Add a chord symbol to a measure in the live score.
 
+    Not available with Dorico.
+
     Args:
         measure: Measure number (1-indexed).
         symbol: Chord symbol (e.g. "Cmaj7", "Dm7", "G7").
@@ -89,6 +98,8 @@ async def add_live_chord_symbol(measure: int, symbol: str) -> CommandResult:
 @score_tool
 async def add_live_dynamic(measure: int, dynamic: str, staff: int = 0) -> CommandResult:
     """Add a dynamic marking to a measure in the live score.
+
+    Not available with Dorico.
 
     Args:
         measure: Measure number (1-indexed).
@@ -110,7 +121,8 @@ async def set_live_barline(measure: int, barline_type: str) -> CommandResult:
         barline_type: One of "normal", "double", "final", "dashed", "dotted",
             "tick", "short", "startRepeat", "endRepeat" or "endStartRepeat".
             "startRepeat" marks the start of this measure; "endStartRepeat"
-            ends a repeat here and starts one in the next measure.
+            ends a repeat here and starts one in the next measure. Dorico
+            supports "double", "final", "startRepeat" and "endRepeat".
     """
     bridge = require_bridge()
     require_measure(measure)
@@ -121,6 +133,8 @@ async def set_live_barline(measure: int, barline_type: str) -> CommandResult:
 @score_tool
 async def set_live_key_signature(measure: int, fifths: int) -> CommandResult:
     """Set the key signature from a measure onward in the live score.
+
+    Not available with Dorico.
 
     Args:
         measure: Measure number (1-indexed).
@@ -138,6 +152,8 @@ async def set_live_time_signature(
     measure: int, numerator: int, denominator: int
 ) -> CommandResult:
     """Set the time signature from a measure onward in the live score.
+
+    Not available with Dorico.
 
     Args:
         measure: Measure number (1-indexed).
@@ -158,6 +174,8 @@ async def set_live_tempo(
 ) -> CommandResult:
     """Set the tempo at a measure in the live score.
 
+    Not available with Dorico.
+
     Args:
         measure: Measure number (1-indexed).
         bpm: Beats per minute.
@@ -174,6 +192,8 @@ async def set_live_tempo(
 @score_tool
 async def append_live_measures(count: int = 1) -> CommandResult:
     """Append empty measures to the end of the live score.
+
+    Not available with Dorico.
 
     Args:
         count: How many measures to append (default: 1).
@@ -192,7 +212,7 @@ async def transpose_passage(
 
     Notes are moved with conventional spelling (a minor second up turns C
     into Db). Key signatures and chord symbols in the passage are left
-    unchanged.
+    unchanged. Not available with Dorico, which cannot select a range.
 
     Args:
         start_measure: First measure (1-indexed).

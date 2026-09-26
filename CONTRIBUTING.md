@@ -51,6 +51,11 @@ pytest
 
 Markdown is formatted with Prettier; CI checks it, so run `npx prettier --write "**/*.md"` on the files you touch.
 
+`docs/reference.md` is generated from the tool docstrings, input schemas and
+the CLI parser; a test fails when it drifts. After changing a tool, run
+`uv run scripts/generate_reference.py` and commit the result. Tool docstrings
+are what MCP clients see, so write the reference there.
+
 ## Code style
 
 Follow the code standards in [CONVENTIONS.md](CONVENTIONS.md) — code quality,

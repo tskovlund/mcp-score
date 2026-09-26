@@ -80,7 +80,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", metavar="<command>")
     commands.add_parser("serve", help="run the MCP server (the default)")
-    run = commands.add_parser("run", help="run a Python script with music21 available")
+    run = commands.add_parser(
+        "run",
+        help="run a Python script with music21 available; extra arguments go to it",
+    )
     run.add_argument("script", help="the script to run")
     run.add_argument(
         "arguments", nargs=argparse.REMAINDER, help="arguments for the script"
