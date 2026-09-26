@@ -45,7 +45,7 @@ def test_docstring_arguments_become_table_rows() -> None:
         "Do a thing.\n\nMore detail.\n\nArgs:\n"
         "    measure: Measure number (1-indexed).\n"
         "    text: Some text that wraps\n        onto a second line.\n\n"
-        "Returns:\n    A result\n    dict.\n"
+        "Trailing note.\n"
     )
 
     # Act
@@ -57,7 +57,7 @@ def test_docstring_arguments_become_table_rows() -> None:
         "measure": "Measure number (1-indexed).",
         "text": "Some text that wraps onto a second line.",
     }
-    assert tail == "**Returns:** A result dict."
+    assert tail == "Trailing note."
 
 
 def test_parameter_table_reads_types_and_defaults_from_the_schema() -> None:
@@ -85,3 +85,58 @@ def test_parameter_table_reads_types_and_defaults_from_the_schema() -> None:
         "| `staff`   | `int \\| None` | `None`     |                 |",
         '| `text`    | `str`         | `"A"`      |                 |',
     ]
+
+
+def test_result_renders_fields_and_collects_shared_models() -> None:
+    # Arrange: the shape the SDK publishes for a model with a nested model
+    schema = {
+        "title": "Passage",
+        "description": "The measures read.",
+        "$defs": {
+            "Element": {"title": "Element", "properties": {"type": {"type": "integer"}}}
+        },
+        "properties": {
+            "elements": {"type": "array", "items": {"$ref": "#/$defs/Element"}},
+            "warning": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Why reading stopped.",
+            },
+        },
+    }
+    shared: dict[str, dict[str, object]] = {}
+
+    # Act
+    rendered = generator.render_result(schema, shared)
+
+    # Assert
+    assert rendered.splitlines() == [
+        "**Returns** `Passage`: The measures read.",
+        "",
+        "| Field      | Type            | Description          |",
+        "| ---------- | --------------- | -------------------- |",
+        "| `elements` | `list[Element]` |                      |",
+        "| `warning`  | `str \\| None`   | Why reading stopped. |",
+    ]
+    assert list(shared) == ["Element"]
+
+
+def test_wrapped_plain_result_renders_its_type() -> None:
+    # Arrange: the SDK wraps a non-model return value as {"result": ...}
+    schema = {
+        "title": "score_generation_guideOutput",
+        "properties": {"result": {"type": "string"}},
+    }
+
+    # Act / Assert
+    assert generator.render_result(schema, {}) == "**Returns** `str`."
+
+
+def test_open_model_renders_a_sentence_instead_of_an_empty_table() -> None:
+    # Arrange
+    schema = {"title": "ApplicationReply", "additionalProperties": True}
+
+    # Act
+    rendered = generator.render_result(schema, {})
+
+    # Assert
+    assert rendered.endswith("Whatever fields the application sends.")

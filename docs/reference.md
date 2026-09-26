@@ -4,7 +4,7 @@
 
 > Reference -- every MCP tool and prompt the server provides, and the CLI.
 
-Tools return the JSON object each one describes. A tool that cannot do what was asked fails with an MCP tool error whose message says why. Connection, analysis and manipulation tools need a connected application (MuseScore, or experimentally Dorico); generation and rendering tools work on files.
+Every tool publishes the schema of its result, described under the tool and, for the result types tools share, in the last section. A tool that cannot do what was asked fails with an MCP tool error whose message says why. Connection, analysis and manipulation tools need a connected application (MuseScore, or experimentally Dorico); generation and rendering tools work on files.
 
 ## Connection tools
 
@@ -26,11 +26,24 @@ window open. Connecting disconnects any other application.
 | `host`    | `str` | `"localhost"` | WebSocket host (default: localhost). |
 | `port`    | `int` | `8765`        | WebSocket port (default: 8765).      |
 
+**Returns** `Connected`.
+
+| Field         | Type  | Description |
+| ------------- | ----- | ----------- |
+| `application` | `str` |             |
+| `uri`         | `str` |             |
+
 ### `disconnect_from_musescore`
 
 Disconnect from MuseScore.
 
 No parameters.
+
+**Returns** `Disconnected`.
+
+| Field         | Type  | Description |
+| ------------- | ----- | ----------- |
+| `application` | `str` |             |
 
 ### `connect_to_dorico`
 
@@ -47,11 +60,24 @@ Connecting disconnects any other application.
 | `host`    | `str` | `"localhost"` | WebSocket host (default: localhost).              |
 | `port`    | `int` | `4560`        | WebSocket port (default: 4560, Dorico's default). |
 
+**Returns** `Connected`.
+
+| Field         | Type  | Description |
+| ------------- | ----- | ----------- |
+| `application` | `str` |             |
+| `uri`         | `str` |             |
+
 ### `disconnect_from_dorico`
 
 Disconnect from Dorico.
 
 No parameters.
+
+**Returns** `Disconnected`.
+
+| Field         | Type  | Description |
+| ------------- | ----- | ----------- |
+| `application` | `str` |             |
 
 ### `get_live_score_info`
 
@@ -62,11 +88,28 @@ Not available with Dorico, whose API cannot describe the score.
 
 No parameters.
 
+**Returns** `ScoreInfo`: What is known about the open score without reading its content.
+
+| Field            | Type                    | Description                                                     |
+| ---------------- | ----------------------- | --------------------------------------------------------------- |
+| `title`          | `str`                   |                                                                 |
+| `part_count`     | `int`                   |                                                                 |
+| `parts`          | `list[Part]`            |                                                                 |
+| `measure_count`  | `int`                   |                                                                 |
+| `key_signature`  | `int \| None`           | Sharps (positive) or flats (negative) at the start, when known. |
+| `time_signature` | `TimeSignature \| None` | The time signature at the start, when known.                    |
+
 ### `ping_score_app`
 
 Check whether the connected application responds. Does not connect.
 
 No parameters.
+
+**Returns** `Responsive`: The connected application answered a ping.
+
+| Field         | Type  | Description |
+| ------------- | ----- | ----------- |
+| `application` | `str` |             |
 
 ## Analysis tools
 
@@ -93,6 +136,16 @@ which cannot read score content.
 | `end_measure`   | `int`         | (required) | Last measure to read (inclusive, 1-indexed).               |
 | `staff`         | `int \| None` | `None`     | Staff to read (0-indexed). Omit to read the current staff. |
 
+**Returns** `Passage`.
+
+| Field           | Type                   | Description                                                 |
+| --------------- | ---------------------- | ----------------------------------------------------------- |
+| `start_measure` | `int`                  |                                                             |
+| `end_measure`   | `int`                  |                                                             |
+| `staff`         | `int \| None`          |                                                             |
+| `elements`      | `list[MeasureContent]` |                                                             |
+| `warning`       | `str \| None`          | Why the application could not read more, when it could not. |
+
 ### `get_measure_content`
 
 Select one measure of one staff in MuseScore and report the selection.
@@ -107,6 +160,14 @@ a staff or select a measure.
 | `measure` | `int` | (required) | Measure number (1-indexed).          |
 | `staff`   | `int` | `0`        | Staff index (0-indexed, default: 0). |
 
+**Returns** `Selected`: A measure of a staff is selected in the application.
+
+| Field     | Type          | Description                 |
+| --------- | ------------- | --------------------------- |
+| `measure` | `int`         | Measure number (1-indexed). |
+| `staff`   | `int`         | Staff index (0-indexed).    |
+| `warning` | `str \| None` |                             |
+
 ### `get_selection_properties`
 
 Get properties of the current selection in the connected application.
@@ -116,6 +177,17 @@ Dorico reports the names, types and values of every property of the
 selected items, which is the closest its API gets to reading the score.
 
 No parameters.
+
+**Returns** `SelectionProperties`: What the application reports about the current selection.
+
+MuseScore reports the cursor position; Dorico reports the properties
+of the selected items as they come from its API.
+
+| Field        | Type                       | Description |
+| ------------ | -------------------------- | ----------- |
+| `cursor`     | `CursorInfo \| None`       |             |
+| `properties` | `ApplicationReply \| None` |             |
+| `warning`    | `str \| None`              |             |
 
 ## Manipulation tools
 
@@ -144,6 +216,15 @@ available with Dorico.
 | `denominator` | `int` | `4`        | Duration denominator (default 4).                                  |
 | `staff`       | `int` | `0`        | Staff index (0-indexed, default: 0).                               |
 
+**Returns** `NoteAdded`: A note was added; the position is where the cursor went afterwards.
+
+| Field      | Type       | Description                 |
+| ---------- | ---------- | --------------------------- |
+| `measure`  | `int`      | Measure number (1-indexed). |
+| `staff`    | `int`      | Staff index (0-indexed).    |
+| `pitch`    | `int`      |                             |
+| `duration` | `Duration` |                             |
+
 ### `add_live_rehearsal_mark`
 
 Add a rehearsal mark to a measure in the live score.
@@ -156,6 +237,14 @@ says so in a warning).
 | `measure` | `int` | (required) | Measure number (1-indexed).                   |
 | `text`    | `str` | (required) | Rehearsal mark text (e.g. "A", "B", "Intro"). |
 
+**Returns** `RehearsalMarkAdded`.
+
+| Field     | Type          | Description                                              |
+| --------- | ------------- | -------------------------------------------------------- |
+| `text`    | `str`         |                                                          |
+| `measure` | `int`         |                                                          |
+| `warning` | `str \| None` | Set when the application kept the mark but not the text. |
+
 ### `add_live_chord_symbol`
 
 Add a chord symbol to a measure in the live score.
@@ -166,6 +255,13 @@ Not available with Dorico.
 | --------- | ----- | ---------- | ----------------------------------------- |
 | `measure` | `int` | (required) | Measure number (1-indexed).               |
 | `symbol`  | `str` | (required) | Chord symbol (e.g. "Cmaj7", "Dm7", "G7"). |
+
+**Returns** `ChordSymbolAdded`.
+
+| Field     | Type  | Description |
+| --------- | ----- | ----------- |
+| `text`    | `str` |             |
+| `measure` | `int` |             |
 
 ### `add_live_dynamic`
 
@@ -179,6 +275,13 @@ Not available with Dorico.
 | `dynamic` | `str` | (required) | Dynamic such as "pp", "p", "mp", "mf", "f", "ff", "sfz". |
 | `staff`   | `int` | `0`        | Staff index (0-indexed, default: 0).                     |
 
+**Returns** `DynamicAdded`.
+
+| Field     | Type  | Description |
+| --------- | ----- | ----------- |
+| `dynamic` | `str` |             |
+| `measure` | `int` |             |
+
 ### `set_live_barline`
 
 Set the bar line at the end of a measure in the live score.
@@ -187,6 +290,13 @@ Set the bar line at the end of a measure in the live score.
 | -------------- | ----- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `measure`      | `int` | (required) | Measure number (1-indexed).                                                                                                                                                                                                                                                                                       |
 | `barline_type` | `str` | (required) | One of "normal", "double", "final", "dashed", "dotted", "tick", "short", "startRepeat", "endRepeat" or "endStartRepeat". "startRepeat" marks the start of this measure; "endStartRepeat" ends a repeat here and starts one in the next measure. Dorico supports "double", "final", "startRepeat" and "endRepeat". |
+
+**Returns** `BarlineSet`.
+
+| Field          | Type  | Description |
+| -------------- | ----- | ----------- |
+| `barline_type` | `str` |             |
+| `measure`      | `int` |             |
 
 ### `set_live_key_signature`
 
@@ -198,6 +308,13 @@ Not available with Dorico.
 | --------- | ----- | ---------- | ------------------------------------------------------------------------------- |
 | `measure` | `int` | (required) | Measure number (1-indexed).                                                     |
 | `fifths`  | `int` | (required) | Sharps (positive) or flats (negative): 0 = C major, 2 = D major, -3 = Eb major. |
+
+**Returns** `KeySignatureSet`.
+
+| Field     | Type  | Description |
+| --------- | ----- | ----------- |
+| `fifths`  | `int` |             |
+| `measure` | `int` |             |
 
 ### `set_live_time_signature`
 
@@ -211,6 +328,14 @@ Not available with Dorico.
 | `numerator`   | `int` | (required) | Beats per measure (e.g. 3 in 3/4). |
 | `denominator` | `int` | (required) | Beat unit (e.g. 4 in 3/4).         |
 
+**Returns** `TimeSignatureSet`.
+
+| Field         | Type  | Description |
+| ------------- | ----- | ----------- |
+| `numerator`   | `int` |             |
+| `denominator` | `int` |             |
+| `measure`     | `int` |             |
+
 ### `set_live_tempo`
 
 Set the tempo at a measure in the live score.
@@ -223,6 +348,14 @@ Not available with Dorico.
 | `bpm`     | `int`         | (required) | Beats per minute.                                |
 | `text`    | `str \| None` | `None`     | Optional display text (e.g. "Swing", "Allegro"). |
 
+**Returns** `TempoSet`.
+
+| Field     | Type  | Description                   |
+| --------- | ----- | ----------------------------- |
+| `bpm`     | `int` |                               |
+| `text`    | `str` | The tempo marking as written. |
+| `measure` | `int` |                               |
+
 ### `append_live_measures`
 
 Append empty measures to the end of the live score.
@@ -232,6 +365,13 @@ Not available with Dorico.
 | Parameter | Type  | Default | Description                               |
 | --------- | ----- | ------- | ----------------------------------------- |
 | `count`   | `int` | `1`     | How many measures to append (default: 1). |
+
+**Returns** `MeasuresAppended`.
+
+| Field            | Type  | Description |
+| ---------------- | ----- | ----------- |
+| `count`          | `int` |             |
+| `total_measures` | `int` |             |
 
 ### `transpose_passage`
 
@@ -248,6 +388,13 @@ unchanged. Not available with Dorico, which cannot select a range.
 | `staff`         | `int` | (required) | Staff index (0-indexed).                                 |
 | `semitones`     | `int` | (required) | Semitones to transpose (positive = up, negative = down). |
 
+**Returns** `Transposed`.
+
+| Field       | Type  | Description                |
+| ----------- | ----- | -------------------------- |
+| `semitones` | `int` |                            |
+| `notes`     | `int` | How many notes were moved. |
+
 ### `undo_last_action`
 
 Undo the last change in the connected application.
@@ -256,6 +403,13 @@ Reports where the cursor is afterwards, since undoing can remove the
 measure it was on.
 
 No parameters.
+
+**Returns** `CursorPosition`: Where the application's cursor is.
+
+| Field     | Type  | Description                 |
+| --------- | ----- | --------------------------- |
+| `measure` | `int` | Measure number (1-indexed). |
+| `staff`   | `int` | Staff index (0-indexed).    |
 
 ## Generate tools
 
@@ -290,6 +444,13 @@ Only send code the user would be comfortable running themselves.
 A script that fails is a tool error whose message ends with the last
 lines of its stderr.
 
+**Returns** `GeneratedScore`.
+
+| Field          | Type        | Description                                                              |
+| -------------- | ----------- | ------------------------------------------------------------------------ |
+| `output_files` | `list[str]` | Absolute paths of the files the script created in its working directory. |
+| `stdout`       | `str`       |                                                                          |
+
 ### `score_generation_guide`
 
 Return the score generation guide for writing music21 scripts.
@@ -303,6 +464,8 @@ runnable template script. Takes no parameters.
 Returns the guide as Markdown.
 
 No parameters.
+
+**Returns** `str`.
 
 ### Prompt `score-generate`
 
@@ -334,6 +497,88 @@ environment.
 | `input_path`  | `str`         | (required) | Path to the score file to render.                                                                                                                                                                                     |
 | `format`      | `str`         | `"pdf"`    | One of "pdf", "png", "midi", "mp3", "wav", "musicxml" (default: pdf). PNG export writes one file per page, named with a -1, -2, ... suffix before the extension.                                                      |
 | `output_path` | `str \| None` | `None`     | Where to write the result. Defaults to the input path with the format's extension. Its extension must match the format, its directory must exist, and it must not be the input file. An existing file is overwritten. |
+
+**Returns** `RenderedScore`.
+
+| Field          | Type          | Description                                                              |
+| -------------- | ------------- | ------------------------------------------------------------------------ |
+| `output_path`  | `str`         | The file MuseScore was asked to write.                                   |
+| `output_files` | `list[str]`   | The files it wrote: one, or one per page for PNG.                        |
+| `format`       | `str`         |                                                                          |
+| `warning`      | `str \| None` | Set when MuseScore wrote the output but did not exit cleanly afterwards. |
+
+## Result types
+
+### `ApplicationReply`
+
+An application's reply passed on as it came, for data with no fixed shape.
+
+Whatever fields the application sends.
+
+### `CursorInfo`
+
+The cursor position and what is there.
+
+| Field     | Type              | Description                                                            |
+| --------- | ----------------- | ---------------------------------------------------------------------- |
+| `measure` | `int`             | Measure number (1-indexed).                                            |
+| `staff`   | `int`             | Staff index (0-indexed).                                               |
+| `voice`   | `int`             |                                                                        |
+| `beat`    | `int \| None`     | Beat within the measure (1-indexed), when the time signature is known. |
+| `tick`    | `int`             | Position in the application's internal ticks.                          |
+| `element` | `Element \| None` | The element at the cursor, or None on an empty position.               |
+
+### `Duration`
+
+A note length as a fraction of a whole note (1/4 is a quarter note).
+
+| Field         | Type  | Description |
+| ------------- | ----- | ----------- |
+| `numerator`   | `int` |             |
+| `denominator` | `int` |             |
+
+### `Element`
+
+What sits at the cursor: a chord, a rest, a single note or something else.
+
+| Field      | Type                 | Description                          |
+| ---------- | -------------------- | ------------------------------------ |
+| `type`     | `int`                | The application's element type code. |
+| `notes`    | `list[Note] \| None` | The notes of a chord.                |
+| `duration` | `Duration \| None`   | The length of a chord or rest.       |
+| `pitch`    | `int \| None`        | MIDI pitch of a single note.         |
+| `tpc`      | `int \| None`        | Tonal pitch class of a single note.  |
+| `name`     | `str \| None`        | Name of a single note.               |
+
+### `MeasureContent`
+
+| Field     | Type         | Description                                                   |
+| --------- | ------------ | ------------------------------------------------------------- |
+| `measure` | `int`        |                                                               |
+| `content` | `CursorInfo` | The cursor at the start of the measure and the element there. |
+
+### `Note`
+
+| Field   | Type          | Description                                                 |
+| ------- | ------------- | ----------------------------------------------------------- |
+| `pitch` | `int`         | MIDI pitch (60 = middle C).                                 |
+| `tpc`   | `int`         | Tonal pitch class, which fixes the spelling (C# versus Db). |
+| `name`  | `str \| None` | Note name with octave, when the application gives one.      |
+
+### `Part`
+
+| Field         | Type  | Description                                    |
+| ------------- | ----- | ---------------------------------------------- |
+| `name`        | `str` |                                                |
+| `start_staff` | `int` | First staff of the part (0-indexed).           |
+| `end_staff`   | `int` | Last staff of the part (0-indexed, inclusive). |
+
+### `TimeSignature`
+
+| Field         | Type  | Description |
+| ------------- | ----- | ----------- |
+| `numerator`   | `int` |             |
+| `denominator` | `int` |             |
 
 ## CLI
 

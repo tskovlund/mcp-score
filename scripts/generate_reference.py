@@ -1,14 +1,15 @@
 """Generate docs/reference.md from the server's tools, prompts and CLI.
 
-The tool docstrings and signatures are what MCP clients see, so they are
-the source of truth for the reference; this script renders them, and a
-test fails when the committed file no longer matches. Run it after
-changing a tool::
+The tool docstrings, signatures and result models are what MCP clients
+see, so they are the source of truth for the reference; this script
+renders them, and a test fails when the committed file no longer matches.
+Run it after changing a tool::
 
     uv run scripts/generate_reference.py
 
 Sections follow the tool modules in the order the server registers them,
-with each module's docstring as the section introduction.
+with each module's docstring as the section introduction. Result models
+that several tools share are described once, in the last section.
 """
 
 from __future__ import annotations
@@ -45,8 +46,10 @@ PREAMBLE = "\n".join(
         "",
         "> Reference -- every MCP tool and prompt the server provides, and the CLI.",
         "",
-        "Tools return the JSON object each one describes. A tool that cannot do"
-        " what was asked fails with an MCP tool error whose message says why."
+        "Every tool publishes the schema of its result, described under the tool"
+        " and, for the result types tools share, in the last section. A tool that"
+        " cannot do what was asked fails with an MCP tool error whose message says"
+        " why."
         " Connection, analysis and manipulation tools need a connected"
         " application (MuseScore, or experimentally Dorico); generation and"
         " rendering tools work on files.",
@@ -54,7 +57,7 @@ PREAMBLE = "\n".join(
 )
 
 ARGS_HEADING = "Args:"
-RETURNS_HEADING = "Returns:"
+RESULT_TYPES_TITLE = "## Result types"
 SCHEMA_TYPE_NAMES: dict[str, str] = {
     "string": "str",
     "integer": "int",
@@ -94,29 +97,23 @@ def split_docstring(text: str) -> tuple[str, dict[str, str], str]:
         elif current is not None:
             arguments[current] = f"{arguments[current]} {stripped}"
     body = "\n".join(lines[:start]).strip()
-    return body, arguments, render_tail(lines[end:])
-
-
-def render_tail(lines: list[str]) -> str:
-    """The text after the arguments; a ``Returns:`` block becomes a paragraph."""
-    text = textwrap.dedent("\n".join(lines)).strip()
-    if text.startswith(RETURNS_HEADING):
-        returns = " ".join(
-            line.strip() for line in text[len(RETURNS_HEADING) :].splitlines()
-        ).strip()
-        return f"**Returns:** {returns}"
-    return text
+    return body, arguments, textwrap.dedent("\n".join(lines[end:])).strip()
 
 
 # ── Schema ────────────────────────────────────────────────────────────
 
 
 def schema_type(schema: dict[str, Any]) -> str:
+    if "$ref" in schema:
+        return str(schema["$ref"]).rsplit("/", 1)[-1]
     if "anyOf" in schema:
         options: list[dict[str, Any]] = schema["anyOf"]
         return " | ".join(schema_type(option) for option in options)
     if "enum" in schema:
         return " | ".join(json.dumps(value) for value in schema["enum"])
+    if schema.get("type") == "array":
+        items: dict[str, Any] = schema.get("items", {})
+        return f"list[{schema_type(items)}]"
     return SCHEMA_TYPE_NAMES.get(str(schema.get("type")), str(schema.get("type")))
 
 
@@ -165,16 +162,59 @@ def parameter_table(schema: dict[str, Any], descriptions: dict[str, str]) -> str
     return table(["Parameter", "Type", "Default", "Description"], rows)
 
 
-def render_tool(tool: Tool) -> str:
+def field_table(schema: dict[str, Any]) -> str:
+    """The fields of a result model, as the schema describes them."""
+    properties: dict[str, dict[str, Any]] = schema.get("properties", {})
+    if not properties and schema.get("additionalProperties"):
+        return "Whatever fields the application sends."
+    rows = [
+        [code(name), code(schema_type(field)), field.get("description", "")]
+        for name, field in properties.items()
+    ]
+    return table(["Field", "Type", "Description"], rows)
+
+
+def is_wrapped(schema: dict[str, Any]) -> bool:
+    """Whether the server wrapped a plain return value as ``{"result": ...}``."""
+    return str(schema.get("title", "")).endswith("Output") and list(
+        schema.get("properties", {})
+    ) == ["result"]
+
+
+def render_result(schema: dict[str, Any], shared: dict[str, dict[str, Any]]) -> str:
+    """Describe a tool's result; nested models go to *shared* for the last section."""
+    definitions: dict[str, dict[str, Any]] = schema.get("$defs", {})
+    shared.update(definitions)
+    if is_wrapped(schema):
+        return f"**Returns** {code(schema_type(schema['properties']['result']))}."
+    description = str(schema.get("description", "")).strip()
+    heading = f"**Returns** {code(str(schema['title']))}"
+    intro = f"{heading}: {description}" if description else f"{heading}."
+    return f"{intro}\n\n{field_table(schema)}"
+
+
+def render_tool(tool: Tool, shared: dict[str, dict[str, Any]]) -> str:
     body, arguments, tail = split_docstring(tool.description or "")
     parts = [
         f"### {code(tool.name)}",
         body,
         parameter_table(tool.input_schema, arguments),
+        tail,
     ]
-    if tail:
-        parts.append(tail)
+    if tool.output_schema is not None:
+        parts.append(render_result(tool.output_schema, shared))
     return "\n\n".join(part for part in parts if part)
+
+
+def render_result_type(name: str, schema: dict[str, Any]) -> str:
+    description = str(schema.get("description", "")).strip()
+    parts = [f"### {code(name)}", description, field_table(schema)]
+    return "\n\n".join(part for part in parts if part)
+
+
+def render_result_types(shared: dict[str, dict[str, Any]]) -> str:
+    entries = [render_result_type(name, shared[name]) for name in sorted(shared)]
+    return "\n\n".join([RESULT_TYPES_TITLE, *entries])
 
 
 def render_prompt(prompt: Prompt) -> str:
@@ -192,14 +232,14 @@ def section_intro(module: ToolModule) -> str:
     return docstring.strip()
 
 
-async def render_section(module: ToolModule) -> str:
+async def render_section(module: ToolModule, shared: dict[str, dict[str, Any]]) -> str:
     server = MCPServer("reference")
     module.register(server)
     tools = await server.list_tools()
     prompts = await server.list_prompts()
     entries: Iterable[str] = (
         [section_title(module), section_intro(module)]
-        + [render_tool(tool) for tool in tools]
+        + [render_tool(tool, shared) for tool in tools]
         + [render_prompt(prompt) for prompt in prompts]
     )
     return "\n\n".join(entry for entry in entries if entry)
@@ -212,8 +252,10 @@ def render_cli() -> str:
 
 
 async def render_reference() -> str:
-    sections = [await render_section(module) for module in TOOL_MODULES]
-    return "\n\n".join([PREAMBLE.rstrip(), *sections, render_cli()]) + "\n"
+    shared: dict[str, dict[str, Any]] = {}
+    sections = [await render_section(module, shared) for module in TOOL_MODULES]
+    parts = [PREAMBLE.rstrip(), *sections, render_result_types(shared), render_cli()]
+    return "\n\n".join(parts) + "\n"
 
 
 # ── Entry point ───────────────────────────────────────────────────────
