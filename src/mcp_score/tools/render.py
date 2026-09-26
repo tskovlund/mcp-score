@@ -6,12 +6,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from mcp_score.bridge import CommandResult
-from mcp_score.musescore.headless import (
+from mcp_score.musescore.executable import (
     MUSESCORE_PATH_ENV_VAR,
     MuseScoreNotFoundError,
-    RenderError,
-    render,
 )
+from mcp_score.musescore.headless import RenderError, render
 from mcp_score.tools import ToolError, score_tool
 
 if TYPE_CHECKING:

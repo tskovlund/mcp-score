@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from mcp_score.bridge import CommandResult
-from mcp_score.resources import SKILL_DIRECTORY, package_path
+from mcp_score.guide import load_guide
 from mcp_score.tools import ToolError, score_tool
 
 if TYPE_CHECKING:
@@ -38,28 +38,6 @@ OUTPUT_DIRECTORY_PREFIX = "mcp-score-"
 
 PROMPT_NAME = "score-generate"
 """Name of the MCP prompt that serves the generation guide."""
-
-_GUIDE_FILES: tuple[Path, ...] = (
-    Path("SKILL.md"),
-    Path("references") / "instruments.md",
-    Path("references") / "template.py",
-)
-"""Skill files concatenated into the guide, relative to the skill directory."""
-
-_GUIDE_PREAMBLE = """\
-# Score generation guide
-
-This is the bundled `score-generate` skill that Claude Code uses, served so
-any MCP client can follow the same instructions.
-
-When you read this through MCP, replace the skill's "save to /tmp and run
-`mcp-score run`" steps with the `generate_score` tool: pass the complete
-music21 script as the `script` argument. The tool runs it in a working
-directory of its own and returns the absolute paths of the files it created,
-so end the script with `score.write("musicxml", fp="<Title>.musicxml")`
-(a plain file name, relative to the working directory).
-"""
-
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -99,25 +77,6 @@ def _stderr_tail(stderr: str) -> str:
     """Return the last STDERR_TAIL_LINES lines of *stderr*."""
     lines = stderr.splitlines()
     return "\n".join(lines[-STDERR_TAIL_LINES:])
-
-
-def _load_guide() -> str:
-    """Concatenate the skill files into one guide document.
-
-    Raises FileNotFoundError when the bundled skill files are missing.
-    """
-    skill_directory = package_path(str(SKILL_DIRECTORY))
-    sections: list[str] = [_GUIDE_PREAMBLE]
-    for relative_path in _GUIDE_FILES:
-        file_path = skill_directory / relative_path
-        if not file_path.is_file():
-            error_message = f"Cannot find bundled skill file: {file_path}"
-            raise FileNotFoundError(error_message)
-        content = file_path.read_text(encoding="utf-8")
-        if file_path.suffix == ".py":
-            content = f"```python\n{content}\n```"
-        sections.append(f"---\n\n# {relative_path.as_posix()}\n\n{content}")
-    return "\n\n".join(sections)
 
 
 # ── Tools ─────────────────────────────────────────────────────────────
@@ -214,7 +173,7 @@ def score_generation_guide() -> str:
     skill files cannot be found.
     """
     try:
-        return _load_guide()
+        return load_guide()
     except FileNotFoundError as exception:
         return json.dumps({"error": str(exception)})
 
@@ -224,7 +183,7 @@ def score_generation_guide() -> str:
 
 def score_generate_prompt() -> str:
     """Serve the generation guide as a prompt for clients that support them."""
-    return _load_guide()
+    return load_guide()
 
 
 def register(server: MCPServer) -> None:
