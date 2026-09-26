@@ -84,6 +84,7 @@ jobs:
           uv run scripts/musescore_harness.py stop
           mkdir -p musescore-logs
           cp ~/.local/share/MuseScore/MuseScore4/logs/*.log musescore-logs/ 2>/dev/null || true
+          cp -r ~/.local/share/MuseScore/MuseScore4/logs/dumps musescore-logs/ 2>/dev/null || true
           cp "${TMPDIR:-/tmp}/mcp-score-musescore.log" musescore-logs/ 2>/dev/null || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -137,6 +138,7 @@ jobs:
           uv run scripts/musescore_harness.py stop
           mkdir -p musescore-logs
           cp "$LOCALAPPDATA"/MuseScore/MuseScore4/logs/*.log musescore-logs/ 2>/dev/null || true
+          cp -r "$LOCALAPPDATA"/MuseScore/MuseScore4/logs/dumps musescore-logs/ 2>/dev/null || true
           cp "$TEMP"/mcp-score-musescore.log musescore-logs/ 2>/dev/null || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -188,6 +190,7 @@ jobs:
           uv run scripts/musescore_harness.py stop
           mkdir -p musescore-logs
           cp ~/Library/Application\ Support/MuseScore/MuseScore4/logs/*.log musescore-logs/ 2>/dev/null || true
+          cp -r ~/Library/Application\ Support/MuseScore/MuseScore4/logs/dumps musescore-logs/ 2>/dev/null || true
           cp "${TMPDIR:-/tmp}/mcp-score-musescore.log" musescore-logs/ 2>/dev/null || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
