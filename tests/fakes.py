@@ -11,11 +11,14 @@ from __future__ import annotations
 
 import json
 from typing import Any, NamedTuple
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
+from mcp.server.context import ServerRequestContext
+from mcp.server.mcpserver import Context
 from websockets.protocol import State
 
-from mcp_score.bridge import CommandResult, NoteDuration, ScoreBridge
+from mcp_score.bridge import BridgeRegistry, CommandResult, NoteDuration, ScoreBridge
+from mcp_score.context import AppState, ScoreContext
 
 __all__ = [
     "REMOTE_CONTROL_HANDSHAKE",
@@ -24,8 +27,23 @@ __all__ = [
     "BridgeCall",
     "FakeBridge",
     "fake_connection",
+    "score_context",
     "sent_payloads",
 ]
+
+PROTOCOL_VERSION = "2025-06-18"
+
+
+def score_context(registry: BridgeRegistry) -> ScoreContext:
+    """The context the SDK would inject for a request on a server holding *registry*."""
+    request_context = ServerRequestContext(
+        session=MagicMock(),
+        lifespan_context=AppState(registry),
+        protocol_version=PROTOCOL_VERSION,
+        method="tools/call",
+    )
+    return Context(request_context=request_context)
+
 
 WEBSOCKETS_CONNECT = "mcp_score.bridge.websocket.websockets.connect"
 """Patch target for the function every bridge opens its connection with."""

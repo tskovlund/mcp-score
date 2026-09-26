@@ -1,8 +1,14 @@
-"""Tests for the assembled MCP server: what it offers and how tools reach it."""
+"""Tests for the assembled MCP server: what it offers and how tools reach it.
+
+The server is built around a bridge registry that its lifespan hands to
+every tool through the request context, so these tests build the server
+around the test's registry and inject the matching context.
+"""
 
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 import pytest
 from mcp.types import CallToolResult, TextContent
@@ -10,6 +16,10 @@ from mcp.types import CallToolResult, TextContent
 from mcp_score.server import SERVER_NAME, create_server
 from mcp_score.tools import NOT_CONNECTED
 from mcp_score.tools.generate import PROMPT_NAME
+
+if TYPE_CHECKING:
+    from mcp_score.bridge import BridgeRegistry
+    from mcp_score.context import ScoreContext
 
 EXPECTED_TOOLS: frozenset[str] = frozenset(
     {
@@ -73,14 +83,28 @@ class TestCreateServer:
         assert prompt_names == [PROMPT_NAME]
 
     @pytest.mark.anyio()
-    async def test_tool_called_through_server_returns_not_connected_error(
-        self,
+    async def test_lifespan_yields_state_holding_given_registry(
+        self, registry: BridgeRegistry
     ) -> None:
-        # Arrange: the autouse registry fixture leaves nothing connected.
-        server = create_server()
+        # Arrange
+        server = create_server(registry)
+        lifespan = server.settings.lifespan
+        assert lifespan is not None
 
         # Act
-        result = await server.call_tool("undo_last_action", {})
+        async with lifespan(server) as state:
+            # Assert
+            assert state.registry is registry
+
+    @pytest.mark.anyio()
+    async def test_tool_called_through_server_returns_not_connected_error(
+        self, registry: BridgeRegistry, context: ScoreContext
+    ) -> None:
+        # Arrange: the fresh registry has nothing connected.
+        server = create_server(registry)
+
+        # Act
+        result = await server.call_tool("undo_last_action", {}, context=context)
 
         # Assert
         assert isinstance(result, CallToolResult)

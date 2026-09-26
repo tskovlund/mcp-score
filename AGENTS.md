@@ -14,6 +14,7 @@ Follow the code standards in [CONVENTIONS.md](CONVENTIONS.md).
 src/mcp_score/
   cli.py              CLI entry point (serve, run, install, install-skill, install-plugin)
   server.py           MCP server entry point: create_server() registers every tool module
+  context.py          AppState and ScoreContext: what the server hands every tool
   resources.py        Locate bundled files (skill directory, plugin.qml)
   tools/
     __init__.py       Shared tool plumbing: ToolError, score_tool, bridge and measure guards

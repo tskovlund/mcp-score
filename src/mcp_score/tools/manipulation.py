@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from mcp_score.bridge import CommandResult, NoteDuration
+from mcp_score.context import ScoreContext
 from mcp_score.tools import (
     ToolError,
     navigate,
@@ -33,6 +34,7 @@ MAX_MIDI_PITCH = 127
 
 @score_tool
 async def add_live_note(
+    context: ScoreContext,
     measure: int,
     pitch: int,
     numerator: int = 1,
@@ -52,7 +54,7 @@ async def add_live_note(
         denominator: Duration denominator (default 4).
         staff: Staff index (0-indexed, default: 0).
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure(measure)
     if not MIN_MIDI_PITCH <= pitch <= MAX_MIDI_PITCH:
         raise ToolError(f"pitch must be between {MIN_MIDI_PITCH} and {MAX_MIDI_PITCH}.")
@@ -63,7 +65,9 @@ async def add_live_note(
 
 
 @score_tool
-async def add_live_rehearsal_mark(measure: int, text: str) -> CommandResult:
+async def add_live_rehearsal_mark(
+    context: ScoreContext, measure: int, text: str
+) -> CommandResult:
     """Add a rehearsal mark to a measure in the live score.
 
     Dorico numbers rehearsal marks itself and ignores the text (the result
@@ -73,14 +77,16 @@ async def add_live_rehearsal_mark(measure: int, text: str) -> CommandResult:
         measure: Measure number (1-indexed).
         text: Rehearsal mark text (e.g. "A", "B", "Intro").
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure(measure)
     await navigate(bridge, measure)
     return await bridge.add_rehearsal_mark(text)
 
 
 @score_tool
-async def add_live_chord_symbol(measure: int, symbol: str) -> CommandResult:
+async def add_live_chord_symbol(
+    context: ScoreContext, measure: int, symbol: str
+) -> CommandResult:
     """Add a chord symbol to a measure in the live score.
 
     Not available with Dorico.
@@ -89,14 +95,16 @@ async def add_live_chord_symbol(measure: int, symbol: str) -> CommandResult:
         measure: Measure number (1-indexed).
         symbol: Chord symbol (e.g. "Cmaj7", "Dm7", "G7").
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure(measure)
     await navigate(bridge, measure)
     return await bridge.add_chord_symbol(symbol)
 
 
 @score_tool
-async def add_live_dynamic(measure: int, dynamic: str, staff: int = 0) -> CommandResult:
+async def add_live_dynamic(
+    context: ScoreContext, measure: int, dynamic: str, staff: int = 0
+) -> CommandResult:
     """Add a dynamic marking to a measure in the live score.
 
     Not available with Dorico.
@@ -106,14 +114,16 @@ async def add_live_dynamic(measure: int, dynamic: str, staff: int = 0) -> Comman
         dynamic: Dynamic such as "pp", "p", "mp", "mf", "f", "ff", "sfz".
         staff: Staff index (0-indexed, default: 0).
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure(measure)
     await navigate(bridge, measure, staff)
     return await bridge.add_dynamic(dynamic)
 
 
 @score_tool
-async def set_live_barline(measure: int, barline_type: str) -> CommandResult:
+async def set_live_barline(
+    context: ScoreContext, measure: int, barline_type: str
+) -> CommandResult:
     """Set the bar line at the end of a measure in the live score.
 
     Args:
@@ -124,14 +134,16 @@ async def set_live_barline(measure: int, barline_type: str) -> CommandResult:
             ends a repeat here and starts one in the next measure. Dorico
             supports "double", "final", "startRepeat" and "endRepeat".
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure(measure)
     await navigate(bridge, measure)
     return await bridge.set_barline(barline_type)
 
 
 @score_tool
-async def set_live_key_signature(measure: int, fifths: int) -> CommandResult:
+async def set_live_key_signature(
+    context: ScoreContext, measure: int, fifths: int
+) -> CommandResult:
     """Set the key signature from a measure onward in the live score.
 
     Not available with Dorico.
@@ -141,7 +153,7 @@ async def set_live_key_signature(measure: int, fifths: int) -> CommandResult:
         fifths: Sharps (positive) or flats (negative): 0 = C major,
             2 = D major, -3 = Eb major.
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure(measure)
     await navigate(bridge, measure)
     return await bridge.set_key_signature(fifths)
@@ -149,7 +161,7 @@ async def set_live_key_signature(measure: int, fifths: int) -> CommandResult:
 
 @score_tool
 async def set_live_time_signature(
-    measure: int, numerator: int, denominator: int
+    context: ScoreContext, measure: int, numerator: int, denominator: int
 ) -> CommandResult:
     """Set the time signature from a measure onward in the live score.
 
@@ -160,7 +172,7 @@ async def set_live_time_signature(
         numerator: Beats per measure (e.g. 3 in 3/4).
         denominator: Beat unit (e.g. 4 in 3/4).
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure(measure)
     if numerator < 1 or denominator < 1:
         raise ToolError("numerator and denominator must be >= 1.")
@@ -170,7 +182,7 @@ async def set_live_time_signature(
 
 @score_tool
 async def set_live_tempo(
-    measure: int, bpm: int, text: str | None = None
+    context: ScoreContext, measure: int, bpm: int, text: str | None = None
 ) -> CommandResult:
     """Set the tempo at a measure in the live score.
 
@@ -181,7 +193,7 @@ async def set_live_tempo(
         bpm: Beats per minute.
         text: Optional display text (e.g. "Swing", "Allegro").
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure(measure)
     if bpm < 1:
         raise ToolError("bpm must be >= 1.")
@@ -190,7 +202,7 @@ async def set_live_tempo(
 
 
 @score_tool
-async def append_live_measures(count: int = 1) -> CommandResult:
+async def append_live_measures(context: ScoreContext, count: int = 1) -> CommandResult:
     """Append empty measures to the end of the live score.
 
     Not available with Dorico.
@@ -198,7 +210,7 @@ async def append_live_measures(count: int = 1) -> CommandResult:
     Args:
         count: How many measures to append (default: 1).
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     if count < 1:
         raise ToolError("count must be >= 1.")
     return await bridge.append_measures(count)
@@ -206,7 +218,11 @@ async def append_live_measures(count: int = 1) -> CommandResult:
 
 @score_tool
 async def transpose_passage(
-    start_measure: int, end_measure: int, staff: int, semitones: int
+    context: ScoreContext,
+    start_measure: int,
+    end_measure: int,
+    staff: int,
+    semitones: int,
 ) -> CommandResult:
     """Transpose the notes of a passage by a number of semitones in the live score.
 
@@ -220,7 +236,7 @@ async def transpose_passage(
         staff: Staff index (0-indexed).
         semitones: Semitones to transpose (positive = up, negative = down).
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure_range(start_measure, end_measure)
     await navigate(bridge, start_measure, staff)
     selection = await bridge.select_range(start_measure, end_measure, staff, staff)
@@ -230,9 +246,9 @@ async def transpose_passage(
 
 
 @score_tool
-async def undo_last_action() -> CommandResult:
+async def undo_last_action(context: ScoreContext) -> CommandResult:
     """Undo the last change in the connected application."""
-    return await require_bridge().undo()
+    return await require_bridge(context).undo()
 
 
 def register(server: MCPServer) -> None:

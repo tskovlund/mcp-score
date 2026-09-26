@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from mcp_score.bridge import CommandResult
+from mcp_score.context import ScoreContext
 from mcp_score.tools import (
     navigate,
     require_bridge,
@@ -34,7 +35,10 @@ def _with_limitation(result: CommandResult, limitation: str | None) -> CommandRe
 
 @score_tool
 async def read_passage(
-    start_measure: int, end_measure: int, staff: int | None = None
+    context: ScoreContext,
+    start_measure: int,
+    end_measure: int,
+    staff: int | None = None,
 ) -> CommandResult:
     """Read a range of measures in the live score, one entry per measure.
 
@@ -50,7 +54,7 @@ async def read_passage(
         end_measure: Last measure to read (inclusive, 1-indexed).
         staff: Staff to read (0-indexed). Omit to read the current staff.
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure_range(start_measure, end_measure)
 
     elements: list[dict[str, Any]] = []
@@ -71,7 +75,9 @@ async def read_passage(
 
 
 @score_tool
-async def get_measure_content(measure: int, staff: int = 0) -> CommandResult:
+async def get_measure_content(
+    context: ScoreContext, measure: int, staff: int = 0
+) -> CommandResult:
     """Select one measure of one staff in MuseScore and report the selection.
 
     The selection becomes visible in the score, ready for a manual edit;
@@ -83,7 +89,7 @@ async def get_measure_content(measure: int, staff: int = 0) -> CommandResult:
         measure: Measure number (1-indexed).
         staff: Staff index (0-indexed, default: 0).
     """
-    bridge = require_bridge()
+    bridge = require_bridge(context)
     require_measure(measure)
     await navigate(bridge, measure, staff)
     return _with_limitation(
@@ -92,14 +98,14 @@ async def get_measure_content(measure: int, staff: int = 0) -> CommandResult:
 
 
 @score_tool
-async def get_selection_properties() -> CommandResult:
+async def get_selection_properties(context: ScoreContext) -> CommandResult:
     """Get properties of the current selection in the connected application.
 
     MuseScore reports the cursor position (measure, beat, staff, element).
     Dorico reports the names, types and values of every property of the
     selected items, which is the closest its API gets to reading the score.
     """
-    return await require_bridge().get_properties()
+    return await require_bridge(context).get_properties()
 
 
 def register(server: MCPServer) -> None:

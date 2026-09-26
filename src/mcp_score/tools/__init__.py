@@ -1,7 +1,9 @@
 """What every MCP tool module shares.
 
 A tool is a plain async function that returns a :class:`CommandResult`
-and raises :class:`ToolError` when it cannot proceed. :func:`score_tool`
+and raises :class:`ToolError` when it cannot proceed. Tools that talk to
+an application take the server's :class:`ScoreContext` first, which the
+MCP SDK injects. :func:`score_tool`
 turns the error into an ``{"error": ...}`` result, so error handling
 lives here once instead of in every tool, and the MCP server delivers the
 dict to the model as JSON text and as structured content. Each module
@@ -14,7 +16,7 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any, Protocol
 
-from mcp_score.bridge import registry
+from mcp_score.context import registry_of
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -22,6 +24,7 @@ if TYPE_CHECKING:
     from mcp.server.mcpserver import MCPServer
 
     from mcp_score.bridge import CommandResult, ScoreBridge
+    from mcp_score.context import ScoreContext
 
 __all__ = [
     "NOT_CONNECTED",
@@ -86,13 +89,13 @@ def succeeded(message: str, **fields: Any) -> CommandResult:
     return {"success": True, "message": message, **fields}
 
 
-def require_bridge() -> ScoreBridge:
+def require_bridge(context: ScoreContext) -> ScoreBridge:
     """The connected bridge.
 
     Raises:
         ToolError: When no application is connected.
     """
-    bridge = registry.connected()
+    bridge = registry_of(context).connected()
     if bridge is None:
         raise ToolError(NOT_CONNECTED)
     return bridge

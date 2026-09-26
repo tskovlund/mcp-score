@@ -2,14 +2,14 @@
 
 ``ScoreBridge`` is the interface the tools use. ``MuseScoreBridge`` talks
 to the bridge plugin inside MuseScore; ``DoricoBridge`` talks to Dorico's
-Remote Control API through ``RemoteControlBridge``. ``registry`` tracks
-which one is active.
+Remote Control API through ``RemoteControlBridge``. A ``BridgeRegistry``
+tracks which one is active.
 """
 
 from mcp_score.bridge.base import CommandResult, NoteDuration, ScoreBridge
 from mcp_score.bridge.dorico import DoricoBridge
 from mcp_score.bridge.musescore import MuseScoreBridge
-from mcp_score.bridge.registry import BridgeRegistry, registry
+from mcp_score.bridge.registry import BridgeRegistry
 from mcp_score.bridge.remote_control import HandshakeError, RemoteControlBridge
 from mcp_score.bridge.websocket import TransportError, WebSocketBridge
 
@@ -24,5 +24,4 @@ __all__ = [
     "ScoreBridge",
     "TransportError",
     "WebSocketBridge",
-    "registry",
 ]

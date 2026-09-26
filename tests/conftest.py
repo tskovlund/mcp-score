@@ -1,8 +1,8 @@
 """Fixtures shared by the unit tests.
 
-The tools operate on the module-level bridge ``registry``. Every test gets
-that registry in a known state (fresh bridges, nothing active) and leaves
-it as it found it, so tests never see each other's connections.
+Tools that talk to an application take the server's context, which carries
+the bridge registry. Every test gets its own registry and a context that
+points at it, so tests never see each other's connections.
 """
 
 from __future__ import annotations
@@ -11,31 +11,28 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from mcp_score.bridge import BridgeRegistry, DoricoBridge, MuseScoreBridge, registry
-from tests.fakes import FakeBridge
+from mcp_score.bridge import BridgeRegistry
+from tests.fakes import FakeBridge, score_context
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-
-@pytest.fixture(autouse=True)
-def isolated_registry() -> Iterator[BridgeRegistry]:
-    """The real registry with fresh, disconnected bridges and nothing active."""
-    previous_musescore = registry.musescore
-    previous_dorico = registry.dorico
-    previous_active = registry.active
-    registry.musescore = MuseScoreBridge()
-    registry.dorico = DoricoBridge()
-    registry.active = None
-    yield registry
-    registry.musescore = previous_musescore
-    registry.dorico = previous_dorico
-    registry.active = previous_active
+    from mcp_score.context import ScoreContext
 
 
 @pytest.fixture
-def connected_bridge(isolated_registry: BridgeRegistry) -> FakeBridge:
+def registry() -> BridgeRegistry:
+    """A registry with fresh, disconnected bridges and nothing active."""
+    return BridgeRegistry()
+
+
+@pytest.fixture
+def context(registry: BridgeRegistry) -> ScoreContext:
+    """The context a tool receives when the server holds *registry*."""
+    return score_context(registry)
+
+
+@pytest.fixture
+def connected_bridge(registry: BridgeRegistry) -> FakeBridge:
     """A connected ``FakeBridge`` installed as the registry's active bridge."""
     bridge = FakeBridge()
-    isolated_registry.active = bridge
+    registry.active = bridge
     return bridge
