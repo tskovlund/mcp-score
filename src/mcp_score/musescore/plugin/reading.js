@@ -14,13 +14,14 @@ function getScore(plugin, params) {
     if (scoreErr) return scoreErr;
     var curScore = plugin.curScore;
 
+    // The API places a part by track (staff * voices + voice), not by staff.
     var parts = [];
     for (var i = 0; i < curScore.parts.length; i++) {
         var part = curScore.parts[i];
         parts.push({
             name: part.partName,
-            startStaff: part.startStaff,
-            endStaff: part.endStaff
+            startStaff: part.startTrack / Constants.voicesPerStaff,
+            endStaff: part.endTrack / Constants.voicesPerStaff - 1
         });
     }
 
