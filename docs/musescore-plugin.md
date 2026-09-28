@@ -22,7 +22,7 @@ The easy way:
 mcp-score install-plugin
 ```
 
-Or copy the `src/mcp_score/musescore/plugin/` directory by hand to `~/Documents/MuseScore4/Plugins/mcp-score-bridge/`. MuseScore uses that directory on macOS, Linux and Windows (`%USERPROFILE%\Documents\MuseScore4\Plugins\` on Windows); if you changed it in MuseScore's preferences (Folders > Plugins), use your own path.
+Or copy the `src/mcp_score/musescore/plugin/` directory by hand to `~/Documents/MuseScore4/Plugins/mcp-score-bridge/` (and delete a `mcp-score-bridge.qml` file left by a release before 0.2, or MuseScore lists two bridges). MuseScore uses that directory on macOS, Linux and Windows (`%USERPROFILE%\Documents\MuseScore4\Plugins\` on Windows); if you changed it in MuseScore's preferences (Folders > Plugins), use your own path.
 
 Then:
 

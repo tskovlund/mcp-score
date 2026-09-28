@@ -14,7 +14,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from mcp_score.musescore.paths import PLUGIN_DIRECTORY_NAME, plugins_directory
+from mcp_score.musescore.paths import (
+    PLUGIN_DIRECTORY_NAME,
+    PLUGIN_QML_NAME,
+    plugins_directory,
+)
 from mcp_score.resources import PLUGIN_DIRECTORY, SKILL_DIRECTORY, package_path
 
 __all__ = ["build_parser", "install_plugin", "install_skill", "main", "run_script"]
@@ -50,13 +54,16 @@ def install_skill(destination: Path = SKILL_DESTINATION) -> Path:
 def install_plugin(directory: Path | None = None) -> Path:
     """Copy the bridge plugin into MuseScore's plugins *directory*, replacing it.
 
+    Releases before 0.2 installed the plugin as a single QML file; one left
+    behind would show up in MuseScore as a second bridge, so it is removed.
+
     Raises:
         FileNotFoundError: When the plugin files are not bundled.
     """
     source = package_path(str(PLUGIN_DIRECTORY))
-    return _replace_tree(
-        source, (directory or plugins_directory()) / PLUGIN_DIRECTORY_NAME
-    )
+    plugins = directory or plugins_directory()
+    (plugins / PLUGIN_QML_NAME).unlink(missing_ok=True)
+    return _replace_tree(source, plugins / PLUGIN_DIRECTORY_NAME)
 
 
 def run_script(script: str, arguments: list[str]) -> int:

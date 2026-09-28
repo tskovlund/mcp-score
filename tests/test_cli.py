@@ -9,7 +9,11 @@ import pytest
 
 from mcp_score import cli
 from mcp_score.cli import install_plugin, install_skill, main
-from mcp_score.musescore.paths import PLUGIN_DIRECTORY_NAME, plugins_directory
+from mcp_score.musescore.paths import (
+    PLUGIN_DIRECTORY_NAME,
+    PLUGIN_QML_NAME,
+    plugins_directory,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -85,6 +89,23 @@ class TestInstallPlugin:
         assert installed == directory / PLUGIN_DIRECTORY_NAME
         assert (installed / "mcp-score-bridge.qml").read_text() == "// fake plugin"
         assert (installed / "score.js").read_text() == "// fake module"
+
+    def test_removes_the_single_file_plugin_of_earlier_releases(
+        self, plugin_source: Path, tmp_path: Path
+    ) -> None:
+        # Arrange: a 0.1 install left the plugin as one file
+        directory = tmp_path / "Plugins"
+        directory.mkdir()
+        old_plugin = directory / PLUGIN_QML_NAME
+        old_plugin.write_text("// old single-file plugin")
+
+        with patch(_PACKAGE_PATH, return_value=plugin_source):
+            # Act
+            install_plugin(directory)
+
+        # Assert
+        assert not old_plugin.exists()
+        assert (directory / PLUGIN_DIRECTORY_NAME / "mcp-score-bridge.qml").is_file()
 
     def test_defaults_to_musescores_plugins_directory(
         self, plugin_source: Path, tmp_path: Path
