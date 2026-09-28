@@ -1,0 +1,731 @@
+From b8ebecc9794c7bd8658fbb73343b5f324fa778d1 Mon Sep 17 00:00:00 2001
+From: Thomas Skovlund Hansen <thomas@skovlund.dev>
+Date: Sat, 26 Sep 2026 04:25:48 +0000
+Subject: [PATCH] docs(conventions): rules encode intent; trim, update and add
+ releases and generation
+
+The general conventions open with how to read them: follow the intent,
+not the letter; nothing is maintained for its own sake; generate over
+hand-maintain. Testing asks for the critical paths and tests that each
+catch a regression, not a coverage percentage. The gate is tool-agnostic
+instead of `make` targets, the per-archetype table no longer names repos
+or hypothesis, retries allow a bounded reconnect, and the branch-and-PR
+flow with squash merges is the default. Releases are tags with notes
+drafted from commits and curated on GitHub; there is no changelog file.
+Docs state what the code does not and never carry drifting counts.
+AGENTS.md needs no CLAUDE.md symlink now that Claude Code reads it;
+this repo's own symlink goes too. Python and TypeScript modules add the
+no-escape-hatch and docstring-semantics rules.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019ydLojugUs3zcsJbN9axQF
+---
+ CLAUDE.md                 |   1 -
+ CONVENTIONS.md            | 306 ++++++++++++++++++--------------------
+ conventions/general.md    | 294 ++++++++++++++++--------------------
+ conventions/python.md     |  10 +-
+ conventions/typescript.md |   2 +
+ 5 files changed, 282 insertions(+), 331 deletions(-)
+ delete mode 120000 CLAUDE.md
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+deleted file mode 120000
+index 47dc3e3..0000000
+--- a/CLAUDE.md
++++ /dev/null
+@@ -1 +0,0 @@
+-AGENTS.md
+\ No newline at end of file
+diff --git a/CONVENTIONS.md b/CONVENTIONS.md
+index 9adbce0..a70d75a 100644
+--- a/CONVENTIONS.md
++++ b/CONVENTIONS.md
+@@ -5,180 +5,148 @@ Shared conventions for all tskovlund repositories. The canonical source is
+ `conventions/general.md` + all language modules for display. Edit the source
+ files in `conventions/`, not this file directly.
+ 
+-## Code Quality
+-
+-- **Explicit types whenever possible** — full type annotations in Python, no
+-  `var` in C#, no `auto` where the type isn't obvious. The reader should never
+-  have to guess a type
+-- **Proper fixes over workarounds.** Solve at the root cause. If a hack is
+-  unavoidable (something outside our control), track it so it can be replaced
+-  when a proper solution is available
+-- **No magic constants** — named constants for ports, protocol versions, error
+-  codes. Every literal value must be self-documenting
+-- **No DRY violations** — extract shared logic into a single source of truth.
+-  Prefer a base class or utility over copy-paste
+-- **Single responsibility** — each file and class has one clear purpose
+-- **Clean APIs / interface abstractions** — decouple code when valuable and
+-  appropriate
+-- **Full variable names** — `measure_index` not `m`, `connection` not `conn`.
+-  Intent should be readable, not inferred from abbreviations
+-- **No shorthand** — `exception` not `exc`, `message` not `msg`, `response`
+-  not `resp`
+-- **Idempotency** — scripts, migrations, and deployments must be safe to run
+-  twice
+-- **Sorted imports** — enforce automatically via tooling (Prettier plugin,
+-  Ruff `isort`, etc.). Order: built-in → third-party → internal aliases →
+-  relative, with blank lines between groups
+-- **No debug logging in production code** — no `console.log`, `print()`,
+-  `Debug.Log`, etc. Use proper logging frameworks or remove before commit.
+-  Enforce via linter (`no-console`, Ruff `T20`)
++## How to read these
++
++- **Rules encode intent; follow the intent.** A rule satisfied by a workaround
++  is a rule broken: `any` to "use TypeScript", a docstring that restates the
++  signature to "document the public API", a test that asserts a constant to
++  "cover the module". When the letter and the intent conflict, do what the
++  intent asks and say so in the PR
++- **Nothing is maintained for its own sake.** Every line of code, test,
++  documentation and configuration must earn its place. What adds no value is
++  deleted, not kept current
++- **Generate over hand-maintain.** Anything derivable from a source of truth
++  is generated from it, with a check that fails when the copy drifts: API
++  references from docstrings, release notes from commits, CI matrices from a
++  versions file
++- **Proper fixes over workarounds.** Solve at the root cause. When a workaround
++  is unavoidable (the cause is outside our control), say so in the code and
++  track it so it can go once a real fix exists
++
++## Code
++
++- **Explicit types.** The reader never guesses a type: full annotations in
++  Python, no `var` in C#, no `auto` where the type is not obvious. Escape
++  hatches (`Any`, `any`, casts) only at true boundaries such as JSON, and
++  narrowed immediately
++- **Full names.** `measure_index` not `m`, `exception` not `exc`, `message`
++  not `msg`. Intent is read, not inferred
++- **No magic constants.** Ports, protocol versions, error codes, timeouts are
++  named
++- **One source of truth.** Shared logic lives in one place; prefer a base
++  class or a shared function over copy-paste
++- **Single responsibility.** A file, class or function does one thing; an
++  interface exists where it decouples something that varies
++- **Comments and docstrings explain semantics**: what a value means, which
++  constraints hold, why the code does what it does. They never retell what
++  the signature already says
++- **Idempotency.** Scripts, migrations and deployments are safe to run twice
++- **Tooling enforces the mechanical rules**: import order, formatting,
++  linting, type checking, no debug printing (`no-console`, Ruff `T20`).
++  Warnings fail CI; a warning that stays becomes invisible
+ 
+ ## Configuration
+ 
+-- **Externalize values that vary by environment or that users may need to
+-  change.** Hardcode what is truly constant
+-- **Choose the right configuration mechanism for the situation** — env vars for
+-  secrets and deployment, config files for complex settings, CI variables for
++- **Externalize what varies by environment or that users may change**;
++  hardcode what is truly constant
++- **Pick the mechanism for the situation**: environment variables for secrets
++  and deployment, config files for complex settings, CI variables for
+   build-time values
+ 
+-## Error Handling & Resilience
+-
+-- **Surface problems, don't swallow them** — errors should be visible, not
+-  silently ignored
+-- **Validate data** — at system boundaries, API inputs, external data. Trust
+-  internal code
+-- **Proper retry patterns** — use battle-tested libraries (Polly/.NET,
+-  tenacity/Python, EF Core built-in retries) instead of homebrew retry loops
+-- **Structured logging** — use proper logging frameworks (`logging` in Python,
+-  Serilog/.NET, etc.) with consistent log levels (DEBUG/INFO/WARN/ERROR). No
+-  print debugging in production code
+-- **Fail CI on warnings** — warnings that persist become invisible. Either fix
+-  them or explicitly suppress with justification
+-
+-## API Design
+-
+-- **Predictable and consistent** — consistent naming, consistent error shapes,
+-  consistent return types. If one endpoint returns `{"error": "..."}`, all
+-  endpoints do
+-- **Version APIs deliberately** — whether versioning adds value depends on the
+-  technology and situation. Make it a conscious decision, not a default or an
+-  afterthought
+-
+-## Library Usage
+-
+-- **Battle-tested libraries for complex problems** — don't reinvent auth, retry
+-  logic, serialization, or anything with known edge cases
+-- **Skip trivial dependencies** — if a few lines of our own code solve the same
+-  problem, the dependency isn't worth it
+-- **Vet before adding** — check maintenance activity, security track record,
+-  and transitive dependency count
+-- **Discuss with the maintainer if unsure** — the right call isn't always
+-  obvious
+-
+-## Dependencies & Security
+-
+-- **Lockfiles always committed** — `uv.lock`, `package-lock.json`,
+-  `flake.lock`, etc. Reproducible builds
+-- **Pin direct dependencies to compatible ranges with major version upper
+-  bounds** — allow minor/patch updates, block major version bumps. Automated
+-  dependency tools (Dependabot, Renovate) handle bumps; upper bounds ensure they
+-  produce reviewable PRs instead of silent breakage. Examples:
+-  - Python: `"websockets>=14.0,<15"` (not `">=14.0"`)
+-  - Node: `"^14.0.0"` in `package.json` (caret is the default and correct)
+-  - Nix flakes: `follows` pins; lockfile is the version constraint
+-  - GitHub Actions: pin to commit SHA with version comment (e.g.
+-    `actions/checkout@<sha> # v6`)
+-- **CodeQL scanning in CI** when available
+-- **Dependabot/Renovate** for automated dependency updates when available
+-- **No secrets in code** — env vars or secret managers. `.env` files gitignored
++## Errors and resilience
++
++- **Surface problems.** Errors are visible, never swallowed
++- **Validate at boundaries** (API inputs, external data); trust internal code
++- **Structured logging** through the platform's logging framework, with
++  consistent levels
++- **Retry policies come from a library** (tenacity, Polly). A single bounded
++  reconnect that a protocol calls for is fine; a homebrew retry loop with
++  backoff is not
++
++## APIs
++
++- **Predictable and consistent**: one naming scheme, one error shape, one
++  return convention across every endpoint or tool
++- **Version deliberately.** Whether versioning adds value depends on the
++  technology; make it a decision, not a default
++
++## Dependencies
++
++- **Battle-tested libraries for problems with known edge cases** (auth,
++  retries, serialization); **no dependency for a few lines of our own code**
++- **Vet before adding**: maintenance activity, security record, transitive
++  dependency count. Ask the maintainer when unsure
++- **Lockfiles committed** (`uv.lock`, `package-lock.json`, `flake.lock`)
++- **Direct dependencies pinned to compatible ranges with a major upper bound**
++  (`"websockets>=14.0,<15"`, `"^14.0.0"`), so Renovate produces reviewable PRs
++  instead of silent breakage. GitHub Actions pinned to a commit SHA with a
++  version comment
++- **Renovate and CodeQL in CI** where available. No secrets in code
+ 
+ ## Testing
+ 
+-### Test Design
+-
+-- **Naming:** `test` + `<action>` + `<expected outcome>`, cased per language
+-  convention (e.g., `test_action_expected_outcome` in Python,
+-  `testActionExpectedOutcome` in Lean/Kotlin)
+-- **Structure:** Arrange / Act / Assert comments in every test
+-- **Lean:** every test must earn its place. No trivial tests, no tests of
+-  library/built-in functionality
+-- **No duplication:** shared logic tested once in the base, not per subclass
+-- **Complete coverage:** every error path, edge case, and branching condition
+-  that could fail in production
+-- **Integration tests alongside unit tests** — unit tests verify components in
+-  isolation, integration tests verify outcomes end-to-end. Both complement each
+-  other
+-
+-### Universal Rules
+-
+-- **`make check` as universal validation gate** — lint + typecheck + test. Must
+-  pass before any commit is merged. Same command runs locally and in CI
+-- **`make test` for fast feedback** — unit tests only, runs in seconds
+-- **`make test-integration` for container-based tests** — separated from unit
+-  tests so the fast loop stays fast
+-- **Offline-capable unit tests** — no network calls, mock external APIs. Unit
+-  tests must work on a plane
+-- **CI parity** — developers run the exact same commands locally that CI runs.
+-  Devbox or Nix dev shells ensure identical tooling everywhere. No "works on my
+-  machine" gaps
+-
+-### Per-Archetype Minimum Test Types
+-
+-| Archetype                              | Test types                                                                                                                            |
+-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+-| Python library/tool (cambr, mcp-score) | Unit (pytest), property-based (hypothesis) for pure functions                                                                         |
+-| Static website (skovlund.dev)          | A11y (Playwright + axe-core, blocking), E2E navigation (Playwright), visual regression (`toHaveScreenshot()`, non-blocking initially) |
+-| Lean 4 (qed)                           | Unit tests (`lake test`), formal proofs (`Qed/Proofs/`), no `sorry` check in CI                                                       |
+-| Nix configuration (nix-config)         | `nix flake check --all-systems`                                                                                                       |
+-
+-### Integration Test Infrastructure
+-
+-- **Testcontainers for container-based integration tests** — add only when repos
+-  interact with external services (databases, message brokers, APIs)
+-- **Dev shells set Podman env vars** — `DOCKER_HOST`,
+-  `TESTCONTAINERS_RYUK_DISABLED` configured in Nix dev shells so Testcontainers
+-  works with Podman out of the box
+-
+-## Git & Workflow
+-
+-- **Conventional commits** — `feat:`, `fix:`, `refactor:`, `docs:`, `test:`,
+-  `chore:`
+-- **Direct to main** for small changes, **branch + PR** for structural work.
+-  Product repos with external users (e.g. kammer) may enforce PR-only with
+-  required checks via a ruleset — the strictness is per-repo, deliberate
+-- **PR review loop** before merge on structural changes
++- **Cover the critical paths.** A test exists to catch a specific regression:
++  every behavior a user would notice failing, every error path production can
++  hit, every edge case that has bitten. A coverage percentage is not a goal
++- **Every test earns its place.** No trivial tests, no tests of library
++  behavior, no assertions on constants. Shared logic is tested once, not per
++  subclass
++- **Unit tests are fast and offline**; they work on a plane
++- **Integration tests exercise the real thing** (a real MuseScore, a real
++  database via Testcontainers) where a mock cannot catch the failure that
++  matters. They are separate and opt-in so the fast loop stays fast
++- **Naming and shape**: `test_<action>_<expected outcome>`, cased per
++  language; Arrange / Act / Assert
++- **One gate, identical locally and in CI**: lint, format, typecheck and tests
++  behind one command (`devbox run check`, `mix precommit`, whatever the repo's
++  tooling provides). Dev shells (Devbox, Nix) make the tooling identical
++- **Archetype minimums**: static websites get accessibility checks (axe) and
++  end-to-end navigation; Lean projects get `lake test` and a no-`sorry` check;
++  Nix configurations get `nix flake check --all-systems`
++
++## Git and releases
++
++- **Conventional commits**, enforced by the shared `commit-msg` hook:
++  `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, `style`, `perf`,
++  `build`, `revert`, with an optional scope
++- **Branch, PR, required checks, squash merge** is the default; one small PR
++  per change. A personal configuration repo may allow direct pushes to `main`;
++  that is a per-repo ruleset decision, made deliberately
++- **Releases are tags** (`vX.Y.Z`, semver, `0.x` until the API is stable).
++  Release notes live on the GitHub release: drafted from the conventional
++  commits since the previous tag, curated by hand, published once. No
++  hand-maintained changelog file
+ 
+ ## Documentation
+ 
+-- **Diataxis framework** — tutorials, how-to guides, reference, explanation.
+-  Use it as a thinking tool when writing docs, not a rigid filing system
+-- **README as landing page** — what the project is, why it matters, quick start
+-  (3–5 commands). Keep it lean. The README sells, `docs/` teaches
+-- **Detailed docs in `docs/`** — getting started, architecture, reference, and
+-  how-to guides live in `docs/` and are linked from the README. For small repos
+-  where the README already covers everything, `docs/` is not required
+-- **CONTRIBUTING.md** when external contributors are expected — references
+-  CONVENTIONS.md for standards, covers dev setup and PR process
+-- **Author section at the bottom of every README** — always present. Format:
+-  `Name — [site](url) · [email](mailto:email)`. Licensed repos also have a
+-  License section (linking to the LICENSE file) after it
+-
+-## Project Structure
+-
+-- **Follow established conventions per language/framework** — `src/` layout in
+-  Python, standard framework structures elsewhere
+-- **AGENTS.md in every repo** with a CLAUDE.md symlink — the canonical file for
+-  AI agent instructions. Repos are de-personalized factsheets by default;
+-  kammer's AGENTS.md is intentionally exempt — it is an owner-specific
+-  operations manual for autonomous agent work, and stays that way
+-- **Shared CI via `tskovlund/.github`** — reusable workflows for common
+-  patterns. Repos reference shared workflows instead of duplicating CI
+-  configuration
+-- **Automate enforcement** — CI checks, pre-commit/pre-push hooks, linting,
+-  and type checking should enforce every rule that can be checked automatically
+-- **Conventions belong in the repo** — each repo includes the relevant subset
+-  of these conventions in its own docs. Redundancy across repos is intentional
+-  so that every contributor picks them up
++- **Docs state what the code does not.** Rationale, constraints, how to
++  operate the thing. Anything derivable is generated (see above). No counts
++  or version lists that drift; describe or point at the source instead
++- **Diataxis as a thinking tool**: tutorial, how-to, reference, explanation.
++  Not a filing system
++- **README sells, `docs/` teaches.** The README says what the project is,
++  why it matters, and gets a reader running in a few commands. Details live in
++  `docs/` and are linked; a small repo may need no `docs/`
++- **CONTRIBUTING.md when external contributors are expected**: dev setup,
++  the gate, the PR process; it links to CONVENTIONS.md rather than restating
++  it
++- **Author section at the bottom of every README**:
++  `Name — [site](url) · [email](mailto:email)`, followed by a License section
++  in licensed repos
++
++## Repositories
++
++- **Language conventions apply** (`src/` layout in Python, the framework's
++  structure elsewhere)
++- **AGENTS.md in every repo** holds the instructions for AI agents (Claude
++  Code reads it directly; no CLAUDE.md symlink). Repos are de-personalized
++  factsheets; kammer's AGENTS.md is the deliberate exception, an
++  owner-specific operations manual
++- **Shared CI via `tskovlund/.github`**: reusable workflows instead of
++  duplicated configuration
++- **Conventions are synced into each repo** as its CONVENTIONS.md, general
++  plus the repo's language modules, so every contributor and agent sees them
++  without leaving the repo
+ 
+ <!-- Language-specific conventions are appended per-repo by the sync workflow -->
+ 
+@@ -262,9 +230,15 @@ files in `conventions/`, not this file directly.
+ ## Python
+ 
+ - **src layout** — all package code under `src/<package>/`
+-- **Pyright strict mode** — all function signatures fully typed
++- **Pyright strict mode** — every signature fully typed. `Any` and
++  `dict[str, Any]` only where JSON or another untyped boundary enters, and
++  narrowed as soon as the shape is known
+ - **Ruff** for linting and formatting (line length 88)
+-- **`__all__` in every module** — explicitly declare the public API
++- **`__all__` in every module** — the public API is declared, not implied
++- **Docstrings on the public surface** say what a value means and which
++  constraints hold; a name that already says it needs no docstring
++- **Google-style `Args:` and `Raises:` sections** where the parameters or the
++  failure modes carry meaning; a generated reference can then read them
+ 
+ ## qed Specs
+ 
+@@ -313,6 +287,8 @@ Conventions for repositories using qed as their spec framework.
+ ## TypeScript / JavaScript
+ 
+ - **Strict typescript-eslint** — `tseslint.configs.strict` as baseline
++- **No `any`.** `unknown` at boundaries, narrowed with type guards; `as`
++  casts only where the type system cannot follow and a comment says why
+ - **Explicit return types** — `explicit-function-return-type` and
+   `explicit-module-boundary-types` on all `.ts` files
+ - **Naming convention** — enforced via `@typescript-eslint/naming-convention`:
+diff --git a/conventions/general.md b/conventions/general.md
+index 99eda5f..9ba5041 100644
+--- a/conventions/general.md
++++ b/conventions/general.md
+@@ -2,179 +2,147 @@
+ 
+ Shared conventions for all tskovlund repositories.
+ 
+-## Code Quality
+-
+-- **Explicit types whenever possible** — full type annotations in Python, no
+-  `var` in C#, no `auto` where the type isn't obvious. The reader should never
+-  have to guess a type
+-- **Proper fixes over workarounds.** Solve at the root cause. If a hack is
+-  unavoidable (something outside our control), track it so it can be replaced
+-  when a proper solution is available
+-- **No magic constants** — named constants for ports, protocol versions, error
+-  codes. Every literal value must be self-documenting
+-- **No DRY violations** — extract shared logic into a single source of truth.
+-  Prefer a base class or utility over copy-paste
+-- **Single responsibility** — each file and class has one clear purpose
+-- **Clean APIs / interface abstractions** — decouple code when valuable and
+-  appropriate
+-- **Full variable names** — `measure_index` not `m`, `connection` not `conn`.
+-  Intent should be readable, not inferred from abbreviations
+-- **No shorthand** — `exception` not `exc`, `message` not `msg`, `response`
+-  not `resp`
+-- **Idempotency** — scripts, migrations, and deployments must be safe to run
+-  twice
+-- **Sorted imports** — enforce automatically via tooling (Prettier plugin,
+-  Ruff `isort`, etc.). Order: built-in → third-party → internal aliases →
+-  relative, with blank lines between groups
+-- **No debug logging in production code** — no `console.log`, `print()`,
+-  `Debug.Log`, etc. Use proper logging frameworks or remove before commit.
+-  Enforce via linter (`no-console`, Ruff `T20`)
++## How to read these
++
++- **Rules encode intent; follow the intent.** A rule satisfied by a workaround
++  is a rule broken: `any` to "use TypeScript", a docstring that restates the
++  signature to "document the public API", a test that asserts a constant to
++  "cover the module". When the letter and the intent conflict, do what the
++  intent asks and say so in the PR
++- **Nothing is maintained for its own sake.** Every line of code, test,
++  documentation and configuration must earn its place. What adds no value is
++  deleted, not kept current
++- **Generate over hand-maintain.** Anything derivable from a source of truth
++  is generated from it, with a check that fails when the copy drifts: API
++  references from docstrings, release notes from commits, CI matrices from a
++  versions file
++- **Proper fixes over workarounds.** Solve at the root cause. When a workaround
++  is unavoidable (the cause is outside our control), say so in the code and
++  track it so it can go once a real fix exists
++
++## Code
++
++- **Explicit types.** The reader never guesses a type: full annotations in
++  Python, no `var` in C#, no `auto` where the type is not obvious. Escape
++  hatches (`Any`, `any`, casts) only at true boundaries such as JSON, and
++  narrowed immediately
++- **Full names.** `measure_index` not `m`, `exception` not `exc`, `message`
++  not `msg`. Intent is read, not inferred
++- **No magic constants.** Ports, protocol versions, error codes, timeouts are
++  named
++- **One source of truth.** Shared logic lives in one place; prefer a base
++  class or a shared function over copy-paste
++- **Single responsibility.** A file, class or function does one thing; an
++  interface exists where it decouples something that varies
++- **Comments and docstrings explain semantics**: what a value means, which
++  constraints hold, why the code does what it does. They never retell what
++  the signature already says
++- **Idempotency.** Scripts, migrations and deployments are safe to run twice
++- **Tooling enforces the mechanical rules**: import order, formatting,
++  linting, type checking, no debug printing (`no-console`, Ruff `T20`).
++  Warnings fail CI; a warning that stays becomes invisible
+ 
+ ## Configuration
+ 
+-- **Externalize values that vary by environment or that users may need to
+-  change.** Hardcode what is truly constant
+-- **Choose the right configuration mechanism for the situation** — env vars for
+-  secrets and deployment, config files for complex settings, CI variables for
++- **Externalize what varies by environment or that users may change**;
++  hardcode what is truly constant
++- **Pick the mechanism for the situation**: environment variables for secrets
++  and deployment, config files for complex settings, CI variables for
+   build-time values
+ 
+-## Error Handling & Resilience
+-
+-- **Surface problems, don't swallow them** — errors should be visible, not
+-  silently ignored
+-- **Validate data** — at system boundaries, API inputs, external data. Trust
+-  internal code
+-- **Proper retry patterns** — use battle-tested libraries (Polly/.NET,
+-  tenacity/Python, EF Core built-in retries) instead of homebrew retry loops
+-- **Structured logging** — use proper logging frameworks (`logging` in Python,
+-  Serilog/.NET, etc.) with consistent log levels (DEBUG/INFO/WARN/ERROR). No
+-  print debugging in production code
+-- **Fail CI on warnings** — warnings that persist become invisible. Either fix
+-  them or explicitly suppress with justification
+-
+-## API Design
+-
+-- **Predictable and consistent** — consistent naming, consistent error shapes,
+-  consistent return types. If one endpoint returns `{"error": "..."}`, all
+-  endpoints do
+-- **Version APIs deliberately** — whether versioning adds value depends on the
+-  technology and situation. Make it a conscious decision, not a default or an
+-  afterthought
+-
+-## Library Usage
+-
+-- **Battle-tested libraries for complex problems** — don't reinvent auth, retry
+-  logic, serialization, or anything with known edge cases
+-- **Skip trivial dependencies** — if a few lines of our own code solve the same
+-  problem, the dependency isn't worth it
+-- **Vet before adding** — check maintenance activity, security track record,
+-  and transitive dependency count
+-- **Discuss with the maintainer if unsure** — the right call isn't always
+-  obvious
+-
+-## Dependencies & Security
+-
+-- **Lockfiles always committed** — `uv.lock`, `package-lock.json`,
+-  `flake.lock`, etc. Reproducible builds
+-- **Pin direct dependencies to compatible ranges with major version upper
+-  bounds** — allow minor/patch updates, block major version bumps. Automated
+-  dependency tools (Dependabot, Renovate) handle bumps; upper bounds ensure they
+-  produce reviewable PRs instead of silent breakage. Examples:
+-  - Python: `"websockets>=14.0,<15"` (not `">=14.0"`)
+-  - Node: `"^14.0.0"` in `package.json` (caret is the default and correct)
+-  - Nix flakes: `follows` pins; lockfile is the version constraint
+-  - GitHub Actions: pin to commit SHA with version comment (e.g.
+-    `actions/checkout@<sha> # v6`)
+-- **CodeQL scanning in CI** when available
+-- **Dependabot/Renovate** for automated dependency updates when available
+-- **No secrets in code** — env vars or secret managers. `.env` files gitignored
++## Errors and resilience
++
++- **Surface problems.** Errors are visible, never swallowed
++- **Validate at boundaries** (API inputs, external data); trust internal code
++- **Structured logging** through the platform's logging framework, with
++  consistent levels
++- **Retry policies come from a library** (tenacity, Polly). A single bounded
++  reconnect that a protocol calls for is fine; a homebrew retry loop with
++  backoff is not
++
++## APIs
++
++- **Predictable and consistent**: one naming scheme, one error shape, one
++  return convention across every endpoint or tool
++- **Version deliberately.** Whether versioning adds value depends on the
++  technology; make it a decision, not a default
++
++## Dependencies
++
++- **Battle-tested libraries for problems with known edge cases** (auth,
++  retries, serialization); **no dependency for a few lines of our own code**
++- **Vet before adding**: maintenance activity, security record, transitive
++  dependency count. Ask the maintainer when unsure
++- **Lockfiles committed** (`uv.lock`, `package-lock.json`, `flake.lock`)
++- **Direct dependencies pinned to compatible ranges with a major upper bound**
++  (`"websockets>=14.0,<15"`, `"^14.0.0"`), so Renovate produces reviewable PRs
++  instead of silent breakage. GitHub Actions pinned to a commit SHA with a
++  version comment
++- **Renovate and CodeQL in CI** where available. No secrets in code
+ 
+ ## Testing
+ 
+-### Test Design
+-
+-- **Naming:** `test` + `<action>` + `<expected outcome>`, cased per language
+-  convention (e.g., `test_action_expected_outcome` in Python,
+-  `testActionExpectedOutcome` in Lean/Kotlin)
+-- **Structure:** Arrange / Act / Assert comments in every test
+-- **Lean:** every test must earn its place. No trivial tests, no tests of
+-  library/built-in functionality
+-- **No duplication:** shared logic tested once in the base, not per subclass
+-- **Complete coverage:** every error path, edge case, and branching condition
+-  that could fail in production
+-- **Integration tests alongside unit tests** — unit tests verify components in
+-  isolation, integration tests verify outcomes end-to-end. Both complement each
+-  other
+-
+-### Universal Rules
+-
+-- **`make check` as universal validation gate** — lint + typecheck + test. Must
+-  pass before any commit is merged. Same command runs locally and in CI
+-- **`make test` for fast feedback** — unit tests only, runs in seconds
+-- **`make test-integration` for container-based tests** — separated from unit
+-  tests so the fast loop stays fast
+-- **Offline-capable unit tests** — no network calls, mock external APIs. Unit
+-  tests must work on a plane
+-- **CI parity** — developers run the exact same commands locally that CI runs.
+-  Devbox or Nix dev shells ensure identical tooling everywhere. No "works on my
+-  machine" gaps
+-
+-### Per-Archetype Minimum Test Types
+-
+-| Archetype                              | Test types                                                                                                                            |
+-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+-| Python library/tool (cambr, mcp-score) | Unit (pytest), property-based (hypothesis) for pure functions                                                                         |
+-| Static website (skovlund.dev)          | A11y (Playwright + axe-core, blocking), E2E navigation (Playwright), visual regression (`toHaveScreenshot()`, non-blocking initially) |
+-| Lean 4 (qed)                           | Unit tests (`lake test`), formal proofs (`Qed/Proofs/`), no `sorry` check in CI                                                       |
+-| Nix configuration (nix-config)         | `nix flake check --all-systems`                                                                                                       |
+-
+-### Integration Test Infrastructure
+-
+-- **Testcontainers for container-based integration tests** — add only when repos
+-  interact with external services (databases, message brokers, APIs)
+-- **Dev shells set Podman env vars** — `DOCKER_HOST`,
+-  `TESTCONTAINERS_RYUK_DISABLED` configured in Nix dev shells so Testcontainers
+-  works with Podman out of the box
+-
+-## Git & Workflow
+-
+-- **Conventional commits** — `feat:`, `fix:`, `refactor:`, `docs:`, `test:`,
+-  `chore:`
+-- **Direct to main** for small changes, **branch + PR** for structural work.
+-  Product repos with external users (e.g. kammer) may enforce PR-only with
+-  required checks via a ruleset — the strictness is per-repo, deliberate
+-- **PR review loop** before merge on structural changes
++- **Cover the critical paths.** A test exists to catch a specific regression:
++  every behavior a user would notice failing, every error path production can
++  hit, every edge case that has bitten. A coverage percentage is not a goal
++- **Every test earns its place.** No trivial tests, no tests of library
++  behavior, no assertions on constants. Shared logic is tested once, not per
++  subclass
++- **Unit tests are fast and offline**; they work on a plane
++- **Integration tests exercise the real thing** (a real MuseScore, a real
++  database via Testcontainers) where a mock cannot catch the failure that
++  matters. They are separate and opt-in so the fast loop stays fast
++- **Naming and shape**: `test_<action>_<expected outcome>`, cased per
++  language; Arrange / Act / Assert
++- **One gate, identical locally and in CI**: lint, format, typecheck and tests
++  behind one command (`devbox run check`, `mix precommit`, whatever the repo's
++  tooling provides). Dev shells (Devbox, Nix) make the tooling identical
++- **Archetype minimums**: static websites get accessibility checks (axe) and
++  end-to-end navigation; Lean projects get `lake test` and a no-`sorry` check;
++  Nix configurations get `nix flake check --all-systems`
++
++## Git and releases
++
++- **Conventional commits**, enforced by the shared `commit-msg` hook:
++  `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, `style`, `perf`,
++  `build`, `revert`, with an optional scope
++- **Branch, PR, required checks, squash merge** is the default; one small PR
++  per change. A personal configuration repo may allow direct pushes to `main`;
++  that is a per-repo ruleset decision, made deliberately
++- **Releases are tags** (`vX.Y.Z`, semver, `0.x` until the API is stable).
++  Release notes live on the GitHub release: drafted from the conventional
++  commits since the previous tag, curated by hand, published once. No
++  hand-maintained changelog file
+ 
+ ## Documentation
+ 
+-- **Diataxis framework** — tutorials, how-to guides, reference, explanation.
+-  Use it as a thinking tool when writing docs, not a rigid filing system
+-- **README as landing page** — what the project is, why it matters, quick start
+-  (3–5 commands). Keep it lean. The README sells, `docs/` teaches
+-- **Detailed docs in `docs/`** — getting started, architecture, reference, and
+-  how-to guides live in `docs/` and are linked from the README. For small repos
+-  where the README already covers everything, `docs/` is not required
+-- **CONTRIBUTING.md** when external contributors are expected — references
+-  CONVENTIONS.md for standards, covers dev setup and PR process
+-- **Author section at the bottom of every README** — always present. Format:
+-  `Name — [site](url) · [email](mailto:email)`. Licensed repos also have a
+-  License section (linking to the LICENSE file) after it
+-
+-## Project Structure
+-
+-- **Follow established conventions per language/framework** — `src/` layout in
+-  Python, standard framework structures elsewhere
+-- **AGENTS.md in every repo** with a CLAUDE.md symlink — the canonical file for
+-  AI agent instructions. Repos are de-personalized factsheets by default;
+-  kammer's AGENTS.md is intentionally exempt — it is an owner-specific
+-  operations manual for autonomous agent work, and stays that way
+-- **Shared CI via `tskovlund/.github`** — reusable workflows for common
+-  patterns. Repos reference shared workflows instead of duplicating CI
+-  configuration
+-- **Automate enforcement** — CI checks, pre-commit/pre-push hooks, linting,
+-  and type checking should enforce every rule that can be checked automatically
+-- **Conventions belong in the repo** — each repo includes the relevant subset
+-  of these conventions in its own docs. Redundancy across repos is intentional
+-  so that every contributor picks them up
++- **Docs state what the code does not.** Rationale, constraints, how to
++  operate the thing. Anything derivable is generated (see above). No counts
++  or version lists that drift; describe or point at the source instead
++- **Diataxis as a thinking tool**: tutorial, how-to, reference, explanation.
++  Not a filing system
++- **README sells, `docs/` teaches.** The README says what the project is,
++  why it matters, and gets a reader running in a few commands. Details live in
++  `docs/` and are linked; a small repo may need no `docs/`
++- **CONTRIBUTING.md when external contributors are expected**: dev setup,
++  the gate, the PR process; it links to CONVENTIONS.md rather than restating
++  it
++- **Author section at the bottom of every README**:
++  `Name — [site](url) · [email](mailto:email)`, followed by a License section
++  in licensed repos
++
++## Repositories
++
++- **Language conventions apply** (`src/` layout in Python, the framework's
++  structure elsewhere)
++- **AGENTS.md in every repo** holds the instructions for AI agents (Claude
++  Code reads it directly; no CLAUDE.md symlink). Repos are de-personalized
++  factsheets; kammer's AGENTS.md is the deliberate exception, an
++  owner-specific operations manual
++- **Shared CI via `tskovlund/.github`**: reusable workflows instead of
++  duplicated configuration
++- **Conventions are synced into each repo** as its CONVENTIONS.md, general
++  plus the repo's language modules, so every contributor and agent sees them
++  without leaving the repo
+ 
+ <!-- Language-specific conventions are appended per-repo by the sync workflow -->
+diff --git a/conventions/python.md b/conventions/python.md
+index b15fb22..aa1dfd6 100644
+--- a/conventions/python.md
++++ b/conventions/python.md
+@@ -1,6 +1,12 @@
+ ## Python
+ 
+ - **src layout** — all package code under `src/<package>/`
+-- **Pyright strict mode** — all function signatures fully typed
++- **Pyright strict mode** — every signature fully typed. `Any` and
++  `dict[str, Any]` only where JSON or another untyped boundary enters, and
++  narrowed as soon as the shape is known
+ - **Ruff** for linting and formatting (line length 88)
+-- **`__all__` in every module** — explicitly declare the public API
++- **`__all__` in every module** — the public API is declared, not implied
++- **Docstrings on the public surface** say what a value means and which
++  constraints hold; a name that already says it needs no docstring
++- **Google-style `Args:` and `Raises:` sections** where the parameters or the
++  failure modes carry meaning; a generated reference can then read them
+diff --git a/conventions/typescript.md b/conventions/typescript.md
+index e497942..ef9366b 100644
+--- a/conventions/typescript.md
++++ b/conventions/typescript.md
+@@ -1,6 +1,8 @@
+ ## TypeScript / JavaScript
+ 
+ - **Strict typescript-eslint** — `tseslint.configs.strict` as baseline
++- **No `any`.** `unknown` at boundaries, narrowed with type guards; `as`
++  casts only where the type system cannot follow and a comment says why
+ - **Explicit return types** — `explicit-function-return-type` and
+   `explicit-module-boundary-types` on all `.ts` files
+ - **Naming convention** — enforced via `@typescript-eslint/naming-convention`:
+-- 
+2.43.0
+
