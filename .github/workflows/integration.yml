@@ -44,7 +44,7 @@ jobs:
       MUSESCORE_CACHE_DIR: ${{ github.workspace }}/.musescore
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
       - run: uv sync
@@ -86,7 +86,7 @@ jobs:
           cp ~/.local/share/MuseScore/MuseScore4/logs/*.log musescore-logs/ 2>/dev/null || true
           cp -r ~/.local/share/MuseScore/MuseScore4/logs/dumps musescore-logs/ 2>/dev/null || true
           cp "${TMPDIR:-/tmp}/mcp-score-musescore.log" musescore-logs/ 2>/dev/null || true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: musescore-logs-linux-${{ matrix.version }}
@@ -103,7 +103,7 @@ jobs:
       MUSESCORE_CACHE_DIR: ${{ github.workspace }}\.musescore
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
       - run: uv sync
@@ -140,7 +140,7 @@ jobs:
           cp "$LOCALAPPDATA"/MuseScore/MuseScore4/logs/*.log musescore-logs/ 2>/dev/null || true
           cp -r "$LOCALAPPDATA"/MuseScore/MuseScore4/logs/dumps musescore-logs/ 2>/dev/null || true
           cp "$TEMP"/mcp-score-musescore.log musescore-logs/ 2>/dev/null || true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: musescore-logs-windows
@@ -157,7 +157,7 @@ jobs:
       MUSESCORE_CACHE_DIR: ${{ github.workspace }}/.musescore
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
       - run: uv sync
@@ -192,7 +192,7 @@ jobs:
           cp ~/Library/Application\ Support/MuseScore/MuseScore4/logs/*.log musescore-logs/ 2>/dev/null || true
           cp -r ~/Library/Application\ Support/MuseScore/MuseScore4/logs/dumps musescore-logs/ 2>/dev/null || true
           cp "${TMPDIR:-/tmp}/mcp-score-musescore.log" musescore-logs/ 2>/dev/null || true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: musescore-logs-macos
