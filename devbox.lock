@@ -90,41 +90,41 @@
         }
       }
     },
-    "ruff@0.16.4": {
-      "last_modified": "2026-08-27T07:16:00Z",
-      "resolved": "github:NixOS/nixpkgs/c27cdad491a991b11ed731760aa2ef8db0cb0410#ruff",
+    "ruff@0.16.10": {
+      "last_modified": "2026-10-16T02:15:57Z",
+      "resolved": "github:NixOS/nixpkgs/f20cd90e28fe0403873f473b29e42662cd86e8c4#ruff",
       "source": "devbox-search",
-      "version": "0.16.4",
+      "version": "0.16.10",
       "systems": {
         "aarch64-darwin": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/if22594360r2a423r80z89gsx4pl2gwj-ruff-0.16.4",
+              "path": "/nix/store/5gyb99v5vdl5wijskdi2f0s3rs8ma2wl-ruff-0.16.10",
               "default": true
             }
           ],
-          "store_path": "/nix/store/if22594360r2a423r80z89gsx4pl2gwj-ruff-0.16.4"
+          "store_path": "/nix/store/5gyb99v5vdl5wijskdi2f0s3rs8ma2wl-ruff-0.16.10"
         },
         "aarch64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/s6c59frygi1c6jr2q8qi3f2qa2jbxw8x-ruff-0.16.4",
+              "path": "/nix/store/4c54v562kasdkpglrdh0hddfjr2jdm03-ruff-0.16.10",
               "default": true
             }
           ],
-          "store_path": "/nix/store/s6c59frygi1c6jr2q8qi3f2qa2jbxw8x-ruff-0.16.4"
+          "store_path": "/nix/store/4c54v562kasdkpglrdh0hddfjr2jdm03-ruff-0.16.10"
         },
         "x86_64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/xi59277whmb7gyivdh13q24bglzgkmgs-ruff-0.16.4",
+              "path": "/nix/store/76d8ldwj26p9am8yb82sygyrxmgwxixi-ruff-0.16.10",
               "default": true
             }
           ],
-          "store_path": "/nix/store/xi59277whmb7gyivdh13q24bglzgkmgs-ruff-0.16.4"
+          "store_path": "/nix/store/76d8ldwj26p9am8yb82sygyrxmgwxixi-ruff-0.16.10"
         }
       }
     },
