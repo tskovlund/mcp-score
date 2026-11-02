@@ -10,7 +10,7 @@ on:
 
 jobs:
   analyze:
-    uses: tskovlund/.github/.github/workflows/codeql.yml@18dd185effe0ed7f16204a8187516c7e17925f72 # main
+    uses: tskovlund/.github/.github/workflows/codeql.yml@5e23418261f7337e2d0024d3c74435d7faef3e3d # main
     with:
       language: python
     permissions:
