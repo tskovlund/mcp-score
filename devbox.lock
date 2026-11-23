@@ -5,41 +5,41 @@
       "last_modified": "2026-10-08T19:21:32Z",
       "resolved": "github:NixOS/nixpkgs/8edc0c72e3a38faf5434e40d1f19431125fe4b30?lastModified=1791487292&narHash=sha256-tqM7xDEsaeK1p6VvRygeZ9LkQRpUUkbRT02BHv6hnTM%3D"
     },
-    "pyright@1.1.414": {
-      "last_modified": "2026-10-16T02:15:57Z",
-      "resolved": "github:NixOS/nixpkgs/f20cd90e28fe0403873f473b29e42662cd86e8c4#pyright",
+    "pyright@1.1.415": {
+      "last_modified": "2026-11-21T08:18:15Z",
+      "resolved": "github:NixOS/nixpkgs/93a9ed0a866099a230ed5146a5bb7d16fd5c9b14#pyright",
       "source": "devbox-search",
-      "version": "1.1.414",
+      "version": "1.1.415",
       "systems": {
         "aarch64-darwin": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/5p2y5gz6l6dfhb1j2fxhvr9993gx5slv-pyright-1.1.414",
+              "path": "/nix/store/n5g66jvzbgzxd03zls39lmaxw9l8k46h-pyright-1.1.415",
               "default": true
             }
           ],
-          "store_path": "/nix/store/5p2y5gz6l6dfhb1j2fxhvr9993gx5slv-pyright-1.1.414"
+          "store_path": "/nix/store/n5g66jvzbgzxd03zls39lmaxw9l8k46h-pyright-1.1.415"
         },
         "aarch64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/i29vyy8b46q018q4sjfq9yy45cgd3hkg-pyright-1.1.414",
+              "path": "/nix/store/ag9wg561901d9nx45fbqy7h8nvw01xqk-pyright-1.1.415",
               "default": true
             }
           ],
-          "store_path": "/nix/store/i29vyy8b46q018q4sjfq9yy45cgd3hkg-pyright-1.1.414"
+          "store_path": "/nix/store/ag9wg561901d9nx45fbqy7h8nvw01xqk-pyright-1.1.415"
         },
         "x86_64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/8xnqdagain80s9d16d64v51fg05pvxrc-pyright-1.1.414",
+              "path": "/nix/store/ljgjchskxkcdyr9pvc7mjvbwgbnbw9da-pyright-1.1.415",
               "default": true
             }
           ],
-          "store_path": "/nix/store/8xnqdagain80s9d16d64v51fg05pvxrc-pyright-1.1.414"
+          "store_path": "/nix/store/ljgjchskxkcdyr9pvc7mjvbwgbnbw9da-pyright-1.1.415"
         }
       }
     },
